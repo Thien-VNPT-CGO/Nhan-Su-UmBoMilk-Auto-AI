@@ -73,14 +73,17 @@ export function createApp() {
   app.use('/api/webhooks', webhookRoutes);
 
   // ===== Serve frontend (client/dist) - 1 URL duy nhất cho production =====
-  const clientDist = path.resolve(__dirname, '../../client/dist');
-  const indexPath = path.join(clientDist, 'index.html');
-  if (fs.existsSync(indexPath)) {
+  const distCandidates = [
+    path.resolve(__dirname, '../../client/dist'),
+    path.resolve(process.cwd(), 'client/dist'),
+  ];
+  const clientDist = distCandidates.find((p) => fs.existsSync(path.join(p, 'index.html')));
+  if (clientDist) {
     app.use(express.static(clientDist));
-    app.get(/^(?!\/api).*/, (_req, res) => res.sendFile(indexPath));
+    app.get(/^(?!\/api).*/, (_req, res) => res.sendFile(path.join(clientDist, 'index.html')));
     console.log(`[UMBO MILK] Serving web UI from ${clientDist}`);
   } else {
-    console.warn(`[UMBO MILK] Không tìm thấy client/dist (${clientDist}) - chỉ chạy API. Chạy "npm run build" ở gốc repo để build cả web.`);
+    console.warn(`[UMBO MILK] Không tìm thấy client/dist (đã thử: ${distCandidates.join(', ')}) - chỉ chạy API. Chạy "npm run build" ở gốc repo để build cả web.`);
   }
 
   app.use(notFoundHandler);
