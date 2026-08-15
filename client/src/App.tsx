@@ -2,7 +2,6 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './stores/auth';
 import AppLayout from './layouts/AppLayout';
 import Login from './pages/Login';
-import DangKy from './pages/DangKy';
 import Dashboard from './pages/Dashboard';
 import Candidates from './pages/Candidates';
 import Scoring from './pages/Scoring';
@@ -33,7 +32,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route path="/dang-ky" element={<DangKy />} />
+        <Route path="/dang-ky" element={<Navigate to="/" replace />} />
         <Route
           path="/"
           element={

@@ -1,5 +1,5 @@
 import { useState, FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Milk, Lock, User, Loader2 } from 'lucide-react';
 import { useAuth } from '../stores/auth';
 import { useToast } from '../stores/Toast';
@@ -73,11 +73,6 @@ export default function Login() {
           </button>
           <p className="text-[11px] text-center text-slate-400">
             Tài khoản mặc định: hr_umbomilk/hr123456 · viewer/view1234
-          </p>
-          <p className="text-[12px] text-center">
-            <Link to="/dang-ky" className="text-brand-500 hover:underline">
-              Ứng viên đăng ký tuyển dụng tại đây →
-            </Link>
           </p>
         </form>
       </div>
