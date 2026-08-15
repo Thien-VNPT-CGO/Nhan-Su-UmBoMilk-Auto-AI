@@ -95,6 +95,8 @@ export function createApp() {
 export async function startSystem(server: http.Server) {
   const { prisma } = await import('./lib/prisma');
   await ensureSeedUsers(prisma);
+  const { getGoogleSheetService } = await import('./services/GoogleSheetService');
+  await getGoogleSheetService().refreshConfig().catch(() => undefined);
   initSocket(server);
   syncWorker.start();
   reconciliationService.start(5 * 60 * 1000);
