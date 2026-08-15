@@ -127,7 +127,7 @@ export default function Training() {
         <div>
           <h1 className="text-xl font-extrabold text-slate-800">Đào tạo 7 ngày</h1>
           <p className="text-sm text-slate-500">
-            {summary.all} nhân sự · {summary.started} đang training · {summary.done} hoàn thành · {summary.need} cần xử lý
+            {summary.all} nhân sự · {summary.started} đang đào tạo · {summary.done} hoàn thành · {summary.need} cần xử lý
           </p>
         </div>
         <div className="flex gap-2">
