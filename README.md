@@ -218,15 +218,15 @@ Code đã sẵn sàng deploy: PostgreSQL + tự tạo tài khoản khi DB trốn
 
 ### Render
 1. https://render.com → **New → Web Service** → connect repo `Nhan-Su-UmBoMilk-Auto-AI`
-2. **Build Command**: `npm install && npm run build -w server`
+2. **Build Command**: `npm install && npm run build` (build cả server + web UI)
 3. **Start Command**: `npm run start -w server`
 4. Tạo **PostgreSQL** (New → PostgreSQL) → copy **Internal Database URL** vào `DATABASE_URL`
 5. Add env: `SESSION_SECRET`, `WEBHOOK_SECRET`, `DEMO_MODE=true`
 6. Deploy lần đầu → **Shell** (console service) chạy: `npx prisma db push --skip-generate`
-7. Mở URL `https://<tên>.onrender.com` → đăng nhập `admin/admin123` (tự seed khi DB trống)
+7. Mở URL `https://<tên>.onrender.com` → đăng nhập `admin/admin123` (tự seed khi DB trống) — web UI, API, form đăng ký `/dang-ky` dùng chung 1 URL
 
 ### Lưu ý sau khi deploy
-- **Client build** không được server phục vụ — web hiện là giao diện dev (Vite). Để dùng 1 URL duy nhất, cần để Express serve `client/dist` hoặc deploy frontend lên Vercel/Netlify trỏ `/api` về server.
+- Server tự phục vụ web UI (thư mục `client/dist`) — mọi thứ dùng chung 1 URL.
 - Webhook Google Form/Apps Script phải trỏ URL public của server (không phải localhost).
 - `DEMO_MODE` tắt khi đã liên kết Google Sheet thật qua Cài đặt → Google Sheet.
 - Chạy thử cục bộ với Postgres: `docker compose up -d` → sửa `server/.env` `DATABASE_URL` → `npm run db:push` → `npm run dev`.

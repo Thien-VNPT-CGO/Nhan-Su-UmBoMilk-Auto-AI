@@ -1,5 +1,7 @@
 import express from 'express';
 import http from 'http';
+import path from 'path';
+import fs from 'fs';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -69,6 +71,17 @@ export function createApp() {
   app.use('/api/settings', apiLimiter, settingsRoutes);
   app.use('/api/conflicts', apiLimiter, conflictRoutes);
   app.use('/api/webhooks', webhookRoutes);
+
+  // ===== Serve frontend (client/dist) - 1 URL duy nhất cho production =====
+  const clientDist = path.resolve(__dirname, '../../client/dist');
+  const indexPath = path.join(clientDist, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    app.use(express.static(clientDist));
+    app.get(/^(?!\/api).*/, (_req, res) => res.sendFile(indexPath));
+    console.log(`[UMBO MILK] Serving web UI from ${clientDist}`);
+  } else {
+    console.warn(`[UMBO MILK] Không tìm thấy client/dist (${clientDist}) - chỉ chạy API. Chạy "npm run build" ở gốc repo để build cả web.`);
+  }
 
   app.use(notFoundHandler);
   app.use(errorHandler);
