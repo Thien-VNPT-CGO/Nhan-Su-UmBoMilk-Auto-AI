@@ -78,6 +78,13 @@ router.delete('/:id', requireRole('ADMIN', 'HR'), async (req: AuthedRequest, res
     const candidate = await prisma.candidate.findUnique({ where: { id: req.params.id } });
     if (!candidate) throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy ứng viên.');
 
+    await syncQueue.enqueue({
+      entity: 'candidate',
+      entityId: req.params.id,
+      operation: 'DELETE',
+      version: candidate.dataVersion + 1,
+      idempotencyKey: `candidate:${req.params.id}:delete:v1`,
+    });
     await prisma.candidate.delete({ where: { id: req.params.id } });
     await audit({
       user: req.user!.username,
@@ -86,13 +93,6 @@ router.delete('/:id', requireRole('ADMIN', 'HR'), async (req: AuthedRequest, res
       entityId: req.params.id,
       oldValue: { tenUv: candidate.tenUv, sdtZalo: candidate.sdtZalo },
       version: candidate.dataVersion,
-    });
-    await syncQueue.enqueue({
-      entity: 'candidate',
-      entityId: req.params.id,
-      operation: 'DELETE',
-      version: candidate.dataVersion + 1,
-      idempotencyKey: `candidate:${req.params.id}:delete:v1`,
     });
 
     res.json({ success: true, data: { id: req.params.id, deleted: true } });
