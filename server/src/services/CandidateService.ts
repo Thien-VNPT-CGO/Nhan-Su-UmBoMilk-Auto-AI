@@ -47,6 +47,7 @@ export class CandidateService {
   async createFromForm(input: {
     thoiGian?: string;
     tenUv: string;
+    gioiTinh?: string;
     namSinh: string;
     trinhDo: string;
     queQuan: string;
@@ -72,6 +73,7 @@ export class CandidateService {
         id,
         thoiGian: input.thoiGian ? new Date(input.thoiGian) : new Date(),
         tenUv: input.tenUv,
+        gioiTinh: input.gioiTinh ?? '',
         namSinh: input.namSinh,
         trinhDo: input.trinhDo,
         queQuan: input.queQuan,

@@ -52,7 +52,8 @@ model AuditLog {
 model Candidate {
   id                  String   @id // UV-YYYYMMDD-NNNNN
   thoiGian            DateTime
-  tenUv               String
+tenUv     String
+  gioiTinh  String? // Nam | Nữ (từ Google Form)
   namSinh             String
   trinhDo             String
   queQuan             String

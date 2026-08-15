@@ -9,7 +9,7 @@ const BRANCHES = ['Hoc Mon', 'Quận 12', 'Go Vap', 'Thu Duc', 'Binh Tan', 'Tan 
 const SHIFTS = ['SÁNG', 'CHIỀU', 'TỐI', 'CA 2 (SÁNG + CHIỀU)', 'CA 3 (SÁNG + TỐI)'];
 
 const EMPTY = {
-  tenUv: '', namSinh: '', trinhDo: '', queQuan: '',
+  tenUv: '', gioiTinh: '', namSinh: '', trinhDo: '', queQuan: '',
   sdtZalo: '', caLam: '', chiNhanh: '', kinhNghiem: '', xuLy: '', linkFb: '',
 };
 
@@ -67,6 +67,13 @@ export default function DangKy() {
             <div className="grid sm:grid-cols-2 gap-3">
               <Field label="Họ và tên *">
                 <input className="input" value={form.tenUv} onChange={set('tenUv')} placeholder="VD: Nguyễn Văn A" />
+              </Field>
+              <Field label="Giới tính">
+                <select className="input" value={form.gioiTinh} onChange={set('gioiTinh')}>
+                  <option value="">-- Chọn --</option>
+                  <option>Nam</option>
+                  <option>Nữ</option>
+                </select>
               </Field>
               <Field label="Năm sinh">
                 <input className="input" value={form.namSinh} onChange={set('namSinh')} placeholder="VD: 2004" />

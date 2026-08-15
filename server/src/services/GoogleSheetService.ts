@@ -7,7 +7,7 @@ import { dataHash } from '../lib/id';
 import type { Candidate } from '@prisma/client';
 
 export const LOC_HO_SO_COLS = [
-  'CANDIDATE_ID', 'THOI_GIAN', 'TEN_UV', 'NAM_SINH', 'TRINH_DO', 'QUE_QUAN',
+  'CANDIDATE_ID', 'THOI_GIAN', 'TEN_UV', 'GIOI_TINH', 'NAM_SINH', 'TRINH_DO', 'QUE_QUAN',
   'SDT_ZALO', 'CA_LAM', 'CHI_NHANH', 'KINH_NGHIEM', 'XU_LY', 'LINK_FB',
   'KET_QUA_PV', 'DATA_VERSION', 'UPDATED_AT', 'UPDATED_BY', 'SYNC_STATUS', 'DATA_HASH',
 ];
@@ -305,6 +305,7 @@ export class GoogleSheetService {
         case 'CANDIDATE_ID': return c.id;
         case 'THOI_GIAN': return formatDateTime(c.thoiGian);
         case 'TEN_UV': return c.tenUv;
+        case 'GIOI_TINH': return c.gioiTinh ?? '';
         case 'NAM_SINH': return c.namSinh;
         case 'TRINH_DO': return c.trinhDo;
         case 'QUE_QUAN': return c.queQuan;
@@ -441,6 +442,7 @@ export function candidateDataHash(c: Candidate): string {
   const payload: Record<string, unknown> = {
     id: c.id,
     tenUv: c.tenUv,
+    gioiTinh: c.gioiTinh ?? '',
     namSinh: c.namSinh,
     trinhDo: c.trinhDo,
     queQuan: c.queQuan,

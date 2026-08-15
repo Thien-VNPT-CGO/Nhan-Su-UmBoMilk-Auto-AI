@@ -14,6 +14,7 @@ const router = Router();
 const formSchema = z.object({
   secret: z.string().optional(),
   tenUv: z.string().min(1),
+  gioiTinh: z.string().optional().default(''),
   namSinh: z.string().optional().default(''),
   trinhDo: z.string().optional().default(''),
   queQuan: z.string().optional().default(''),

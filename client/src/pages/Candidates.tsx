@@ -16,6 +16,7 @@ interface CandidateRow {
   id: string;
   thoiGian: string;
   tenUv: string;
+  gioiTinh: string | null;
   namSinh: string;
   sdtZalo: string;
   trinhDo: string;
@@ -177,6 +178,7 @@ export default function Candidates() {
                 <th className="table-th">Mã UV</th>
                 <th className="table-th">Thời gian</th>
                 <th className="table-th">Tên</th>
+                <th className="table-th">Giới tính</th>
                 <th className="table-th">Năm sinh</th>
                 <th className="table-th">SĐT</th>
                 <th className="table-th">Trình độ</th>
@@ -210,6 +212,7 @@ export default function Candidates() {
                   <td className="table-td font-mono text-xs font-bold text-brand-600">{r.id}</td>
                   <td className="table-td text-xs text-slate-500">{formatDateTime(r.thoiGian)}</td>
                   <td className="table-td font-semibold text-slate-800">{r.tenUv}</td>
+                  <td className="table-td text-slate-600">{r.gioiTinh || '—'}</td>
                   <td className="table-td text-slate-600">{r.namSinh}</td>
                   <td className="table-td text-slate-600">{r.sdtZalo}</td>
                   <td className="table-td text-slate-600 max-w-[160px] truncate">{r.trinhDo}</td>
