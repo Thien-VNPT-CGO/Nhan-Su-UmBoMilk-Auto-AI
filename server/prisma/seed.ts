@@ -19,7 +19,7 @@ async function main() {
       console.log(`Created user: ${u.username}`);
     }
   }
-  console.log('Seed done. Users: admin/admin123, hr_umbomilk/hr123456, viewer/view1234');
+  console.log('Seed done. Users: admin (quản trị - đổi mật khẩu khi dùng thật), hr_umbomilk/hr123456, viewer/view1234');
 }
 
 main()

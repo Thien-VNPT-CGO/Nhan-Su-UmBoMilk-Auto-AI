@@ -72,7 +72,7 @@ export default function Login() {
             Đăng nhập
           </button>
           <p className="text-[11px] text-center text-slate-400">
-            Tài khoản mặc định: admin/admin123 · hr_umbomilk/hr123456 · viewer/view1234
+            Tài khoản mặc định: hr_umbomilk/hr123456 · viewer/view1234
           </p>
           <p className="text-[12px] text-center">
             <Link to="/dang-ky" className="text-brand-500 hover:underline">
