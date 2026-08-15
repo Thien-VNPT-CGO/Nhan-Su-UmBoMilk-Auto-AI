@@ -212,32 +212,18 @@ function onFormSubmit(e) {
 
 ---
 
-## Deploy online (Railway / Render)
+## Deploy online (Render)
 
 Code đã sẵn sàng deploy: PostgreSQL + tự tạo tài khoản khi DB trống + `postinstall` tự generate Prisma Client.
 
-### Railway (khuyến nghị - có Postgres tích hợp)
-1. Tạo tài khoản https://railway.com (đăng nhập bằng GitHub)
-2. **New Project → Deploy from GitHub repo** → chọn `Nhan-Su-UmBoMilk-Auto-AI`
-3. Trong project: **New → Database → PostgreSQL** (Railway tự cấp `DATABASE_URL`, tự gán vào service)
-4. Cài đặt service (tab Settings của service app):
-   - **Build Command**: `npm install && npm run build -w server`
-   - **Start Command**: `npm run start -w server`
-   - **Root Directory**: để trống (deploy từ gốc repo)
-5. **Variables** thêm: `SESSION_SECRET`, `WEBHOOK_SECRET`, `DEMO_MODE=true` (bỏ `true` khi liên kết sheet thật)
-6. Railway tự **db push**? Chưa — chạy 1 lần sau khi deploy: tab **Deployments → ⋯ → Run command**:
-   `npx prisma db push --skip-generate` (tạo bảng trong Postgres)
-   *Hoặc mở shell service và chạy lệnh tương tự.*
-7. Mở URL service (`https://<tên>.up.railway.app`) — server chạy port `$PORT` Railway cấp (app đọc `env.PORT`)
-   → đăng nhập `admin/admin123` (tự seed khi DB trống)
-
 ### Render
-1. https://render.com → **New → Web Service** → connect repo
+1. https://render.com → **New → Web Service** → connect repo `Nhan-Su-UmBoMilk-Auto-AI`
 2. **Build Command**: `npm install && npm run build -w server`
 3. **Start Command**: `npm run start -w server`
-4. Tạo **PostgreSQL** (New → PostgreSQL) → copy Internal URL vào `DATABASE_URL`
+4. Tạo **PostgreSQL** (New → PostgreSQL) → copy **Internal Database URL** vào `DATABASE_URL`
 5. Add env: `SESSION_SECRET`, `WEBHOOK_SECRET`, `DEMO_MODE=true`
 6. Deploy lần đầu → **Shell** (console service) chạy: `npx prisma db push --skip-generate`
+7. Mở URL `https://<tên>.onrender.com` → đăng nhập `admin/admin123` (tự seed khi DB trống)
 
 ### Lưu ý sau khi deploy
 - **Client build** không được server phục vụ — web hiện là giao diện dev (Vite). Để dùng 1 URL duy nhất, cần để Express serve `client/dist` hoặc deploy frontend lên Vercel/Netlify trỏ `/api` về server.
