@@ -222,8 +222,7 @@ Code đã sẵn sàng deploy: PostgreSQL + tự tạo tài khoản khi DB trốn
 3. **Start Command**: `npm run start -w server`
 4. Tạo **PostgreSQL** (New → PostgreSQL) → copy **Internal Database URL** vào `DATABASE_URL`
 5. Add env: `SESSION_SECRET`, `WEBHOOK_SECRET`, `DEMO_MODE=true`
-6. Deploy lần đầu → **Shell** (console service) chạy: `npx prisma db push --skip-generate`
-7. Mở URL `https://<tên>.onrender.com` → đăng nhập `admin/admin123` (tự seed khi DB trống) — web UI, API, form đăng ký `/dang-ky` dùng chung 1 URL
+6. Deploy xong mở URL `https://<tên>.onrender.com` — tự tạo bảng DB khi khởi động (không cần Shell), tự seed tài khoản khi DB trống
 
 ### Lưu ý sau khi deploy
 - Server tự phục vụ web UI (thư mục `client/dist`) — mọi thứ dùng chung 1 URL.
