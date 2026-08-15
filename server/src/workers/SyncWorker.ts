@@ -117,9 +117,7 @@ export class SyncWorker {
           if (job.operation === 'CREATE' || job.operation === 'UPSERT' || job.operation === 'UPDATE') {
             await sheet.syncCandidate(candidate);
             await sheet.syncScore(candidate);
-            if (candidate.hrDecision === 'PASS' || candidate.ngayBatDauTraining) {
-              await sheet.syncTraining(candidate);
-            }
+            await sheet.syncTraining(candidate);
           }
           break;
         }

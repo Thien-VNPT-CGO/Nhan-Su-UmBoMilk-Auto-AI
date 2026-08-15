@@ -261,9 +261,7 @@ export class GoogleSheetService {
     for (const c of candidates) {
       await this.syncCandidate(c);
       await this.syncScore(c);
-      if (c.hrDecision === 'PASS' || c.ngayBatDauTraining) {
-        await this.syncTraining(c);
-      }
+      await this.syncTraining(c);
     }
     return { candidates: candidates.length };
   }
