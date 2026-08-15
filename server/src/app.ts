@@ -1,0 +1,94 @@
+import express from 'express';
+import http from 'http';
+import cookieParser from 'cookie-parser';
+import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import { env } from './config/env';
+import { initSocket } from './sockets';
+import { syncWorker } from './workers/SyncWorker';
+import { reconciliationService } from './services/ReconciliationService';
+import { trainingService } from './services/TrainingService';
+import { apiLog, errorHandler, notFoundHandler, requestId } from './middleware/errors';
+
+import authRoutes from './routes/auth';
+import dashboardRoutes from './routes/dashboard';
+import candidateRoutes from './routes/candidates';
+import trainingRoutes from './routes/training';
+import shiftRoutes from './routes/shifts';
+import attendanceRoutes from './routes/attendance';
+import zaloRoutes from './routes/zalo';
+import syncRoutes from './routes/sync';
+import auditRoutes from './routes/audit';
+import settingsRoutes from './routes/settings';
+import conflictRoutes from './routes/conflicts';
+import webhookRoutes from './routes/webhooks';
+
+export function createApp() {
+  const app = express();
+  const server = http.createServer(app);
+
+  app.set('trust proxy', 1);
+  app.use(helmet({ contentSecurityPolicy: false }));
+  app.use(cors({ origin: true, credentials: true }));
+  app.use(express.json({ limit: '2mb' }));
+  app.use(cookieParser());
+  app.use(requestId);
+  app.use(apiLog);
+
+  app.get('/api/health', (_req, res) => {
+    res.json({
+      success: true,
+      data: {
+        status: 'ok',
+        time: new Date().toISOString(),
+        timezone: env.timezone,
+        demoMode: env.demoMode,
+      },
+    });
+  });
+
+  const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, code: 'RATE_LIMITED', message: 'Quá nhiều lần thử đăng nhập. Thử lại sau 15 phút.' },
+  });
+  const apiLimiter = rateLimit({ windowMs: 60 * 1000, max: 600, standardHeaders: true, legacyHeaders: false });
+
+  app.use('/api/auth', authLimiter, authRoutes);
+  app.use('/api/dashboard', apiLimiter, dashboardRoutes);
+  app.use('/api/candidates', apiLimiter, candidateRoutes);
+  app.use('/api/training', apiLimiter, trainingRoutes);
+  app.use('/api/shifts', apiLimiter, shiftRoutes);
+  app.use('/api/attendance', apiLimiter, attendanceRoutes);
+  app.use('/api/zalo', apiLimiter, zaloRoutes);
+  app.use('/api/sync', apiLimiter, syncRoutes);
+  app.use('/api/audit', apiLimiter, auditRoutes);
+  app.use('/api/settings', apiLimiter, settingsRoutes);
+  app.use('/api/conflicts', apiLimiter, conflictRoutes);
+  app.use('/api/webhooks', webhookRoutes);
+
+  app.use(notFoundHandler);
+  app.use(errorHandler);
+
+  return { app, server };
+}
+
+export function startSystem(server: http.Server) {
+  initSocket(server);
+  syncWorker.start();
+  reconciliationService.start(5 * 60 * 1000);
+  trainingRefreshTimer = setInterval(() => void trainingService.refreshAll().catch(() => undefined), 60 * 1000);
+}
+
+let trainingRefreshTimer: NodeJS.Timeout | null = null;
+
+export async function shutdownSystem() {
+  syncWorker.stop();
+  reconciliationService.stop();
+  if (trainingRefreshTimer) clearInterval(trainingRefreshTimer);
+  const { prisma } = await import('./lib/prisma');
+  await prisma.$disconnect();
+}

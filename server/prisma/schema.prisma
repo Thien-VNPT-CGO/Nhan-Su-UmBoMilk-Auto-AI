@@ -1,0 +1,229 @@
+// UMBO MILK - AI Recruitment & Training System
+// SQLite (dev) / PostgreSQL (production) - no enums (SQLite compatible)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  password  String
+  fullName  String
+  role      String   @default("HR") // ADMIN | HR | VIEWER
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  sessions  Session[]
+}
+
+model Session {
+  id        String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  ip        String?
+  userAgent String?
+}
+
+model AuditLog {
+  id        String   @id
+  user      String
+  action    String
+  entity    String
+  entityId  String
+  oldValue  String?
+  newValue  String?
+  version   Int?
+  time      DateTime @default(now())
+  ip        String?
+  syncJobId String?
+
+  @@index([entityId])
+  @@index([time])
+}
+
+model Candidate {
+  id                  String   @id // UV-YYYYMMDD-NNNNN
+  thoiGian            DateTime
+  tenUv               String
+  namSinh             String
+  trinhDo             String
+  queQuan             String
+  sdtZalo             String
+  caLam               String
+  chiNhanh            String
+  kinhNghiem          String
+  xuLy                String
+  linkFb              String
+
+  aiScore             Json? // breakdown D_* / P_*
+  tongDiem            Int?
+  aiRecommendation    String? // PASS | FAIL
+  aiNote              String?
+  aiConfidence        Float?
+  aiScoredAt          DateTime?
+
+  hrDecision          String? // PASS | FAIL | REVIEW
+  hrUser              String?
+  hrReason            String?
+  hrDecisionAt        DateTime?
+
+  ngayBatDauTraining  DateTime?
+  trangThaiTraining   String? // CHUA_THAM_GIA | SAP_BAT_DAU | BAT_DAU | HOAN_THANH | KHONG_DU_NGAY | LOAI
+  soNgayDaTraining    Int      @default(0)
+
+  dataVersion         Int      @default(1)
+  dataHash            String?
+  updatedAt           DateTime @updatedAt
+  updatedBy           String?
+  source              String   @default("GOOGLE_FORM")
+
+  shifts             Shift[]
+  syncJobs           SyncJob[]
+  attendanceEvents   AttendanceEvent[]
+  conflicts          Conflict[]
+  zaloMessages       ZaloMessage[]
+
+  @@index([chiNhanh])
+  @@index([sdtZalo])
+  @@index([thoiGian])
+}
+
+model SyncJob {
+  id             String    @id // SYNC-000001
+  entity         String
+  entityId       String
+  operation      String // CREATE | UPDATE | UPSERT
+  field          String?
+  oldValue       String?
+  newValue       String? // JSON snapshot
+  version        Int
+  status         String    @default("PENDING") // PENDING | PROCESSING | SYNCED | RETRY | FAILED | CONFLICT
+  retryCount     Int       @default(0)
+  nextAttemptAt  DateTime?
+  lastError      String?
+  idempotencyKey String    @unique
+  candidateId    String?
+  candidate      Candidate? @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([candidateId])
+}
+
+model AttendanceEvent {
+  id          String   @id
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  date        String // yyyy-MM-dd
+  shift       String // SANG | CHIEU | TOI
+  checkinAt   DateTime
+  method      String // ZALO | MANUAL
+  valid       Boolean
+  reason      String?
+  trainingDay Int?
+  createdAt   DateTime @default(now())
+
+  @@unique([candidateId, date, shift])
+  @@index([date])
+}
+
+model Shift {
+  id          String   @id
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  date        String // yyyy-MM-dd
+  shifts      String // SANG|CHIEU|TOI|OFF
+  note        String?
+  updatedBy   String?
+  dataVersion Int      @default(1)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([candidateId, date])
+  @@index([date])
+}
+
+model ZaloMessage {
+  id          String    @id
+  candidateId String?
+  phone       String
+  content     String
+  status      String    @default("PENDING") // PENDING | SENT | FAILED
+  error       String?
+  provider    String    @default("MOCK")
+  createdAt   DateTime  @default(now())
+  candidate   Candidate? @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+}
+
+model WebhookEvent {
+  id          String   @id
+  source      String // GOOGLE_SHEET | ZALO
+  payload     Json
+  processed   Boolean  @default(false)
+  error       String?
+  createdAt   DateTime @default(now())
+  processedAt DateTime?
+}
+
+model SystemSetting {
+  key       String   @id
+  value     Json
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+}
+
+model IdempotencyKey {
+  key       String   @id
+  response  String?
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+}
+
+model Conflict {
+  id           String    @id
+  entity       String
+  entityId     String
+  field        String
+  webValue     String?
+  sheetValue   String?
+  webVersion   Int
+  sheetVersion Int?
+  status       String    @default("OPEN") // OPEN | RESOLVED_WEB | RESOLVED_SHEET
+  resolvedBy   String?
+  resolvedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  candidate    Candidate? @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@index([entityId, status])
+}
+
+model ApiLog {
+  id         String   @id
+  method     String
+  path       String
+  status     Int
+  durationMs Int
+  ip         String?
+  user       String?
+  createdAt  DateTime @default(now())
+}
+
+model ReconciliationRun {
+  id         String   @id
+  startedAt  DateTime @default(now())
+  finishedAt DateTime?
+  checked    Int      @default(0)
+  mismatches Int      @default(0)
+  repaired   Int      @default(0)
+  conflicts  Int      @default(0)
+  status     String   @default("RUNNING")
+  details    String?
+}

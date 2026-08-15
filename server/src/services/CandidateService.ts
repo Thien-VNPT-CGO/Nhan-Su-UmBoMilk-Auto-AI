@@ -1,0 +1,390 @@
+import { prisma } from '../lib/prisma';
+import { nextCandidateId, dataHash } from '../lib/id';
+import { formatDateTime } from '../lib/date';
+import { ApiError } from '../lib/errors';
+import { audit } from './AuditService';
+import { syncQueue } from './SyncQueueService';
+import { emit } from '../sockets';
+import { TRAINING_STATUS } from '../lib/constants';
+import type { Candidate, Prisma } from '@prisma/client';
+
+function computeHash(c: {
+  id: string; tenUv: string; namSinh: string; trinhDo: string; queQuan: string;
+  sdtZalo: string; caLam: string; chiNhanh: string; kinhNghiem: string; xuLy: string;
+  linkFb: string; hrDecision: string | null; tongDiem: number | null;
+  aiRecommendation: string | null; dataVersion: number;
+  ngayBatDauTraining: Date | null; trangThaiTraining: string | null;
+}): string {
+  return dataHash({
+    id: c.id,
+    tenUv: c.tenUv,
+    namSinh: c.namSinh,
+    trinhDo: c.trinhDo,
+    queQuan: c.queQuan,
+    sdtZalo: c.sdtZalo,
+    caLam: c.caLam,
+    chiNhanh: c.chiNhanh,
+    kinhNghiem: c.kinhNghiem,
+    xuLy: c.xuLy,
+    linkFb: c.linkFb,
+    hrDecision: c.hrDecision,
+    tongDiem: c.tongDiem,
+    aiRecommendation: c.aiRecommendation,
+    dataVersion: c.dataVersion,
+    ngayBatDauTraining: c.ngayBatDauTraining ? formatDateTime(c.ngayBatDauTraining) : '',
+    trangThaiTraining: c.trangThaiTraining,
+  });
+}
+
+export function normalizePhone(raw: string): string {
+  let p = String(raw ?? '').trim().replace(/[\s.\-()]/g, '');
+  if (p.startsWith('+84')) p = '0' + p.slice(3);
+  else if (p.startsWith('84') && p.length > 9) p = '0' + p.slice(2);
+  return p;
+}
+
+export class CandidateService {
+  async createFromForm(input: {
+    thoiGian?: string;
+    tenUv: string;
+    namSinh: string;
+    trinhDo: string;
+    queQuan: string;
+    sdtZalo: string;
+    caLam: string;
+    chiNhanh: string;
+    kinhNghiem: string;
+    xuLy: string;
+    linkFb: string;
+    source?: string;
+  }): Promise<Candidate> {
+    const sdt = normalizePhone(input.sdtZalo);
+    if (!sdt) throw ApiError.badRequest('INVALID_PHONE', 'Thiếu số điện thoại.');
+
+    const existing = await prisma.candidate.findFirst({ where: { sdtZalo: sdt } });
+    if (existing) {
+      throw ApiError.conflict('DUPLICATE_CANDIDATE', `Ứng viên đã tồn tại (${existing.id}).`);
+    }
+
+    const id = await nextCandidateId();
+    const candidate = await prisma.candidate.create({
+      data: {
+        id,
+        thoiGian: input.thoiGian ? new Date(input.thoiGian) : new Date(),
+        tenUv: input.tenUv,
+        namSinh: input.namSinh,
+        trinhDo: input.trinhDo,
+        queQuan: input.queQuan,
+        sdtZalo: sdt,
+        caLam: input.caLam,
+        chiNhanh: input.chiNhanh,
+        kinhNghiem: input.kinhNghiem,
+        xuLy: input.xuLy,
+        linkFb: input.linkFb,
+        source: input.source ?? 'GOOGLE_FORM',
+        dataVersion: 1,
+      },
+    });
+
+    const withHash = await prisma.candidate.update({
+      where: { id: candidate.id },
+      data: { dataHash: computeHash(candidate) },
+    });
+
+    await audit({
+      user: 'SYSTEM',
+      action: 'CREATE_CANDIDATE',
+      entity: 'candidate',
+      entityId: withHash.id,
+      newValue: { tenUv: withHash.tenUv, sdtZalo: withHash.sdtZalo, chiNhanh: withHash.chiNhanh },
+      version: 1,
+    });
+
+    await syncQueue.enqueue({
+      entity: 'candidate',
+      entityId: withHash.id,
+      operation: 'CREATE',
+      version: 1,
+      idempotencyKey: `candidate:${withHash.id}:create:v1`,
+    });
+
+    emit('candidate:new', { candidateId: withHash.id });
+
+    return withHash;
+  }
+
+  async list(query: {
+    search?: string;
+    chiNhanh?: string;
+    caLam?: string;
+    status?: string;
+    from?: string;
+    to?: string;
+    sort?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<{ rows: Candidate[]; total: number }> {
+    const where: Prisma.CandidateWhereInput = {};
+    if (query.search) {
+      const s = query.search.trim();
+      where.OR = [
+        { tenUv: { contains: s } },
+        { sdtZalo: { contains: s } },
+        { id: { contains: s } },
+      ];
+    }
+    if (query.chiNhanh) where.chiNhanh = query.chiNhanh;
+    if (query.caLam) where.caLam = { contains: query.caLam };
+    if (query.from) where.thoiGian = { gte: new Date(query.from) };
+    if (query.to) {
+      const to = new Date(query.to);
+      to.setHours(23, 59, 59, 999);
+      where.thoiGian = { ...(where.thoiGian as object), lte: to };
+    }
+    if (query.status) {
+      if (query.status === 'PASS') where.hrDecision = 'PASS';
+      else if (query.status === 'FAIL') where.hrDecision = 'FAIL';
+      else if (query.status === 'REVIEW') where.hrDecision = 'REVIEW';
+      else if (query.status === 'TRAINING') where.trangThaiTraining = { in: ['SAP_BAT_DAU', 'BAT_DAU'] };
+      else if (query.status === 'EMPLOYEE') where.trangThaiTraining = 'NHAN_VIEN_CHINH_THUC';
+      else if (query.status === 'SCORED') where.tongDiem = { not: null };
+    }
+
+    const orderBy: Prisma.CandidateOrderByWithRelationInput[] = [];
+    switch (query.sort) {
+      case 'oldest': orderBy.push({ thoiGian: 'asc' }); break;
+      case 'score_desc': orderBy.push({ tongDiem: 'desc' }); break;
+      case 'score_asc': orderBy.push({ tongDiem: 'asc' }); break;
+      default: orderBy.push({ thoiGian: 'desc' });
+    }
+    orderBy.push({ id: 'desc' });
+
+    const page = Math.max(1, Number(query.page) || 1);
+    const pageSize = Math.min(100, Math.max(5, Number(query.pageSize) || 20));
+
+    const [rows, total] = await Promise.all([
+      prisma.candidate.findMany({
+        where,
+        orderBy,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: { _count: { select: { syncJobs: true, conflicts: true } } },
+      }),
+      prisma.candidate.count({ where }),
+    ]);
+    return { rows, total };
+  }
+
+  async getById(id: string): Promise<Candidate & { shifts: unknown[]; attendanceEvents: unknown[]; conflicts: unknown[]; zaloMessages: unknown[] }> {
+    const c = await prisma.candidate.findUnique({
+      where: { id },
+      include: {
+        shifts: { orderBy: { date: 'asc' } },
+        attendanceEvents: { orderBy: { createdAt: 'desc' } },
+        conflicts: { where: { status: 'OPEN' } },
+        zaloMessages: { orderBy: { createdAt: 'desc' }, take: 20 },
+      },
+    });
+    if (!c) throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy ứng viên.');
+    return c as never;
+  }
+
+  async updateFields(
+    id: string,
+    user: string,
+    expectedVersion: number,
+    patch: Record<string, string>,
+    fieldLabels: Record<string, string>,
+  ): Promise<Candidate> {
+    const candidate = await prisma.candidate.findUnique({ where: { id } });
+    if (!candidate) throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy ứng viên.');
+    if (candidate.dataVersion !== expectedVersion) {
+      throw ApiError.conflict('VERSION_CONFLICT', `Dữ liệu đã được người khác cập nhật (version ${candidate.dataVersion}). Vui lòng tải lại.`);
+    }
+
+    const newVersion = candidate.dataVersion + 1;
+    const oldSnapshot: Record<string, unknown> = {};
+    const newSnapshot: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(patch)) {
+      oldSnapshot[fieldLabels[k] ?? k] = (candidate as unknown as Record<string, unknown>)[k] ?? '';
+      newSnapshot[fieldLabels[k] ?? k] = v ?? '';
+    }
+
+    const updated = await prisma.candidate.update({
+      where: { id },
+      data: { ...patch, dataVersion: newVersion, updatedBy: user },
+    });
+    await prisma.candidate.update({ where: { id }, data: { dataHash: computeHash(updated) } });
+    const final = await prisma.candidate.findUniqueOrThrow({ where: { id } });
+
+    await audit({
+      user,
+      action: 'UPDATE_CANDIDATE',
+      entity: 'candidate',
+      entityId: id,
+      oldValue: oldSnapshot,
+      newValue: newSnapshot,
+      version: newVersion,
+    });
+
+    for (const [k] of Object.entries(patch)) {
+      await syncQueue.enqueue({
+        entity: 'candidate',
+        entityId: id,
+        operation: 'UPDATE',
+        field: k,
+        oldValue: (candidate as unknown as Record<string, unknown>)[k],
+        newValue: (patch as unknown as Record<string, unknown>)[k],
+        version: newVersion,
+        idempotencyKey: `candidate:${id}:${k}:v${newVersion}`,
+      });
+    }
+
+    emit('candidate:updated', { candidateId: id });
+    return final;
+  }
+
+  async makeDecision(id: string, user: string, decision: 'PASS' | 'FAIL' | 'REVIEW', reason?: string): Promise<Candidate> {
+    const candidate = await prisma.candidate.findUnique({ where: { id } });
+    if (!candidate) throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy ứng viên.');
+
+    const newVersion = candidate.dataVersion + 1;
+    const updated = await prisma.candidate.update({
+      where: { id },
+      data: {
+        hrDecision: decision,
+        hrUser: user,
+        hrReason: reason ?? null,
+        hrDecisionAt: new Date(),
+        dataVersion: newVersion,
+        updatedBy: user,
+      },
+    });
+    await prisma.candidate.update({ where: { id }, data: { dataHash: computeHash(updated) } });
+    const final = await prisma.candidate.findUniqueOrThrow({ where: { id } });
+
+    await audit({
+      user,
+      action: `HR_DECISION_${decision}`,
+      entity: 'candidate',
+      entityId: id,
+      oldValue: candidate.hrDecision,
+      newValue: decision,
+      version: newVersion,
+    });
+
+    await syncQueue.enqueue({
+      entity: 'decision',
+      entityId: id,
+      operation: 'UPDATE',
+      field: 'KET_QUA_PV',
+      oldValue: candidate.hrDecision,
+      newValue: decision,
+      version: newVersion,
+      idempotencyKey: `candidate:${id}:decision:v${newVersion}`,
+    });
+
+    emit('candidate:decision', { candidateId: id, decision, user });
+    return final;
+  }
+
+  async startTraining(id: string, user: string, ngayBatDau: Date, expectedVersion?: number): Promise<Candidate> {
+    const candidate = await prisma.candidate.findUnique({ where: { id } });
+    if (!candidate) throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy ứng viên.');
+    if (candidate.hrDecision !== 'PASS') {
+      throw ApiError.badRequest('NOT_PASSED', 'Ứng viên phải PASS trước khi vào Training.');
+    }
+    if (expectedVersion !== undefined && candidate.dataVersion !== expectedVersion) {
+      throw ApiError.conflict('VERSION_CONFLICT', 'Dữ liệu đã được cập nhật. Vui lòng tải lại.');
+    }
+
+    const newVersion = candidate.dataVersion + 1;
+    const updated = await prisma.candidate.update({
+      where: { id },
+      data: {
+        ngayBatDauTraining: ngayBatDau,
+        trangThaiTraining: TRAINING_STATUS.SAP_BAT_DAU,
+        dataVersion: newVersion,
+        updatedBy: user,
+      },
+    });
+    await prisma.candidate.update({ where: { id }, data: { dataHash: computeHash(updated) } });
+    const final = await prisma.candidate.findUniqueOrThrow({ where: { id } });
+
+    await audit({
+      user,
+      action: 'START_TRAINING',
+      entity: 'candidate',
+      entityId: id,
+      oldValue: candidate.ngayBatDauTraining,
+      newValue: ngayBatDau,
+      version: newVersion,
+    });
+
+    await syncQueue.enqueue({
+      entity: 'training',
+      entityId: id,
+      operation: 'UPDATE',
+      field: 'NGAY_BAT_DAU_TRAINING',
+      oldValue: candidate.ngayBatDauTraining ? formatDateTime(candidate.ngayBatDauTraining) : '',
+      newValue: formatDateTime(ngayBatDau),
+      version: newVersion,
+      idempotencyKey: `candidate:${id}:training-start:v${newVersion}`,
+    });
+
+    emit('training:updated', { candidateId: id });
+    return final;
+  }
+
+  async setTrainingStatus(id: string, user: string, status: string): Promise<Candidate> {
+    const candidate = await prisma.candidate.findUnique({ where: { id } });
+    if (!candidate) throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy ứng viên.');
+    const newVersion = candidate.dataVersion + 1;
+    const updated = await prisma.candidate.update({
+      where: { id },
+      data: { trangThaiTraining: status, dataVersion: newVersion, updatedBy: user },
+    });
+    await prisma.candidate.update({ where: { id }, data: { dataHash: computeHash(updated) } });
+    const final = await prisma.candidate.findUniqueOrThrow({ where: { id } });
+
+    await audit({
+      user,
+      action: 'CHANGE_TRAINING_STATUS',
+      entity: 'candidate',
+      entityId: id,
+      oldValue: candidate.trangThaiTraining,
+      newValue: status,
+      version: newVersion,
+    });
+    await syncQueue.enqueue({
+      entity: 'training',
+      entityId: id,
+      operation: 'UPDATE',
+      field: 'TRANG_THAI_TRAINING',
+      version: newVersion,
+      idempotencyKey: `candidate:${id}:training-status:v${newVersion}`,
+    });
+    emit('training:updated', { candidateId: id });
+    return final;
+  }
+
+  async stats(): Promise<Record<string, number>> {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+    const [today, scored, pendingDecision, passToday, failToday, training, done, needReview] = await Promise.all([
+      prisma.candidate.count({ where: { thoiGian: { gte: todayStart, lte: todayEnd } } }),
+      prisma.candidate.count({ where: { aiScoredAt: { not: null } } }),
+      prisma.candidate.count({ where: { tongDiem: { not: null }, hrDecision: null } }),
+      prisma.candidate.count({ where: { hrDecision: 'PASS', hrDecisionAt: { gte: todayStart, lte: todayEnd } } }),
+      prisma.candidate.count({ where: { hrDecision: 'FAIL', hrDecisionAt: { gte: todayStart, lte: todayEnd } } }),
+      prisma.candidate.count({ where: { trangThaiTraining: { in: ['SAP_BAT_DAU', 'BAT_DAU'] } } }),
+      prisma.candidate.count({ where: { trangThaiTraining: { in: ['HOAN_THANH', 'NHAN_VIEN_CHINH_THUC'] } } }),
+      prisma.candidate.count({ where: { hrDecision: 'REVIEW' } }),
+    ]);
+    return { today, scored, pendingDecision, passToday, failToday, training, done, needReview };
+  }
+}
+
+export const candidateService = new CandidateService();

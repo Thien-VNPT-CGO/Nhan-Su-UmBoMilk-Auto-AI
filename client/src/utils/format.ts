@@ -1,0 +1,40 @@
+export function cn(...classes: (string | false | null | undefined)[]): string {
+  return classes.filter(Boolean).join(' ');
+}
+
+export function shiftColor(shift: string): { bg: string; text: string; label: string } {
+  switch (shift) {
+    case 'SÁNG':
+    case 'SANG':
+      return { bg: 'bg-yellow-200', text: 'text-yellow-900', label: 'SÁNG' };
+    case 'CHIỀU':
+    case 'CHIEU':
+      return { bg: 'bg-emerald-200', text: 'text-emerald-900', label: 'CHIỀU' };
+    case 'TỐI':
+    case 'TOI':
+      return { bg: 'bg-indigo-200', text: 'text-indigo-900', label: 'TỐI' };
+    case 'OFF':
+      return { bg: 'bg-slate-200', text: 'text-slate-600', label: 'OFF' };
+    default:
+      return { bg: 'bg-slate-100', text: 'text-slate-500', label: shift ?? '' };
+  }
+}
+
+export const trainingStatusLabel: Record<string, { label: string; cls: string }> = {
+  CHUA_THAM_GIA: { label: 'CHƯA THAM GIA', cls: 'bg-slate-100 text-slate-600' },
+  SAP_BAT_DAU: { label: 'SẮP BẮT ĐẦU', cls: 'bg-sky-100 text-sky-700' },
+  BAT_DAU: { label: 'BẮT ĐẦU', cls: 'bg-amber-100 text-amber-700' },
+  HOAN_THANH: { label: 'HOÀN THÀNH', cls: 'bg-emerald-100 text-emerald-700' },
+  KHONG_DU_NGAY: { label: 'KHÔNG ĐỦ NGÀY', cls: 'bg-rose-100 text-rose-700' },
+  LOAI: { label: 'LOẠI', cls: 'bg-red-100 text-red-700' },
+  NHAN_VIEN_CHINH_THUC: { label: 'NHÂN VIÊN CHÍNH THỨC', cls: 'bg-violet-100 text-violet-700' },
+};
+
+export const syncStatusStyle: Record<string, { label: string; cls: string }> = {
+  PENDING: { label: 'ĐANG CHỜ', cls: 'bg-amber-100 text-amber-700' },
+  PROCESSING: { label: 'ĐANG XỬ LÝ', cls: 'bg-sky-100 text-sky-700' },
+  SYNCED: { label: 'ĐÃ ĐỒNG BỘ', cls: 'bg-emerald-100 text-emerald-700' },
+  RETRY: { label: 'THỬ LẠI', cls: 'bg-orange-100 text-orange-700' },
+  FAILED: { label: 'LỖI', cls: 'bg-rose-100 text-rose-700' },
+  CONFLICT: { label: 'XUNG ĐỘT', cls: 'bg-purple-100 text-purple-700' },
+};
