@@ -88,7 +88,7 @@ async function main() {
   console.log('\n========== UMBO MILK TEST SUITE ==========\n');
 
   const { server } = createApp();
-  startSystem(server);
+  await startSystem(server);
   await new Promise<void>((r) => server.listen(PORT, r));
   console.log(`Test server: ${BASE}\n`);
 

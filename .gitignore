@@ -6,4 +6,4 @@ dist/
 .DS_Store
 npm-debug.log*
 client/dist/
-server/dist/
+server/dist/client/tsconfig.tsbuildinfo

@@ -76,11 +76,28 @@ export function createApp() {
   return { app, server };
 }
 
-export function startSystem(server: http.Server) {
+export async function startSystem(server: http.Server) {
+  const { prisma } = await import('./lib/prisma');
+  await ensureSeedUsers(prisma);
   initSocket(server);
   syncWorker.start();
   reconciliationService.start(5 * 60 * 1000);
   trainingRefreshTimer = setInterval(() => void trainingService.refreshAll().catch(() => undefined), 60 * 1000);
+}
+
+/** Tự tạo tài khoản mặc định khi DB trống (idempotent - an toàn cho deploy tự động). */
+async function ensureSeedUsers(prisma: typeof import('./lib/prisma').prisma) {
+  const count = await prisma.user.count();
+  if (count > 0) return;
+  const bcrypt = (await import('bcryptjs')).default;
+  await prisma.user.createMany({
+    data: [
+      { username: 'admin', password: await bcrypt.hash('admin123', 10), fullName: 'Quản trị viên', role: 'ADMIN' },
+      { username: 'hr_umbomilk', password: await bcrypt.hash('hr123456', 10), fullName: 'HR UMBO Milk', role: 'HR' },
+      { username: 'viewer', password: await bcrypt.hash('view1234', 10), fullName: 'Người xem', role: 'VIEWER' },
+    ],
+  });
+  console.log('[startSystem] Đã tạo 3 tài khoản mặc định (DB trống)');
 }
 
 let trainingRefreshTimer: NodeJS.Timeout | null = null;

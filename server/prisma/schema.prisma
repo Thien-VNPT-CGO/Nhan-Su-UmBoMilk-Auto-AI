@@ -1,12 +1,12 @@
 // UMBO MILK - AI Recruitment & Training System
-// SQLite (dev) / PostgreSQL (production) - no enums (SQLite compatible)
+// PostgreSQL (production) / SQLite (dev) - no enums (SQLite compatible)
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
