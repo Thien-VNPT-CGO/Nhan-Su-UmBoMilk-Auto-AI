@@ -6,6 +6,7 @@ import { candidateScoringService } from '../services/CandidateScoringService';
 import { syncQueue } from '../services/SyncQueueService';
 import { audit } from '../services/AuditService';
 import { getGoogleSheetService } from '../services/GoogleSheetService';
+import { getSettings, saveSettings } from '../services/SettingsService';
 import { ApiError } from '../lib/errors';
 import { prisma } from '../lib/prisma';
 
@@ -84,6 +85,20 @@ router.delete('/:id', requireRole('ADMIN', 'HR'), async (req: AuthedRequest, res
       if (cleared > 0) console.log(`[DELETE] Đã xóa ${cleared} dòng phản hồi form của ${candidate.id}`);
     } catch (e) {
       console.warn('[DELETE] clearFormResponseRows:', e instanceof Error ? e.message : String(e));
+    }
+
+    try {
+      const settings = await getSettings();
+      const tomb = Array.isArray((settings as Record<string, unknown>).deletedFormResponses)
+        ? ((settings as Record<string, unknown>).deletedFormResponses as { sdt: string; thoiGian: string | null }[])
+        : [];
+      const entry = { sdt: normalizePhone(candidate.sdtZalo), thoiGian: candidate.thoiGian?.toISOString() ?? null };
+      if (!tomb.some((t) => t.sdt === entry.sdt && t.thoiGian === entry.thoiGian)) {
+        tomb.unshift(entry);
+        await saveSettings({ deletedFormResponses: tomb.slice(0, 500) }, req.user!.username);
+      }
+    } catch (e) {
+      console.warn('[DELETE] tombstone:', e instanceof Error ? e.message : String(e));
     }
 
     await syncQueue.enqueue({

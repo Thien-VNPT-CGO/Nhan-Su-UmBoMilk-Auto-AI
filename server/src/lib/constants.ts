@@ -121,4 +121,5 @@ export const DEFAULT_SETTINGS = {
     accessToken: '',
     refreshToken: '',
   },
+  deletedFormResponses: [] as { sdt: string; thoiGian: string | null }[],
 };

@@ -43,6 +43,9 @@ export async function importFormResponses(): Promise<FormImportResult> {
       return result;
     }
     const { headers, rows } = await fetchFormResponses();
+    const tomb = Array.isArray((settings as Record<string, unknown>).deletedFormResponses)
+      ? ((settings as Record<string, unknown>).deletedFormResponses as { sdt: string; thoiGian: string | null }[])
+      : [];
     for (const row of rows) {
       const mapped = mapFormResponseRow(headers, row);
       if (!mapped) {
@@ -54,15 +57,23 @@ export async function importFormResponses(): Promise<FormImportResult> {
         result.invalid++;
         continue;
       }
+      const timestampIdx = headers.findIndex((h) => h.toLowerCase() === 'timestamp');
+      const thoiGian = parseFormTimestamp(
+        timestampIdx >= 0 ? String(row[timestampIdx] ?? '') : undefined,
+      );
+      const isDeleted = tomb.some((t) =>
+        t.sdt === sdt &&
+        (!t.thoiGian || !thoiGian || t.thoiGian === thoiGian.toISOString()),
+      );
+      if (isDeleted) {
+        result.duplicates++;
+        continue;
+      }
       const existing = await prisma.candidate.findFirst({ where: { sdtZalo: sdt } });
       if (existing) {
         result.duplicates++;
         continue;
       }
-      const timestampIdx = headers.findIndex((h) => h.toLowerCase() === 'timestamp');
-      const thoiGian = parseFormTimestamp(
-        timestampIdx >= 0 ? String(row[timestampIdx] ?? '') : undefined,
-      );
       await candidateService.createFromForm({
         thoiGian: thoiGian?.toISOString(),
         tenUv: mapped.tenUv,
