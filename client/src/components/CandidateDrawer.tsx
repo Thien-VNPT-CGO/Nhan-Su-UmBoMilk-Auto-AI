@@ -6,7 +6,7 @@ import {
 import { api, ApiError } from '../api/client';
 import { Drawer, Tabs, Badge, Spinner, ConfirmDialog, Field, Skeleton } from './ui';
 import { useToast } from '../stores/Toast';
-import { cn, trainingStatusLabel, syncStatusStyle } from '../utils/format';
+import { cn, trainingStatusLabel, syncStatusStyle, decisionLabel } from '../utils/format';
 import { formatDateTime, formatDate } from '../utils/date';
 
 interface CandidateDetail {
@@ -46,13 +46,13 @@ interface CandidateDetail {
 
 const TABS = [
   { key: 'profile', label: 'Hồ sơ' },
-  { key: 'score', label: 'AI Score' },
-  { key: 'decision', label: 'HR Decision' },
-  { key: 'training', label: 'Training' },
-  { key: 'attendance', label: 'Attendance' },
+  { key: 'score', label: 'Điểm AI' },
+  { key: 'decision', label: 'Quyết định HR' },
+  { key: 'training', label: 'Đào tạo' },
+  { key: 'attendance', label: 'Chấm công' },
   { key: 'zalo', label: 'Zalo' },
-  { key: 'audit', label: 'Audit Log' },
-  { key: 'sync', label: 'Sync History' },
+  { key: 'audit', label: 'Nhật ký' },
+  { key: 'sync', label: 'Lịch sử đồng bộ' },
 ];
 
 export default function CandidateDrawer({
@@ -122,7 +122,7 @@ export default function CandidateDrawer({
     act(() => api.post(`/training/${candidateId}/employee`, {}), 'Đã xác nhận nhân viên chính thức.');
 
   const startTraining = () => {
-    const d = prompt('Ngày bắt đầu Training (dd/MM/yyyy):', formatDate(new Date()));
+    const d = prompt('Ngày bắt đầu đào tạo (dd/MM/yyyy):', formatDate(new Date()));
     if (!d) return;
     const m = d.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
     if (!m) {
@@ -131,7 +131,7 @@ export default function CandidateDrawer({
     }
     act(
       () => api.post(`/candidates/${candidateId}/training/start`, { ngayBatDau: `${m[3]}-${m[2]}-${m[1]}T00:00:00` }),
-      'Đã thiết lập ngày bắt đầu Training.',
+      'Đã thiết lập ngày bắt đầu đào tạo.',
     );
   };
 
@@ -158,10 +158,10 @@ export default function CandidateDrawer({
           {/* Header info */}
           <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-3 flex-wrap">
             <Badge className="bg-brand-50 text-brand-700 font-mono">{c.id}</Badge>
-            <Badge className="bg-slate-100 text-slate-600">Version {c.dataVersion}</Badge>
+            <Badge className="bg-slate-100 text-slate-600">Phiên bản {c.dataVersion}</Badge>
             <Badge className="bg-slate-100 text-slate-600">{c.chiNhanh}</Badge>
             <Badge className="bg-brand-50 text-brand-700">{c.caLam}</Badge>
-            {c.hrDecision === 'PASS' && <Badge className="bg-emerald-100 text-emerald-700">PASS</Badge>}
+            {c.hrDecision === 'PASS' && <Badge className="bg-emerald-100 text-emerald-700">{decisionLabel.PASS.label}</Badge>}
             {c.trangThaiTraining && (
               <Badge className={trainingStatusLabel[c.trangThaiTraining]?.cls}>
                 {trainingStatusLabel[c.trangThaiTraining]?.label}
@@ -206,10 +206,10 @@ export default function CandidateDrawer({
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-slate-800">AI Recommendation:</span>
+                      <span className="text-sm font-bold text-slate-800">Gợi ý AI:</span>
                       {c.aiRecommendation ? (
                         <Badge className={c.aiRecommendation === 'PASS' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}>
-                          {c.aiRecommendation}
+                          {decisionLabel[c.aiRecommendation]?.label ?? c.aiRecommendation}
                         </Badge>
                       ) : <Badge className="bg-slate-100 text-slate-400">Chưa chấm</Badge>}
                     </div>
@@ -257,13 +257,13 @@ export default function CandidateDrawer({
               <div className="space-y-4">
                 <div className="grid grid-cols-3 gap-2.5">
                   <button className="btn-success !py-3" onClick={() => setConfirm('PASS')}>
-                    <CheckCircle2 size={16} /> PASS
+                    <CheckCircle2 size={16} /> Đạt
                   </button>
                   <button className="btn-danger !py-3" onClick={() => setConfirm('FAIL')}>
-                    <XCircle size={16} /> FAIL
+                    <XCircle size={16} /> Loại
                   </button>
                   <button className="btn-secondary !py-3" onClick={() => setConfirm('REVIEW')}>
-                    <AlertTriangle size={16} /> CẦN XEM LẠI
+                    <AlertTriangle size={16} /> Cần xem lại
                   </button>
                 </div>
                 <Field label="Ghi chú / lý do (hiển thị cho HR khác)">
@@ -271,7 +271,7 @@ export default function CandidateDrawer({
                 </Field>
                 {c.hrDecision && (
                   <div className="rounded-xl bg-slate-50 p-3.5 text-sm space-y-1">
-                    <div>Quyết định hiện tại: <b>{c.hrDecision}</b> bởi <b>{c.hrUser ?? ''}</b></div>
+                    <div>Quyết định hiện tại: <b>{decisionLabel[c.hrDecision]?.label ?? c.hrDecision}</b> bởi <b>{c.hrUser ?? ''}</b></div>
                     <div className="text-xs text-slate-500">Lúc {formatDateTime(c.hrDecisionAt)}</div>
                     {c.hrReason && <div className="text-xs text-slate-500">Lý do: {c.hrReason}</div>}
                   </div>
@@ -331,7 +331,7 @@ export default function CandidateDrawer({
                       <div className="text-[11px] text-slate-500">
                         {formatDateTime(a.checkinAt)} · {a.method}
                         {a.reason && a.reason !== 'VALID' && ` · ${a.reason}`}
-                        {a.trainingDay && ` · Training ngày ${a.trainingDay}`}
+                        {a.trainingDay && ` · Đào tạo ngày ${a.trainingDay}`}
                       </div>
                     </div>
                   </div>
@@ -343,7 +343,7 @@ export default function CandidateDrawer({
               <div className="space-y-3">
                 <div className="flex justify-end">
                   <button className="btn-primary" onClick={notifyZalo}>
-                    <MessageCircle size={15} /> Gửi thông báo Training
+                    <MessageCircle size={15} /> Gửi thông báo đào tạo
                   </button>
                 </div>
                 {c.zaloMessages.length === 0 && <p className="text-sm text-slate-400">Chưa có tin nhắn nào.</p>}
@@ -420,7 +420,7 @@ export default function CandidateDrawer({
         open={confirm !== null}
         onClose={() => setConfirm(null)}
         title={`Xác nhận ${confirm ?? ''}`}
-        message={c ? `Quyết định ${confirm === 'PASS' ? 'PASS' : confirm === 'FAIL' ? 'FAIL' : 'CẦN XEM LẠI'} cho ${c.tenUv} (${c.id})? Quyết định sẽ đồng bộ realtime xuống Google Sheet.` : ''}
+        message={c ? `Quyết định ${confirm === 'PASS' ? 'ĐẠT' : confirm === 'FAIL' ? 'LOẠI' : 'CẦN XEM LẠI'} cho ${c.tenUv} (${c.id})? Quyết định sẽ đồng bộ realtime xuống Google Sheet.` : ''}
         confirmLabel="Xác nhận"
         danger={confirm === 'FAIL'}
         onConfirm={() => confirm && decide(confirm)}

@@ -35,6 +35,21 @@ interface SyncData {
   total: number;
 }
 
+export function opLabel(op: string): string {
+  switch (op) {
+    case 'CREATE': return 'TẠO MỚI';
+    case 'UPDATE': return 'CẬP NHẬT';
+    case 'UPSERT': return 'GHI/CẬP NHẬT';
+    case 'DELETE': return 'XÓA';
+    case 'SCORE': return 'CHẤM ĐIỂM';
+    case 'TRAINING': return 'ĐÀO TẠO';
+    case 'ATTENDANCE': return 'CHẤM CÔNG';
+    case 'DECISION': return 'QUYẾT ĐỊNH';
+    case 'CONFLICT-RESOLVE': return 'XỬ LÝ XUNG ĐỘT';
+    default: return op;
+  }
+}
+
 export default function SyncCenter() {
   const { toast } = useToast();
   const [data, setData] = useState<SyncData | null>(null);
@@ -116,14 +131,14 @@ export default function SyncCenter() {
         <StatCard label="Đã đồng bộ" value={counts.SYNCED} icon={<RefreshCw size={18} />} accent="emerald" />
         <StatCard label="Đang chờ" value={counts.PENDING} icon={<RefreshCw size={18} />} accent="amber" />
         <StatCard label="Đang xử lý" value={counts.PROCESSING} icon={<RefreshCw size={18} />} accent="sky" />
-        <StatCard label="Retry" value={counts.RETRY} icon={<RotateCcw size={18} />} accent="amber" />
-        <StatCard label="Failed" value={counts.FAILED} icon={<AlertTriangle size={18} />} accent="rose" />
-        <StatCard label="Conflict" value={counts.CONFLICT} icon={<AlertTriangle size={18} />} accent="indigo" />
+        <StatCard label="Thử lại" value={counts.RETRY} icon={<RotateCcw size={18} />} accent="amber" />
+        <StatCard label="Lỗi" value={counts.FAILED} icon={<AlertTriangle size={18} />} accent="rose" />
+        <StatCard label="Xung đột" value={counts.CONFLICT} icon={<AlertTriangle size={18} />} accent="indigo" />
       </div>
 
       <div className="card overflow-hidden">
         <div className="px-4 py-3 flex items-center gap-2 border-b border-slate-100">
-          <span className="text-sm font-bold text-slate-700">Sync Jobs</span>
+          <span className="text-sm font-bold text-slate-700">Công việc đồng bộ</span>
           <select className="input !w-auto !py-1 text-xs" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="">Tất cả trạng thái</option>
             {statusOptions.map((s) => <option key={s} value={s}>{syncStatusStyle[s]?.label}</option>)}
@@ -139,16 +154,16 @@ export default function SyncCenter() {
               <thead className="bg-slate-50/80">
                 <tr>
                   <th className="table-th">Thời gian</th>
-                  <th className="table-th">Job</th>
-                  <th className="table-th">Candidate</th>
-                  <th className="table-th">Operation</th>
-                  <th className="table-th">Field</th>
-                  <th className="table-th">Old value</th>
-                  <th className="table-th">New value</th>
-                  <th className="table-th">Version</th>
-                  <th className="table-th">Retry</th>
-                  <th className="table-th">Status</th>
-                  <th className="table-th">Error</th>
+                  <th className="table-th">Mã Job</th>
+                  <th className="table-th">Ứng viên</th>
+                  <th className="table-th">Thao tác</th>
+                  <th className="table-th">Trường</th>
+                  <th className="table-th">Giá trị cũ</th>
+                  <th className="table-th">Giá trị mới</th>
+                  <th className="table-th">Phiên bản</th>
+                  <th className="table-th">Thử lại</th>
+                  <th className="table-th">Trạng thái</th>
+                  <th className="table-th">Lỗi</th>
                   <th className="table-th">Thao tác</th>
                 </tr>
               </thead>
@@ -158,7 +173,7 @@ export default function SyncCenter() {
                     <td className="table-td text-xs text-slate-500">{formatDateTime(r.createdAt)}</td>
                     <td className="table-td font-mono text-xs font-bold text-brand-600">{r.id}</td>
                     <td className="table-td font-mono text-xs">{r.entityId}</td>
-                    <td className="table-td"><Badge className="bg-slate-100 text-slate-600">{r.operation}</Badge></td>
+                    <td className="table-td"><Badge className="bg-slate-100 text-slate-600">{opLabel(r.operation)}</Badge></td>
                     <td className="table-td text-slate-600">{r.field ?? r.entity}</td>
                     <td className="table-td text-xs text-slate-400 max-w-[140px] truncate">{r.oldValue ?? '—'}</td>
                     <td className="table-td text-xs text-slate-600 max-w-[140px] truncate">{r.newValue ?? '—'}</td>

@@ -60,7 +60,7 @@ export default function Dashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-extrabold text-slate-800">Tổng quan</h1>
-          <p className="text-sm text-slate-500">Trạng thái tuyển dụng & training hôm nay</p>
+          <p className="text-sm text-slate-500">Trạng thái tuyển dụng & đào tạo hôm nay</p>
         </div>
         <button className="btn-secondary" onClick={() => window.location.reload()}>
           <RefreshCw size={15} /> Làm mới
@@ -71,16 +71,16 @@ export default function Dashboard() {
         <StatCard label="Hồ sơ hôm nay" value={data.today} icon={<FileText size={20} />} accent="brand" onClick={() => navigate('/candidates')} />
         <StatCard label="AI đang chấm" value={data.aiScoring} icon={<BrainCircuit size={20} />} accent="sky" onClick={() => navigate('/scoring')} />
         <StatCard label="Chờ duyệt" value={data.pendingDecision} icon={<Hourglass size={20} />} accent="amber" onClick={() => navigate('/scoring')} />
-        <StatCard label="PASS hôm nay" value={data.passToday} icon={<CheckCircle2 size={20} />} accent="emerald" onClick={() => navigate('/candidates?status=PASS')} />
-        <StatCard label="FAIL hôm nay" value={data.failToday} icon={<XCircle size={20} />} accent="rose" onClick={() => navigate('/candidates?status=FAIL')} />
-        <StatCard label="Đang Training" value={data.training} icon={<GraduationCap size={20} />} accent="indigo" onClick={() => navigate('/training')} />
-        <StatCard label="Hoàn thành Training" value={data.doneTraining} icon={<Trophy size={20} />} accent="emerald" onClick={() => navigate('/training')} />
+        <StatCard label="Đạt hôm nay" value={data.passToday} icon={<CheckCircle2 size={20} />} accent="emerald" onClick={() => navigate('/candidates?status=PASS')} />
+        <StatCard label="Loại hôm nay" value={data.failToday} icon={<XCircle size={20} />} accent="rose" onClick={() => navigate('/candidates?status=FAIL')} />
+        <StatCard label="Đang đào tạo" value={data.training} icon={<GraduationCap size={20} />} accent="indigo" onClick={() => navigate('/training')} />
+        <StatCard label="Hoàn thành đào tạo" value={data.doneTraining} icon={<Trophy size={20} />} accent="emerald" onClick={() => navigate('/training')} />
         <StatCard label="Cần xử lý" value={data.needReview + data.pendingDecision} icon={<AlertTriangle size={20} />} accent="rose" onClick={() => navigate('/candidates?status=REVIEW')} />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-5">
         <div className="card p-5">
-          <h3 className="font-bold text-slate-800 mb-4">Recruitment Funnel</h3>
+          <h3 className="font-bold text-slate-800 mb-4">Kênh tuyển dụng</h3>
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={funnelData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -93,7 +93,7 @@ export default function Dashboard() {
         </div>
 
         <div className="card p-5">
-          <h3 className="font-bold text-slate-800 mb-4">Candidate 7 ngày</h3>
+          <h3 className="font-bold text-slate-800 mb-4">Ứng viên 7 ngày</h3>
           <ResponsiveContainer width="100%" height={240}>
             <LineChart data={data.candidate7d} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -106,7 +106,7 @@ export default function Dashboard() {
         </div>
 
         <div className="card p-5">
-          <h3 className="font-bold text-slate-800 mb-4">Training theo chi nhánh</h3>
+          <h3 className="font-bold text-slate-800 mb-4">Đào tạo theo chi nhánh</h3>
           <ResponsiveContainer width="100%" height={240}>
             <PieChart>
               <Pie data={data.trainingByBranch.length ? data.trainingByBranch : [{ branch: 'Chưa có', count: 1 }]}
@@ -122,7 +122,7 @@ export default function Dashboard() {
         </div>
 
         <div className="card p-5 flex flex-col">
-          <h3 className="font-bold text-slate-800 mb-4">Tỉ lệ hoàn thành Training</h3>
+          <h3 className="font-bold text-slate-800 mb-4">Tỉ lệ hoàn thành đào tạo</h3>
           <div className="flex-1 flex flex-col items-center justify-center">
             <div className="relative w-40 h-40">
               <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">

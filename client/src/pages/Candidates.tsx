@@ -36,10 +36,10 @@ interface CandidateRow {
 const STATUS_FILTERS = [
   { key: '', label: 'Tất cả' },
   { key: 'SCORED', label: 'Đã chấm' },
-  { key: 'PASS', label: 'PASS' },
-  { key: 'FAIL', label: 'FAIL' },
+  { key: 'PASS', label: 'Đạt' },
+  { key: 'FAIL', label: 'Loại' },
   { key: 'REVIEW', label: 'Cần xem lại' },
-  { key: 'TRAINING', label: 'Đang Training' },
+  { key: 'TRAINING', label: 'Đang đào tạo' },
 ];
 
 const SORTS = [
@@ -50,8 +50,8 @@ const SORTS = [
 ];
 
 function decisionBadge(d: string | null) {
-  if (d === 'PASS') return <Badge className="bg-emerald-100 text-emerald-700"><CheckCircle2 size={11} /> PASS</Badge>;
-  if (d === 'FAIL') return <Badge className="bg-rose-100 text-rose-700"><XCircle size={11} /> FAIL</Badge>;
+  if (d === 'PASS') return <Badge className="bg-emerald-100 text-emerald-700"><CheckCircle2 size={11} /> ĐẠT</Badge>;
+  if (d === 'FAIL') return <Badge className="bg-rose-100 text-rose-700"><XCircle size={11} /> LOẠI</Badge>;
   if (d === 'REVIEW') return <Badge className="bg-amber-100 text-amber-700"><AlertTriangle size={11} /> CẦN XEM LẠI</Badge>;
   return <span className="text-slate-400 text-xs">—</span>;
 }
@@ -188,11 +188,11 @@ export default function Candidates() {
                 <th className="table-th">Ca</th>
                 <th className="table-th">Chi nhánh</th>
                 <th className="table-th">Kinh nghiệm</th>
-                <th className="table-th">AI Score</th>
-                <th className="table-th">AI Recommendation</th>
-                <th className="table-th">HR Decision</th>
-                <th className="table-th">Training</th>
-                <th className="table-th">Sync</th>
+                <th className="table-th">Điểm AI</th>
+                <th className="table-th">Gợi ý AI</th>
+                <th className="table-th">Quyết định HR</th>
+                <th className="table-th">Đào tạo</th>
+                <th className="table-th">Đồng bộ</th>
                 <th className="table-th">Thao tác</th>
               </tr>
             </thead>
@@ -237,8 +237,8 @@ export default function Candidates() {
                   <td className="table-td">
                     {r.aiRecommendation ? (
                       r.aiRecommendation === 'PASS'
-                        ? <Badge className="bg-emerald-50 text-emerald-600 border border-emerald-100">PASS</Badge>
-                        : <Badge className="bg-slate-100 text-slate-500">FAIL</Badge>
+                        ? <Badge className="bg-emerald-50 text-emerald-600 border border-emerald-100">ĐẠT</Badge>
+                        : <Badge className="bg-slate-100 text-slate-500">LOẠI</Badge>
                     ) : r.aiScoredAt ? (
                       <Badge className="bg-sky-50 text-sky-600"><BrainCircuit size={11} /> Đang chấm</Badge>
                     ) : (

@@ -148,7 +148,7 @@ export default function Attendance() {
                   <th className="table-th">Phương thức</th>
                   <th className="table-th">Kết quả</th>
                   <th className="table-th">Lý do</th>
-                  <th className="table-th">Training ngày</th>
+                  <th className="table-th">Ngày đào tạo</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -185,7 +185,7 @@ export default function Attendance() {
           </>
         }>
         <div className="space-y-4">
-          <Field label="Ứng viên (đang training)">
+          <Field label="Ứng viên (đang đào tạo)">
             <select className="input" value={candidateId} onChange={(e) => setCandidateId(e.target.value)}>
               <option value="">— Chọn ứng viên —</option>
               {candidates.map((c) => (
@@ -204,7 +204,7 @@ export default function Attendance() {
             <input type="time" className="input" value={checkinAt} onChange={(e) => setCheckinAt(e.target.value)} />
           </Field>
           <p className="text-[11px] text-slate-400">
-            Điểm danh hợp lệ khi: đang Training, có lịch ca hôm đó, đúng khung giờ ca, chưa điểm danh trùng.
+            Điểm danh hợp lệ khi: đang đào tạo, có lịch ca hôm đó, đúng khung giờ ca, chưa điểm danh trùng.
           </p>
         </div>
       </Modal>

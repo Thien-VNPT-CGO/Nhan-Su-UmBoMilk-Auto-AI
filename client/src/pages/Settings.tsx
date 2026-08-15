@@ -138,8 +138,8 @@ export default function Settings() {
     { key: 'sheet', label: 'Google Sheet', icon: FileSpreadsheet },
     { key: 'ai', label: 'AI', icon: BrainCircuit },
     { key: 'zalo', label: 'Zalo', icon: MessageCircle },
-    { key: 'scoring', label: 'Recruitment Scoring', icon: Scale },
-    { key: 'attendance', label: 'Attendance', icon: Clock },
+    { key: 'scoring', label: 'Chấm điểm tuyển dụng', icon: Scale },
+    { key: 'attendance', label: 'Chấm công', icon: Clock },
     { key: 'conflicts', label: 'Xung đột', icon: AlertTriangle },
     { key: 'users', label: 'Tài khoản', icon: UsersIcon },
   ];
@@ -427,12 +427,12 @@ export default function Settings() {
               ))}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="label">Số ngày Training yêu cầu</label>
+                  <label className="label">Số ngày đào tạo yêu cầu</label>
                   <input type="number" className="input" value={s.attendance.trainingDaysRequired}
                     onChange={(e) => patch(['attendance', 'trainingDaysRequired'], Number(e.target.value))} />
                 </div>
                 <div>
-                  <label className="label">Deadline (ngày)</label>
+                  <label className="label">Hạn chót (ngày)</label>
                   <input type="number" className="input" value={s.attendance.trainingDeadlineDays}
                     onChange={(e) => patch(['attendance', 'trainingDeadlineDays'], Number(e.target.value))} />
                 </div>
@@ -490,7 +490,7 @@ export default function Settings() {
                       : u.role === 'HR' ? 'bg-brand-100 text-brand-700'
                         : 'bg-slate-100 text-slate-600'
                   }>
-                    {u.role}
+                    {u.role === 'ADMIN' ? 'QUẢN TRỊ' : u.role === 'HR' ? 'NHÂN SỰ' : 'XEM'}
                   </Badge>
                   {!u.active && <Badge className="bg-rose-100 text-rose-700">BỊ KHÓA</Badge>}
                 </div>

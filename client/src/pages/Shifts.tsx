@@ -129,7 +129,7 @@ export default function Shifts() {
             tab === 'training' ? 'bg-brand-500 text-white shadow-sm' : 'bg-white text-slate-500 hover:bg-slate-50 border border-slate-200',
           )}
         >
-          <GraduationCap size={15} /> Training 7 ngày
+          <GraduationCap size={15} /> Đào tạo 7 ngày
           <Badge className={tab === 'training' ? 'bg-white/20 text-white' : 'bg-brand-50 text-brand-600'}>{trainingRows.length}</Badge>
         </button>
         <button
@@ -160,8 +160,8 @@ export default function Shifts() {
       ) : rows.length === 0 ? (
         <div className="card p-10 text-center text-sm text-slate-400">
           {tab === 'training'
-            ? 'Chưa có nhân sự training. Duyệt PASS ứng viên tại trang Ứng viên.'
-            : 'Chưa có nhân viên chính thức. Xác nhận nhận việc tại trang Training khi nhân sự hoàn thành 7 ngày.'}
+            ? 'Chưa có nhân sự đào tạo. Duyệt ĐẠT ứng viên tại trang Ứng viên.'
+            : 'Chưa có nhân viên chính thức. Xác nhận nhận việc tại trang Đào tạo khi nhân sự hoàn thành 7 ngày.'}
         </div>
       ) : (
         <div className="card overflow-hidden">

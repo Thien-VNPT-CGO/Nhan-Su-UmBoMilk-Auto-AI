@@ -30,6 +30,12 @@ export const trainingStatusLabel: Record<string, { label: string; cls: string }>
   NHAN_VIEN_CHINH_THUC: { label: 'NHÂN VIÊN CHÍNH THỨC', cls: 'bg-violet-100 text-violet-700' },
 };
 
+export const decisionLabel: Record<string, { label: string; cls: string }> = {
+  PASS: { label: 'ĐẠT', cls: 'bg-emerald-100 text-emerald-700' },
+  FAIL: { label: 'LOẠI', cls: 'bg-rose-100 text-rose-700' },
+  REVIEW: { label: 'CẦN XEM LẠI', cls: 'bg-amber-100 text-amber-700' },
+};
+
 export const syncStatusStyle: Record<string, { label: string; cls: string }> = {
   PENDING: { label: 'ĐANG CHỜ', cls: 'bg-amber-100 text-amber-700' },
   PROCESSING: { label: 'ĐANG XỬ LÝ', cls: 'bg-sky-100 text-sky-700' },

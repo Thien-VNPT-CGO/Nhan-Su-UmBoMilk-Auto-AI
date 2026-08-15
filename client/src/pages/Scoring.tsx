@@ -107,9 +107,9 @@ export default function Scoring() {
                   <th className="table-th">SĐT</th>
                   <th className="table-th">Chi nhánh</th>
                   <th className="table-th">Ca</th>
-                  <th className="table-th">AI Score</th>
-                  <th className="table-th">AI Recommendation</th>
-                  <th className="table-th">HR Decision</th>
+                  <th className="table-th">Điểm AI</th>
+                  <th className="table-th">Gợi ý AI</th>
+                  <th className="table-th">Quyết định HR</th>
                   <th className="table-th">Thao tác</th>
                 </tr>
               </thead>
@@ -131,13 +131,13 @@ export default function Scoring() {
                       </span>
                     </td>
                     <td className="table-td">
-                      {r.aiRecommendation === 'PASS' && <Badge className="bg-emerald-100 text-emerald-700">PASS</Badge>}
-                      {r.aiRecommendation === 'FAIL' && <Badge className="bg-slate-100 text-slate-500">FAIL</Badge>}
+                      {r.aiRecommendation === 'PASS' && <Badge className="bg-emerald-100 text-emerald-700">ĐẠT</Badge>}
+                      {r.aiRecommendation === 'FAIL' && <Badge className="bg-slate-100 text-slate-500">LOẠI</Badge>}
                       {!r.aiScoredAt && <Badge className="bg-amber-100 text-amber-700">Chưa chấm</Badge>}
                     </td>
                     <td className="table-td">
-                      {r.hrDecision === 'PASS' && <Badge className="bg-emerald-100 text-emerald-700"><CheckCircle2 size={11} /> PASS</Badge>}
-                      {r.hrDecision === 'FAIL' && <Badge className="bg-rose-100 text-rose-700"><XCircle size={11} /> FAIL</Badge>}
+                      {r.hrDecision === 'PASS' && <Badge className="bg-emerald-100 text-emerald-700"><CheckCircle2 size={11} /> ĐẠT</Badge>}
+                      {r.hrDecision === 'FAIL' && <Badge className="bg-rose-100 text-rose-700"><XCircle size={11} /> LOẠI</Badge>}
                       {r.hrDecision === 'REVIEW' && <Badge className="bg-amber-100 text-amber-700"><AlertTriangle size={11} /> CẦN XEM LẠI</Badge>}
                       {!r.hrDecision && <span className="text-xs text-slate-400">—</span>}
                     </td>

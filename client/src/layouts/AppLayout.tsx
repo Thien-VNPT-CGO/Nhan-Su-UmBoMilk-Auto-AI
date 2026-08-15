@@ -16,7 +16,7 @@ const NAV = [
   { to: '/dashboard', label: 'Tổng quan', icon: LayoutDashboard },
   { to: '/candidates', label: 'Ứng viên', icon: Users },
   { to: '/scoring', label: 'AI chấm hồ sơ', icon: BrainCircuit },
-  { to: '/training', label: 'Training', icon: GraduationCap },
+  { to: '/training', label: 'Đào tạo', icon: GraduationCap },
   { to: '/shifts', label: 'Lịch làm việc', icon: CalendarDays },
   { to: '/attendance', label: 'Điểm danh', icon: ClipboardCheck },
   { to: '/zalo', label: 'Zalo', icon: MessageCircle },
@@ -110,7 +110,7 @@ export default function AppLayout() {
           </div>
           <div>
             <div className="font-extrabold text-slate-800 leading-tight">UMBO MILK</div>
-            <div className="text-[10px] text-slate-400 font-medium">AI Recruitment & Training</div>
+            <div className="text-[10px] text-slate-400 font-medium">Tuyển dụng & Đào tạo AI</div>
           </div>
         </div>
         <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto">

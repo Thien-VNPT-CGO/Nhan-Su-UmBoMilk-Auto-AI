@@ -34,7 +34,7 @@ export default function Login() {
             <Milk size={32} />
           </div>
           <h1 className="text-2xl font-extrabold text-slate-800">UMBO MILK</h1>
-          <p className="text-sm text-slate-500 mt-1">AI Recruitment & Training System</p>
+          <p className="text-sm text-slate-500 mt-1">Hệ thống Tuyển dụng & Đào tạo AI</p>
         </div>
 
         <form onSubmit={submit} className="card p-6 space-y-4">

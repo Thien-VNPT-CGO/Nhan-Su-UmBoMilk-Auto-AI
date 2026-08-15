@@ -55,7 +55,7 @@ export default function AuditLog() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-extrabold text-slate-800">Nhật ký hệ thống (Audit Log)</h1>
+          <h1 className="text-xl font-extrabold text-slate-800">Nhật ký hệ thống</h1>
           <p className="text-sm text-slate-500">{total} sự kiện · 100% mutation được ghi lại</p>
         </div>
         <div className="flex items-center gap-2">
@@ -94,16 +94,16 @@ export default function AuditLog() {
             <table className="w-full">
               <thead className="bg-slate-50/80">
                 <tr>
-                  <th className="table-th">USER</th>
-                  <th className="table-th">ACTION</th>
-                  <th className="table-th">ENTITY</th>
-                  <th className="table-th">ENTITY_ID</th>
-                  <th className="table-th">OLD VALUE</th>
-                  <th className="table-th">NEW VALUE</th>
-                  <th className="table-th">VERSION</th>
-                  <th className="table-th">TIME</th>
+                  <th className="table-th">NGƯỜI DÙNG</th>
+                  <th className="table-th">THAO TÁC</th>
+                  <th className="table-th">ĐỐI TƯỢNG</th>
+                  <th className="table-th">MÃ ĐỐI TƯỢNG</th>
+                  <th className="table-th">GIÁ TRỊ CŨ</th>
+                  <th className="table-th">GIÁ TRỊ MỚI</th>
+                  <th className="table-th">PHIÊN BẢN</th>
+                  <th className="table-th">THỜI GIAN</th>
                   <th className="table-th">IP</th>
-                  <th className="table-th">SYNC JOB</th>
+                  <th className="table-th">JOB ĐỒNG BỘ</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">

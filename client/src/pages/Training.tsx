@@ -41,7 +41,7 @@ export default function Training() {
       const data = await api.get<TrainingRow[]>('/training');
       setRows(data);
     } catch {
-      toast('error', 'Không tải được danh sách Training.');
+      toast('error', 'Không tải được danh sách đào tạo.');
     } finally {
       setLoading(false);
     }
@@ -125,7 +125,7 @@ export default function Training() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-extrabold text-slate-800">Training 7 ngày</h1>
+          <h1 className="text-xl font-extrabold text-slate-800">Đào tạo 7 ngày</h1>
           <p className="text-sm text-slate-500">
             {summary.all} nhân sự · {summary.started} đang training · {summary.done} hoàn thành · {summary.need} cần xử lý
           </p>
@@ -230,7 +230,7 @@ export default function Training() {
 
       <Modal open={!!edit} onClose={() => setEdit(null)} title={`Chỉnh Training – ${edit?.tenUv ?? ''}`}>
         <div className="space-y-4">
-          <Field label="Ngày bắt đầu Training">
+          <Field label="Ngày bắt đầu đào tạo">
             <input type="date" className="input" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
           </Field>
           <button className="btn-primary w-full" onClick={saveStart}>
