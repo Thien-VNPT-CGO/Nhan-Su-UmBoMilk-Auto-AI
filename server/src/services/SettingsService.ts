@@ -9,10 +9,20 @@ export function mergeSettings(raw: unknown): Settings {
   if (!raw || typeof raw !== 'object') return base;
   const r = raw as Record<string, unknown>;
   for (const key of Object.keys(base) as (keyof Settings)[]) {
-    if (r[key] !== undefined && typeof r[key] === 'object' && r[key] !== null) {
-      (base as Record<string, unknown>)[key] = { ...(base[key] as object), ...(r[key] as object) };
-    } else if (r[key] !== undefined) {
-      (base as Record<string, unknown>)[key] = r[key];
+    const v = r[key];
+    if (v === undefined || v === null) continue;
+    if (Array.isArray(v)) {
+      (base as Record<string, unknown>)[key] = v;
+    } else if (typeof v === 'object') {
+      const keys = Object.keys(v);
+      const arrLike = keys.length > 0 && keys.every((k) => /^\d+$/.test(k));
+      if (arrLike) {
+        (base as Record<string, unknown>)[key] = Object.values(v as object);
+      } else {
+        (base as Record<string, unknown>)[key] = { ...(base[key] as object), ...(v as object) };
+      }
+    } else {
+      (base as Record<string, unknown>)[key] = v;
     }
   }
   return base;

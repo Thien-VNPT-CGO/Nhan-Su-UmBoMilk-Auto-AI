@@ -7,6 +7,8 @@ import { syncQueue } from '../services/SyncQueueService';
 import { candidateService } from '../services/CandidateService';
 import { dateKey } from '../lib/date';
 import { env } from '../config/env';
+import { mergeSettings } from '../services/SettingsService';
+import { DEFAULT_SETTINGS } from '../lib/constants';
 
 const PORT = 3100;
 const BASE = `http://localhost:${PORT}/api`;
@@ -348,6 +350,18 @@ async function main() {
   const ft = parseFormTimestamp('15/08/2026 11:20:33');
   ok('FORM: parse thời gian VN locale', !!ft && ft.getFullYear() === 2026 && ft.getMonth() === 7 && ft.getDate() === 15, String(ft));
   ok('FORM: dòng thiếu SĐT -> null', mapFormResponseRow(fHeaders, ['x', 'Nguyễn Văn B']) === null);
+
+  // ==================== SETTINGS MERGE (tombstone array) ====================
+  console.log('\n[SETTINGS] Hợp nhất settings (mảng tombstone)');
+  const merged1 = mergeSettings({ ...DEFAULT_SETTINGS, deletedFormResponses: [{ sdt: '0901234567', thoiGian: '2026-08-15T04:20:33.000Z' }] });
+  ok('SETTINGS: mergeSettings giữ nguyên mảng', Array.isArray((merged1 as unknown as Record<string, unknown>).deletedFormResponses)
+    && ((merged1 as unknown as Record<string, unknown>).deletedFormResponses as unknown[]).length === 1);
+  const merged2 = mergeSettings({ ...DEFAULT_SETTINGS, deletedFormResponses: { 0: { sdt: '0901234567', thoiGian: '2026-08-15T04:20:33.000Z' } } });
+  ok('SETTINGS: dữ liệu cũ bị hỏng dạng {0:...} được phục hồi thành mảng', Array.isArray((merged2 as unknown as Record<string, unknown>).deletedFormResponses)
+    && ((merged2 as unknown as Record<string, unknown>).deletedFormResponses as { sdt: string }[])[0]?.sdt === '0901234567');
+  const merged3 = mergeSettings({ ...DEFAULT_SETTINGS, googleSheet: { spreadsheetId: 'abc' } });
+  ok('SETTINGS: object lồng nhau vẫn merge đúng', (merged3 as unknown as { googleSheet: { spreadsheetId: string } }).googleSheet.spreadsheetId === 'abc'
+    && (merged3 as unknown as { googleSheet: { formResponsesId: string } }).googleSheet.formResponsesId === '');
 
   // ==================== SUMMARY ====================
   await shutdownSystem();
