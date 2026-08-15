@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { getSettings } from './SettingsService';
 import { formatDateTime, formatDate, dateKey } from '../lib/date';
 import { dataHash } from '../lib/id';
+import { normalizePhone } from './CandidateService';
 import type { Candidate } from '@prisma/client';
 
 export const LOC_HO_SO_COLS = [
@@ -316,6 +317,44 @@ export class GoogleSheetService {
       range: `${sheetName}!A1:Z`,
     });
     return res.data.values ?? [];
+  }
+
+  /** Xóa (clear) các dòng phản hồi form khớp SĐT (+ thời gian nếu có) để không bị import lại. */
+  async clearFormResponseRows(phone: string, thoiGian?: Date | null): Promise<number> {
+    const formId = this.formResponsesId;
+    if (!formId || !this.configured) return 0;
+    const meta = await this.fetchSpreadsheetMeta(formId);
+    const tab = meta.tabs[0];
+    if (!tab) return 0;
+    const res = await this.fetchValues(formId, `${tab.title}!A1:${tab.lastCol}${tab.rowCount}`);
+    const values = res ?? [];
+    if (values.length <= 1) return 0;
+    const headers = (values[0] ?? []).map((h) => String(h ?? '').trim());
+    let tsIdx = -1;
+    let sdtIdx = -1;
+    headers.forEach((h, i) => {
+      const f = mapHeaderToField(h);
+      if (f === 'sdtZalo' && sdtIdx < 0) sdtIdx = i;
+      if (h.toLowerCase() === 'timestamp' && tsIdx < 0) tsIdx = i;
+    });
+    if (sdtIdx < 0) return 0;
+    const target = normalizePhone(phone);
+    const rowsToClear: number[] = [];
+    for (let i = 1; i < values.length; i++) {
+      const row = values[i] ?? [];
+      const cellPhone = normalizePhone(String(row[sdtIdx] ?? '').trim());
+      if (!cellPhone || cellPhone !== target) continue;
+      if (thoiGian) {
+        const ts = parseFormTimestamp(tsIdx >= 0 ? String(row[tsIdx] ?? '') : undefined);
+        if (!ts || Math.abs(ts.getTime() - thoiGian.getTime()) > 1000) continue;
+      }
+      rowsToClear.push(i + 1);
+    }
+    for (const rowIndex of rowsToClear) {
+      const range = `${tab.title}!A${rowIndex}:${tab.lastCol}${rowIndex}`;
+      await this.sheets!.spreadsheets.values.clear({ spreadsheetId: formId, range });
+    }
+    return rowsToClear.length;
   }
 
   async appendRow(sheetName: string, values: (string | number)[]): Promise<void> {

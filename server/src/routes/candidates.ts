@@ -5,6 +5,7 @@ import { candidateService, normalizePhone } from '../services/CandidateService';
 import { candidateScoringService } from '../services/CandidateScoringService';
 import { syncQueue } from '../services/SyncQueueService';
 import { audit } from '../services/AuditService';
+import { getGoogleSheetService } from '../services/GoogleSheetService';
 import { ApiError } from '../lib/errors';
 import { prisma } from '../lib/prisma';
 
@@ -77,6 +78,13 @@ router.delete('/:id', requireRole('ADMIN', 'HR'), async (req: AuthedRequest, res
   try {
     const candidate = await prisma.candidate.findUnique({ where: { id: req.params.id } });
     if (!candidate) throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy ứng viên.');
+
+    try {
+      const cleared = await getGoogleSheetService().clearFormResponseRows(candidate.sdtZalo, candidate.thoiGian);
+      if (cleared > 0) console.log(`[DELETE] Đã xóa ${cleared} dòng phản hồi form của ${candidate.id}`);
+    } catch (e) {
+      console.warn('[DELETE] clearFormResponseRows:', e instanceof Error ? e.message : String(e));
+    }
 
     await syncQueue.enqueue({
       entity: 'candidate',
