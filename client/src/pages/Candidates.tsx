@@ -2,10 +2,10 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Search, Filter, ChevronLeft, ChevronRight, Users, Eye, RefreshCw,
-  CheckCircle2, XCircle, AlertTriangle, BrainCircuit,
+  CheckCircle2, XCircle, AlertTriangle, BrainCircuit, Trash2,
 } from 'lucide-react';
 import { api, ApiError } from '../api/client';
-import { Badge, Skeleton, EmptyState, Tooltip } from '../components/ui';
+import { Badge, Skeleton, EmptyState, Tooltip, Modal } from '../components/ui';
 import CandidateDrawer from '../components/CandidateDrawer';
 import { useToast } from '../stores/Toast';
 import { getSocket } from '../api/socket';
@@ -72,6 +72,8 @@ export default function Candidates() {
   const [branchOptions, setBranchOptions] = useState<string[]>([]);
   const [shiftOptions, setShiftOptions] = useState<string[]>([]);
   const [selected, setSelected] = useState<CandidateRow | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<CandidateRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -261,14 +263,24 @@ export default function Candidates() {
                     )}
                   </td>
                   <td className="table-td">
-                    <Tooltip text="Xem chi tiết">
-                      <button
-                        className="btn-secondary !px-2.5 !py-1.5"
-                        onClick={(e) => { e.stopPropagation(); setSelected(r); }}
-                      >
-                        <Eye size={14} />
-                      </button>
-                    </Tooltip>
+                    <div className="flex items-center gap-1.5">
+                      <Tooltip text="Xem chi tiết">
+                        <button
+                          className="btn-secondary !px-2.5 !py-1.5"
+                          onClick={(e) => { e.stopPropagation(); setSelected(r); }}
+                        >
+                          <Eye size={14} />
+                        </button>
+                      </Tooltip>
+                      <Tooltip text="Xóa ứng viên">
+                        <button
+                          className="btn-secondary !px-2.5 !py-1.5 !text-red-500 hover:!bg-red-50"
+                          onClick={(e) => { e.stopPropagation(); setConfirmDelete(r); }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </Tooltip>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -297,6 +309,43 @@ export default function Candidates() {
         onClose={() => setSelected(null)}
         onChanged={() => void load()}
       />
+
+      <Modal
+        open={!!confirmDelete}
+        onClose={() => setConfirmDelete(null)}
+        title="Xóa ứng viên"
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-slate-600">
+            Xóa hồ sơ <b className="text-slate-800">{confirmDelete?.tenUv}</b> ({confirmDelete?.id})?
+            Dữ liệu liên quan (ca trực, điểm, training...) sẽ bị xóa khỏi hệ thống
+            và khỏi Google Sheet. <b>Không thể hoàn tác.</b>
+          </p>
+          <div className="flex justify-end gap-2">
+            <button className="btn-secondary" onClick={() => setConfirmDelete(null)}>Hủy</button>
+            <button
+              className="btn-danger"
+              disabled={deleting}
+              onClick={async () => {
+                if (!confirmDelete) return;
+                setDeleting(true);
+                try {
+                  await api.delete(`/candidates/${confirmDelete.id}`);
+                  toast('success', `Đã xóa ứng viên ${confirmDelete.tenUv}.`);
+                  setConfirmDelete(null);
+                  void load();
+                } catch (e) {
+                  toast('error', e instanceof ApiError ? e.message : 'Xóa ứng viên thất bại.');
+                } finally {
+                  setDeleting(false);
+                }
+              }}
+            >
+              {deleting ? 'Đang xóa...' : 'Xóa'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

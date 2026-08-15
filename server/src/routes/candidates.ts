@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { requireAuth, requireWrite, AuthedRequest } from '../middleware/auth';
+import { requireAuth, requireWrite, requireRole, AuthedRequest } from '../middleware/auth';
 import { candidateService, normalizePhone } from '../services/CandidateService';
 import { candidateScoringService } from '../services/CandidateScoringService';
+import { syncQueue } from '../services/SyncQueueService';
+import { audit } from '../services/AuditService';
 import { ApiError } from '../lib/errors';
 import { prisma } from '../lib/prisma';
 
@@ -69,6 +71,34 @@ router.get('/:id', async (req, res, next) => {
 const updateSchema = z.object({
   version: z.number().int().positive(),
   patch: z.record(z.unknown()).refine((v) => Object.keys(v).length > 0, 'Patch trống'),
+});
+
+router.delete('/:id', requireRole('ADMIN', 'HR'), async (req: AuthedRequest, res, next) => {
+  try {
+    const candidate = await prisma.candidate.findUnique({ where: { id: req.params.id } });
+    if (!candidate) throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy ứng viên.');
+
+    await prisma.candidate.delete({ where: { id: req.params.id } });
+    await audit({
+      user: req.user!.username,
+      action: 'DELETE_CANDIDATE',
+      entity: 'candidate',
+      entityId: req.params.id,
+      oldValue: { tenUv: candidate.tenUv, sdtZalo: candidate.sdtZalo },
+      version: candidate.dataVersion,
+    });
+    await syncQueue.enqueue({
+      entity: 'candidate',
+      entityId: req.params.id,
+      operation: 'DELETE',
+      version: candidate.dataVersion + 1,
+      idempotencyKey: `candidate:${req.params.id}:delete:v1`,
+    });
+
+    res.json({ success: true, data: { id: req.params.id, deleted: true } });
+  } catch (e) {
+    next(e);
+  }
 });
 
 router.patch('/:id', requireWrite(), async (req: AuthedRequest, res, next) => {

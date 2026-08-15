@@ -159,6 +159,28 @@ export class GoogleSheetService {
     return (res.data.values as string[][] | null) ?? null;
   }
 
+  /** Xóa dòng ứng viên ở cả 3 sheet theo CANDIDATE_ID. */
+  async deleteCandidateRows(candidateId: string): Promise<void> {
+    if (!this.configured) return;
+    for (const title of [this.sheetNames.locHoSo, this.sheetNames.diemUv, this.sheetNames.hoSoNv]) {
+      try {
+        const res = await this.sheets!.spreadsheets.values.get({
+          spreadsheetId: this.id,
+          range: `${title}!A:A`,
+        });
+        const col = (res.data.values ?? []).map((r) => String(r[0] ?? '').trim());
+        const idx = col.findIndex((v, i) => i > 0 && v === candidateId);
+        if (idx <= 0) continue;
+        await this.sheets!.spreadsheets.values.batchClear({
+          spreadsheetId: this.id,
+          requestBody: { ranges: [`${title}!A${idx + 1}:ZZ${idx + 1}`] },
+        });
+      } catch {
+        // bỏ qua tab lỗi, vẫn xóa tiếp tab khác
+      }
+    }
+  }
+
   private colLetter(n: number): string {
     let s = '';
     while (n > 0) {

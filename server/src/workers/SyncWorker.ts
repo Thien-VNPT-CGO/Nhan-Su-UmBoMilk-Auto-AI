@@ -104,6 +104,15 @@ export class SyncWorker {
 
       switch (job.entity) {
         case 'candidate': {
+          if (job.operation === 'DELETE') {
+            await sheet.deleteCandidateRows(job.entityId);
+            await prisma.syncJob.update({
+              where: { id: job.id },
+              data: { status: 'SYNCED', lastError: null, nextAttemptAt: null },
+            });
+            emit('sync:success', { jobId });
+            return;
+          }
           if (!candidate) throw new Error(`Candidate ${job.entityId} không tồn tại`);
           if (job.operation === 'CREATE' || job.operation === 'UPSERT' || job.operation === 'UPDATE') {
             await sheet.syncCandidate(candidate);
