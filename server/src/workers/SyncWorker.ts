@@ -102,6 +102,15 @@ export class SyncWorker {
         ? await prisma.candidate.findUnique({ where: { id: job.candidateId } })
         : null;
 
+      if (job.operation !== 'DELETE' && !candidate) {
+        await prisma.syncJob.update({
+          where: { id: job.id },
+          data: { status: 'SYNCED', lastError: 'Bỏ qua: ứng viên đã bị xóa', nextAttemptAt: null },
+        });
+        emit('sync:success', { jobId, skipped: true });
+        return;
+      }
+
       switch (job.entity) {
         case 'candidate': {
           if (job.operation === 'DELETE') {
