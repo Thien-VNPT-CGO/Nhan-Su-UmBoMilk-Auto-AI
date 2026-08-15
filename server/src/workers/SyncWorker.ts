@@ -1,13 +1,16 @@
 import { prisma } from '../lib/prisma';
 import { syncQueue } from '../services/SyncQueueService';
 import { getGoogleSheetService } from '../services/GoogleSheetService';
+import { importFormResponses } from '../services/FormImportService';
 import { emit } from '../sockets';
 
 export class SyncWorker {
   private running = false;
   private intervalMs: number;
   private timer: NodeJS.Timeout | null = null;
+  private formTimer: NodeJS.Timeout | null = null;
   private provisioned = false;
+  private importingForm = false;
 
   constructor(intervalMs = 3000) {
     this.intervalMs = intervalMs;
@@ -19,7 +22,11 @@ export class SyncWorker {
     this.timer = setInterval(() => {
       void this.tick();
     }, this.intervalMs);
+    this.formTimer = setInterval(() => {
+      void this.tickFormImport();
+    }, 60_000);
     void this.tick();
+    void this.tickFormImport();
     console.log('[SyncWorker] started');
   }
 
@@ -27,6 +34,26 @@ export class SyncWorker {
     this.running = false;
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    if (this.formTimer) clearInterval(this.formTimer);
+    this.formTimer = null;
+  }
+
+  /** Tự nhập ứng viên mới từ sheet phản hồi Google Form (không cần Apps Script). */
+  private async tickFormImport(): Promise<void> {
+    if (!this.running || this.importingForm) return;
+    this.importingForm = true;
+    try {
+      const result = await importFormResponses();
+      if (result.enabled && result.lastError) {
+        console.warn('[SyncWorker] form import:', result.lastError);
+      } else if (result.imported > 0) {
+        console.log(`[SyncWorker] form import: +${result.imported} mới, ${result.duplicates} trùng`);
+      }
+    } catch (e) {
+      console.warn('[SyncWorker] form import:', e instanceof Error ? e.message : String(e));
+    } finally {
+      this.importingForm = false;
+    }
   }
 
   private async tick(): Promise<void> {

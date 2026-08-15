@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   FileSpreadsheet, BrainCircuit, MessageCircle, Scale, Clock, Users as UsersIcon,
-  Save, AlertTriangle, ShieldCheck,
+  Save, AlertTriangle, ShieldCheck, RefreshCw,
 } from 'lucide-react';
 import { api, ApiError } from '../api/client';
 import { Badge, Spinner } from '../components/ui';
@@ -37,6 +37,7 @@ interface SettingsData {
       spreadsheetId: string;
       serviceAccountEmail: string;
       privateKey: string;
+      formResponsesId: string;
       sheets: { locHoSo: string; diemUv: string; hoSoNv: string };
     };
     zalo: { oaId: string; accessToken: string; refreshToken: string };
@@ -211,6 +212,35 @@ export default function Settings() {
               <div>
                 <label className="label">Private Key (-----BEGIN PRIVATE KEY-----...)</label>
                 <textarea className="input min-h-[90px] font-mono text-[11px]" value={s.googleSheet.privateKey} onChange={(e) => patch(['googleSheet', 'privateKey'], e.target.value)} placeholder="-----BEGIN PRIVATE KEY-----&#10;MIIEvQIBADANBgkqh...&#10;-----END PRIVATE KEY-----" />
+              </div>
+              <div className="rounded-xl border border-dashed border-brand-200 bg-brand-50/40 p-3.5">
+                <div className="text-xs font-semibold text-brand-700 mb-1">
+                  Tự động nhập ứng viên từ Google Form (không cần Apps Script)
+                </div>
+                <label className="label">Form Responses Sheet ID</label>
+                <input className="input" value={s.googleSheet.formResponsesId} onChange={(e) => patch(['googleSheet', 'formResponsesId'], e.target.value)} placeholder="1Abc...XYZ" />
+                <div className="text-[11px] text-slate-500 mt-2 space-y-1">
+                  <div>1. Trong form: tab <b>Phản hồi</b> → <b>Liên kết với Sheets</b> (tạo spreadsheet phản hồi).</div>
+                  <div>2. Mở spreadsheet đó → nút <b>Chia sẻ</b> → thêm <b>{data.googleSheetConfigured ? 'Service Account Email' : 'Service Account Email của bạn'}</b> (quyền xem).</div>
+                  <div>3. Copy ID trong URL (<i>/spreadsheets/d/&lt;ID&gt;/edit</i>) dán vào ô trên.</div>
+                  <div>4. Hệ thống tự kiểm tra mỗi phút + có nút nhập ngay bên dưới.</div>
+                </div>
+                <button
+                  type="button"
+                  className="btn-primary mt-3"
+                  disabled={saving}
+                  onClick={async () => {
+                    try {
+                      const r = await api.post<{ imported: number; duplicates: number; invalid: number; lastError: string | null; lastRunAt: string | null }>('/sync/form-import', {});
+                      if (r.lastError) toast('error', 'Lỗi: ' + r.lastError);
+                      else toast('success', `Nhập xong: +${r.imported} mới · ${r.duplicates} trùng · ${r.invalid} lỗi${r.lastRunAt ? ' · lần chạy: ' + new Date(r.lastRunAt).toLocaleTimeString('vi-VN') : ''}`);
+                    } catch (e) {
+                      toast('error', e instanceof ApiError ? e.message : 'Nhập dữ liệu form thất bại.');
+                    }
+                  }}
+                >
+                  <RefreshCw size={14} /> Nhập dữ liệu form ngay
+                </button>
               </div>
               <div className="grid sm:grid-cols-3 gap-3">
                 {(['locHoSo', 'diemUv', 'hoSoNv'] as const).map((k) => (

@@ -109,6 +109,7 @@ export const DEFAULT_SETTINGS = {
     spreadsheetId: '',
     serviceAccountEmail: '',
     privateKey: '',
+    formResponsesId: '',
     sheets: {
       locHoSo: 'LOC_HO_SO_PV',
       diemUv: 'DIEM_UV',

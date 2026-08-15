@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { createApp, startSystem, shutdownSystem } from '../app';
 import { prisma } from '../lib/prisma';
-import { getGoogleSheetService, GoogleSheetService, LOC_HO_SO_COLS } from '../services/GoogleSheetService';
+import { getGoogleSheetService, GoogleSheetService, LOC_HO_SO_COLS, mapFormResponseRow, parseFormTimestamp } from '../services/GoogleSheetService';
 import { conflictService } from '../services/ConflictService';
 import { syncQueue } from '../services/SyncQueueService';
 import { candidateService } from '../services/CandidateService';
@@ -328,6 +328,26 @@ async function main() {
   const prov = await api('/sync/provision', { method: 'POST', session: session2, body: {} });
   ok('PROV: Endpoint tạo cấu trúc hoạt động (demo mode)', prov.status === 200, `${prov.status}`);
   ok('PROV: Demo mode báo demo + xếp hàng đồng bộ toàn bộ', prov.json.data.demo === true && prov.json.data.candidates > 0, JSON.stringify(prov.json.data));
+
+  // ==================== FORM RESPONSES MAPPING (pure function) ====================
+  console.log('\n[FORM MAP] Map cột sheet phản hồi Google Form');
+  const fHeaders = [
+    'Timestamp', 'Tên Bạn là?', 'Giới tính của bạn?', 'Năm Sinh của bạn?', 'Trình độ học vấn',
+    'Quê Quán theo CCCD?', 'Số điện thoại của bạn (Số zalo để liên hệ)', 'Em có thể làm ca nào?',
+    'Chi nhánh em muốn ứng tuyển (CỐ ĐỊNH)?', 'Kinh nghiệm làm việc?',
+    'Nếu như ngày mai em có việc đột xuất trùng với lịch ca trực của em, thì hướng xử lý như nào?',
+    'Gửi link Facebook cá nhân của bạn vào đây nhé!',
+  ];
+  const fRow = ['15/08/2026 11:20:33', 'Nguyễn Văn A', 'Nữ', '2003', 'Sinh viên năm 2', 'Tiền Giang', '0901234567', 'Ca sáng', 'Tân Phú', 'Chưa có', 'Báo quản lý trước', 'fb.com/a'];
+  const fm = mapFormResponseRow(fHeaders, fRow);
+  ok('FORM: map đủ 11 cột đúng field', !!fm
+    && fm!.tenUv === 'Nguyễn Văn A' && fm!.gioiTinh === 'Nữ' && fm!.namSinh === '2003'
+    && fm!.trinhDo === 'Sinh viên năm 2' && fm!.queQuan === 'Tiền Giang' && fm!.sdtZalo === '0901234567'
+    && fm!.caLam === 'Ca sáng' && fm!.chiNhanh === 'Tân Phú' && fm!.kinhNghiem === 'Chưa có'
+    && fm!.xuLy === 'Báo quản lý trước' && fm!.linkFb === 'fb.com/a');
+  const ft = parseFormTimestamp('15/08/2026 11:20:33');
+  ok('FORM: parse thời gian VN locale', !!ft && ft.getFullYear() === 2026 && ft.getMonth() === 7 && ft.getDate() === 15, String(ft));
+  ok('FORM: dòng thiếu SĐT -> null', mapFormResponseRow(fHeaders, ['x', 'Nguyễn Văn B']) === null);
 
   // ==================== SUMMARY ====================
   await shutdownSystem();

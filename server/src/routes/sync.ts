@@ -3,6 +3,7 @@ import { requireAuth, requireWrite, requireRole, AuthedRequest } from '../middle
 import { syncQueue } from '../services/SyncQueueService';
 import { reconciliationService } from '../services/ReconciliationService';
 import { getGoogleSheetService } from '../services/GoogleSheetService';
+import { importFormResponses, getFormImportStatus } from '../services/FormImportService';
 import { audit } from '../services/AuditService';
 import { ApiError } from '../lib/errors';
 import { prisma } from '../lib/prisma';
@@ -58,6 +59,23 @@ router.post('/reconcile', requireWrite(), async (req: AuthedRequest, _res, next)
  * Liên kết Google Sheet thật: tự động tạo các sheet (tab) + cột chuẩn,
  * sau đó đồng bộ toàn bộ dữ liệu hiện có xuống. Demo mode → enqueue full resync.
  */
+router.post('/form-import', requireRole('ADMIN'), async (req: AuthedRequest, res, next) => {
+  try {
+    const result = await importFormResponses();
+    const status = getFormImportStatus();
+    await audit({
+      user: req.user!.username,
+      action: 'FORM_IMPORT',
+      entity: 'system',
+      entityId: 'google_form',
+      newValue: result as unknown as Record<string, unknown>,
+    });
+    res.json({ success: true, data: { ...result, ...status } });
+  } catch (e) {
+    next(e);
+  }
+});
+
 router.post('/provision', requireRole('ADMIN'), async (req: AuthedRequest, res, next) => {
   try {
     const sheet = getGoogleSheetService();

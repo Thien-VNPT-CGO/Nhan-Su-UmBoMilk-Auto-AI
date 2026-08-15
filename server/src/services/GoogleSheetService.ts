@@ -32,6 +32,7 @@ export interface SheetConfig {
   spreadsheetId: string;
   email: string;
   key: string;
+  formResponsesId: string;
   locHoSo: string;
   diemUv: string;
   hoSoNv: string;
@@ -64,6 +65,7 @@ export class GoogleSheetService {
       spreadsheetId: env.googleSheetId,
       email: env.googleServiceAccountEmail,
       key: env.googlePrivateKey,
+      formResponsesId: '',
       locHoSo: env.sheetNameLocHoSo,
       diemUv: env.sheetNameDiemUv,
       hoSoNv: env.sheetNameHoSoNv,
@@ -107,6 +109,7 @@ export class GoogleSheetService {
         spreadsheetId: String(g.spreadsheetId || cfg.spreadsheetId),
         email: String(g.serviceAccountEmail || cfg.email),
         key: String(g.privateKey || cfg.key),
+        formResponsesId: String(g.formResponsesId || cfg.formResponsesId),
         locHoSo: String(sheets.locHoSo || cfg.locHoSo),
         diemUv: String(sheets.diemUv || cfg.diemUv),
         hoSoNv: String(sheets.hoSoNv || cfg.hoSoNv),
@@ -127,6 +130,43 @@ export class GoogleSheetService {
       diemUv: this.cfg?.diemUv ?? env.sheetNameDiemUv,
       hoSoNv: this.cfg?.hoSoNv ?? env.sheetNameHoSoNv,
     };
+  }
+
+  get formResponsesId(): string {
+    return this.cfg?.formResponsesId ?? '';
+  }
+
+  /** Lấy danh sách tab của spreadsheet khác (sheet phản hồi form). */
+  async fetchSpreadsheetMeta(spreadsheetId: string): Promise<{
+    tabs: { title: string; rowCount: number; lastCol: string }[];
+  }> {
+    const meta = await this.sheets!.spreadsheets.get({ spreadsheetId });
+    const tabs = (meta.data.sheets ?? []).map((sh) => {
+      const props = sh.properties ?? {};
+      const cols = props.gridProperties?.columnCount ?? 26;
+      return {
+        title: String(props.title ?? ''),
+        rowCount: props.gridProperties?.rowCount ?? 1000,
+        lastCol: this.colLetter(cols),
+      };
+    });
+    return { tabs };
+  }
+
+  /** Đọc giá trị một vùng của spreadsheet khác. */
+  async fetchValues(spreadsheetId: string, range: string): Promise<string[][] | null> {
+    const res = await this.sheets!.spreadsheets.values.get({ spreadsheetId, range });
+    return (res.data.values as string[][] | null) ?? null;
+  }
+
+  private colLetter(n: number): string {
+    let s = '';
+    while (n > 0) {
+      n -= 1;
+      s = String.fromCharCode(65 + (n % 26)) + s;
+      n = Math.floor(n / 26);
+    }
+    return s || 'A';
   }
 
   private get id(): string {
@@ -438,6 +478,24 @@ export function getGoogleSheetService(): GoogleSheetService {
   return _service;
 }
 
+/** Đọc toàn bộ dữ liệu sheet phản hồi của Google Form (không cần Apps Script). */
+export async function fetchFormResponses(): Promise<{ headers: string[]; rows: string[][] }> {
+  const sheet = getGoogleSheetService();
+  if (!sheet.configured) throw new Error('Google Sheets chưa được cấu hình');
+  const formId = sheet.formResponsesId;
+  if (!formId) throw new Error('Chưa cấu hình Form Responses Sheet ID');
+
+  const meta = await sheet.fetchSpreadsheetMeta(formId);
+  const tab = meta.tabs[0];
+  if (!tab) throw new Error('Spreadsheet phản hồi không có sheet nào');
+  const res = await sheet.fetchValues(formId, `${tab.title}!A1:${tab.lastCol}${tab.rowCount}`);
+  const values = res ?? [];
+  if (values.length === 0) return { headers: [], rows: [] };
+  const headers = (values[0] ?? []).map((h) => String(h ?? '').trim());
+  const rows = values.slice(1).filter((r) => r.some((cell) => String(cell ?? '').trim() !== ''));
+  return { headers, rows };
+}
+
 export function candidateDataHash(c: Candidate): string {
   const payload: Record<string, unknown> = {
     id: c.id,
@@ -460,4 +518,92 @@ export function candidateDataHash(c: Candidate): string {
     trangThaiTraining: c.trangThaiTraining,
   };
   return dataHash(payload);
+}
+
+export interface FormResponseRow {
+  thoiGian?: string;
+  tenUv: string;
+  gioiTinh: string;
+  namSinh: string;
+  trinhDo: string;
+  queQuan: string;
+  sdtZalo: string;
+  caLam: string;
+  chiNhanh: string;
+  kinhNghiem: string;
+  xuLy: string;
+  linkFb: string;
+}
+
+const FORM_HEADER_ALIASES: Record<string, string[]> = {
+  tenUv: ['ten ban la', 'ten', 'ho va ten', 'ho ten'],
+  gioiTinh: ['gioi tinh', 'gioi tinh cua ban'],
+  namSinh: ['nam sinh', 'nam sinh cua ban'],
+  trinhDo: ['trinh do hoc van', 'trinh do'],
+  queQuan: ['que quan', 'que quan theo cccd'],
+  sdtZalo: ['so dien thoai', 'so dien thoai cua ban', 'sdt', 'zalo'],
+  caLam: ['em co the lam ca nao', 'ca lam', 'ca lam viec'],
+  chiNhanh: ['chi nhanh', 'chi nhanh em muon ung tuyen'],
+  kinhNghiem: ['kinh nghiem', 'kinh nghiem lam viec'],
+  xuLy: ['xu ly', 'huong xu ly', 'cong viec dot xuat'],
+  linkFb: ['link facebook', 'facebook', 'fb'],
+};
+
+function normalizeHeader(h: string): string {
+  return h
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/[\(\)\[\]{}?]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function mapHeaderToField(header: string): string | null {
+  const n = normalizeHeader(header);
+  for (const [field, aliases] of Object.entries(FORM_HEADER_ALIASES)) {
+    if (aliases.some((a) => n.includes(a))) return field;
+  }
+  return null;
+}
+
+/** Map 1 dòng dữ liệu sheet phản hồi form -> payload tạo hồ sơ. */
+export function mapFormResponseRow(headers: string[], row: unknown[]): FormResponseRow | null {
+  const mapped: Record<string, string> = {};
+  for (let i = 0; i < headers.length; i++) {
+    const field = mapHeaderToField(headers[i] ?? '');
+    if (!field) continue;
+    const raw = row[i] ?? '';
+    const v = String(raw).trim();
+    if (v && mapped[field] === undefined) mapped[field] = v;
+  }
+  if (!mapped.tenUv || !mapped.sdtZalo) return null;
+  return {
+    tenUv: mapped.tenUv,
+    gioiTinh: mapped.gioiTinh ?? '',
+    namSinh: mapped.namSinh ?? '',
+    trinhDo: mapped.trinhDo ?? '',
+    queQuan: mapped.queQuan ?? '',
+    sdtZalo: mapped.sdtZalo,
+    caLam: mapped.caLam ?? '',
+    chiNhanh: mapped.chiNhanh ?? '',
+    kinhNghiem: mapped.kinhNghiem ?? '',
+    xuLy: mapped.xuLy ?? '',
+    linkFb: mapped.linkFb ?? '',
+  };
+}
+
+/** Parse thời gian phản hồi dạng "15/08/2026 11:20:33" (locale VN) hoặc ISO. */
+export function parseFormTimestamp(v: string | undefined): Date | undefined {
+  if (!v) return undefined;
+  const d = new Date(v);
+  if (!Number.isNaN(d.getTime())) return d;
+  const m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (m) {
+    const [, dd, mm, yyyy, hh, mi, ss = '0'] = m;
+    const parsed = new Date(Number(yyyy), Number(mm) - 1, Number(dd), Number(hh), Number(mi), Number(ss));
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+  return undefined;
 }
