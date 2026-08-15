@@ -42,12 +42,15 @@
 }
 
 ::-webkit-scrollbar {
-  height: 8px;
-  width: 8px;
+  height: 16px;
+  width: 10px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
   @apply bg-slate-300 rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-400;
 }
