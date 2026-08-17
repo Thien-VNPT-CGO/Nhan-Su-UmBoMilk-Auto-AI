@@ -56,32 +56,46 @@ export class ReconciliationService {
       const hashCol = col('DATA_HASH');
       const versionCol = col('DATA_VERSION');
 
+      // Nạp TẤT CẢ ứng viên 1 lần (thay vì 1 query/dòng) - giảm hàng trăm truy vấn DB mỗi chu kỳ
+      const all = await prisma.candidate.findMany({
+        select: {
+          id: true,
+          tenUv: true, gioiTinh: true, namSinh: true, trinhDo: true, queQuan: true,
+          sdtZalo: true, caLam: true, chiNhanh: true, kinhNghiem: true, xuLy: true, linkFb: true,
+          hrDecision: true, tongDiem: true, aiRecommendation: true,
+          dataVersion: true, ngayBatDauTraining: true, trangThaiTraining: true,
+        },
+      });
+      const byId = new Map(all.map((c) => [c.id, c]));
+
       for (let i = 1; i < rows.length; i++) {
         const row = rows[i];
         if (!row[idCol]) continue;
         checked++;
         const candidateId = row[idCol].trim();
-        const candidate = await prisma.candidate.findUnique({ where: { id: candidateId } });
+        const candidate = byId.get(candidateId);
         if (!candidate) {
           // row exists in sheet but not in web -> cannot repair blindly; flag
           mismatches++;
           continue;
         }
         const sheetHash = hashCol !== -1 ? (row[hashCol] ?? '').trim() : '';
-        const localHash = candidateDataHash(candidate);
+        const localHash = candidateDataHash(candidate as never);
 
         if (sheetHash && sheetHash === localHash) continue;
 
         // Mismatch detected
         mismatches++;
+        const full = await prisma.candidate.findUnique({ where: { id: candidateId } });
+        if (!full) continue;
         if (!sheetHash) {
           // web created but sheet row stale -> repair by writing web data
-          await sheet.syncCandidate(candidate);
+          await sheet.syncCandidate(full);
           repaired++;
         } else {
           // both have data but differ -> compare field-by-field
           const sheetVersion = versionCol !== -1 ? Number(row[versionCol]) || 0 : 0;
-          if (sheetVersion >= candidate.dataVersion) {
+          if (sheetVersion >= full.dataVersion) {
             // sheet is newer -> likely admin edited sheet; conflict for admin, no silent overwrite
             conflicts++;
             await prisma.conflict.create({
@@ -92,14 +106,14 @@ export class ReconciliationService {
                 field: 'DATA_MISMATCH',
                 webValue: localHash,
                 sheetValue: sheetHash,
-                webVersion: candidate.dataVersion,
+                webVersion: full.dataVersion,
                 sheetVersion,
                 status: 'OPEN',
               },
             }).catch(() => undefined);
           } else {
             // web is newer -> repair sheet from web
-            await sheet.syncCandidate(candidate);
+            await sheet.syncCandidate(full);
             repaired++;
           }
         }

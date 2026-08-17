@@ -116,7 +116,7 @@ export async function startSystem(server: http.Server) {
   }
   initSocket(server);
   syncWorker.start();
-  reconciliationService.start(5 * 60 * 1000);
+  reconciliationService.start(15 * 60 * 1000);
   trainingRefreshTimer = setInterval(() => void trainingService.refreshAll().catch(() => undefined), 60 * 1000);
 }
 

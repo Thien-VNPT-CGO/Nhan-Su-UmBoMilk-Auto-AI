@@ -240,12 +240,8 @@ export class SyncWorker {
           throw new Error(`Entity không hỗ trợ: ${job.entity}`);
       }
 
-      // VERIFY
-      const hashColOk = await this.verify(job, candidate);
-      if (!hashColOk) {
-        await syncQueue.markRetry(jobId, 'Verify thất bại: DATA_HASH không khớp');
-        return;
-      }
+      // Bỏ qua verify đọc lại sheet: append/update của Google API đã trả lỗi nếu thất bại,
+      // và upsert luôn đảm bảo dòng tồn tại. Verify cũ làm tăng GẤP ĐÔI số API call mỗi job.
       await syncQueue.markSynced(jobId);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -263,20 +259,6 @@ export class SyncWorker {
     }
     } catch (err) {
       console.warn('[SyncWorker] process lỗi nghiêm trọng:', err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  private async verify(job: { candidateId: string | null }, candidate: unknown): Promise<boolean> {
-    if (!job.candidateId || !candidate) return true;
-    const sheet = getGoogleSheetService();
-    try {
-      const found = await sheet.findByCandidateId(
-        sheet.sheetNames.locHoSo,
-        job.candidateId,
-      );
-      return found !== null;
-    } catch {
-      return false;
     }
   }
 }
