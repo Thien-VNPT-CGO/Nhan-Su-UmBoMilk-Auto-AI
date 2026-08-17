@@ -128,16 +128,21 @@ export class SyncWorker {
 
   private async tick(): Promise<void> {
     if (!this.running) return;
-    const claimed = await syncQueue.claimNext();
-    if (!claimed) {
-      // Không có việc → đợi 1s trước khi poll lại (giảm tải DB rất nhiều)
-      setTimeout(() => void this.tick(), 1000);
-      return;
+    try {
+      const claimed = await syncQueue.claimNext();
+      if (!claimed) {
+        // Không có việc → đợi 1s trước khi poll lại (giảm tải DB rất nhiều)
+        setTimeout(() => void this.tick(), 1000);
+        return;
+      }
+      void this.provisionIfNeeded();
+      void this.process(claimed.jobId);
+      // process more jobs in the same tick (small batches)
+      setTimeout(() => void this.tick(), 50);
+    } catch (e) {
+      console.warn('[SyncWorker] tick lỗi:', e instanceof Error ? e.message : String(e));
+      setTimeout(() => void this.tick(), 5000);
     }
-    void this.provisionIfNeeded();
-    void this.process(claimed.jobId);
-    // process more jobs in the same tick (small batches)
-    setTimeout(() => void this.tick(), 50);
   }
 
   /** Tự tạo sheet + cột chuẩn 1 lần khi bắt đầu đồng bộ với Google Sheet thật. */
@@ -156,9 +161,10 @@ export class SyncWorker {
   }
 
   private async process(jobId: string): Promise<void> {
-    const job = await prisma.syncJob.findUnique({ where: { id: jobId } });
-    if (!job) return;
-    const sheet = getGoogleSheetService();
+    try {
+      const job = await prisma.syncJob.findUnique({ where: { id: jobId } });
+      if (!job) return;
+      const sheet = getGoogleSheetService();
 
     if (!sheet.configured) {
       // DEMO MODE: mark SYNCED but flagged as demo - data is preserved in DB,
@@ -243,11 +249,18 @@ export class SyncWorker {
       const message = err instanceof Error ? err.message : String(err);
       const isRetryable =
         /timeout|429|500|network|ECONNREFUSED|ETIMEDOUT|rate limit|quota|temporar/i.test(message);
-      if (isRetryable) {
-        await syncQueue.markRetry(jobId, message);
-      } else {
-        await syncQueue.markFailed(jobId, message);
+      try {
+        if (isRetryable) {
+          await syncQueue.markRetry(jobId, message);
+        } else {
+          await syncQueue.markFailed(jobId, message);
+        }
+      } catch (e2) {
+        console.warn('[SyncWorker] không cập nhật được trạng thái job:', e2 instanceof Error ? e2.message : String(e2));
       }
+    }
+    } catch (err) {
+      console.warn('[SyncWorker] process lỗi nghiêm trọng:', err instanceof Error ? err.message : String(err));
     }
   }
 
