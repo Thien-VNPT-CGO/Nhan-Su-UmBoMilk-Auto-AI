@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Search, Filter, ChevronLeft, ChevronRight, Users, Eye, RefreshCw,
-  CheckCircle2, XCircle, AlertTriangle, BrainCircuit, Trash2,
+  CheckCircle2, XCircle, AlertTriangle, BrainCircuit, Trash2, Star, TrendingUp,
 } from 'lucide-react';
 import { api, ApiError } from '../api/client';
 import { Badge, Skeleton, EmptyState, Tooltip, Modal } from '../components/ui';
@@ -25,6 +25,7 @@ interface CandidateRow {
   chiNhanh: string;
   kinhNghiem: string;
   tongDiem: number | null;
+  xepLoai: string | null;
   aiRecommendation: string | null;
   hrDecision: string | null;
   trangThaiTraining: string | null;
@@ -58,11 +59,19 @@ interface DuplicateGroup {
 }
 
 const SORTS = [
+  { key: 'priority', label: 'Ưu tiên AI (Xuất sắc → Giỏi → Đạt)' },
   { key: 'newest', label: 'Mới nhất' },
   { key: 'oldest', label: 'Cũ nhất' },
   { key: 'score_desc', label: 'Điểm cao nhất' },
   { key: 'score_asc', label: 'Điểm thấp nhất' },
 ];
+
+function xepLoaiBadge(x: string | null) {
+  if (x === 'XUAT_SAC') return <Badge className="bg-amber-100 text-amber-700 border border-amber-200"><Star size={11} /> XUẤT SẮC</Badge>;
+  if (x === 'GIOI') return <Badge className="bg-sky-100 text-sky-700"><TrendingUp size={11} /> GIỎI</Badge>;
+  if (x === 'DAT') return <Badge className="bg-emerald-100 text-emerald-700"><CheckCircle2 size={11} /> ĐẠT</Badge>;
+  return null;
+}
 
 function decisionBadge(d: string | null) {
   if (d === 'PASS') return <Badge className="bg-emerald-100 text-emerald-700"><CheckCircle2 size={11} /> ĐẠT</Badge>;
@@ -81,7 +90,7 @@ export default function Candidates() {
   const [chiNhanh, setChiNhanh] = useState('');
   const [caLam, setCaLam] = useState('');
   const [status, setStatus] = useState(params.get('status') ?? '');
-  const [sort, setSort] = useState('newest');
+  const [sort, setSort] = useState('priority');
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
   const [branchOptions, setBranchOptions] = useState<string[]>([]);
@@ -290,7 +299,9 @@ export default function Candidates() {
                     )}
                   </td>
                   <td className="table-td">
-                    {r.aiRecommendation ? (
+                    {r.xepLoai ? (
+                      xepLoaiBadge(r.xepLoai)
+                    ) : r.aiRecommendation ? (
                       r.aiRecommendation === 'PASS'
                         ? <Badge className="bg-emerald-50 text-emerald-600 border border-emerald-100">ĐẠT</Badge>
                         : <Badge className="bg-slate-100 text-slate-500">LOẠI</Badge>

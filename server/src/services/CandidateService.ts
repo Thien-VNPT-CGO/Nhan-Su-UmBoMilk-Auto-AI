@@ -157,7 +157,12 @@ export class CandidateService {
       case 'oldest': orderBy.push({ thoiGian: 'asc' }); break;
       case 'score_desc': orderBy.push({ tongDiem: 'desc' }); break;
       case 'score_asc': orderBy.push({ tongDiem: 'asc' }); break;
-      default: orderBy.push({ thoiGian: 'desc' });
+      case 'newest': orderBy.push({ thoiGian: 'desc' }); break;
+      default:
+        // Ưu tiên AI: XUẤT SẮC -> GIỎI -> ĐẠT -> (chưa chấm), rồi điểm cao -> mới nhất
+        orderBy.push({ xepLoai: { sort: 'desc', nulls: 'last' } });
+        orderBy.push({ tongDiem: 'desc' });
+        orderBy.push({ thoiGian: 'desc' });
     }
     orderBy.push({ id: 'desc' });
 

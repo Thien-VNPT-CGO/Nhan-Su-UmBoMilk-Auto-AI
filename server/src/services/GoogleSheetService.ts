@@ -18,7 +18,7 @@ export const DIEM_UV_COLS = [
   'D_KINH_NGHIEM', 'D_XU_LY', 'D_LINK_FB',
   'P_HO_TEN', 'P_NAM_SINH', 'P_QUE_QUAN', 'P_SDT', 'P_TRINH_DO', 'P_KINH_NGHIEM',
   'P_XU_LY', 'P_LINK_FB',
-  'TONG_DIEM', 'AI_RECOMMENDATION', 'AI_NOTE', 'AI_CONFIDENCE', 'DATA_VERSION', 'UPDATED_AT',
+  'TONG_DIEM', 'XEP_LOAI', 'AI_RECOMMENDATION', 'AI_NOTE', 'AI_CONFIDENCE', 'DATA_VERSION', 'UPDATED_AT',
 ];
 
 export const HO_SO_NV_COLS = [
@@ -450,6 +450,7 @@ export class GoogleSheetService {
         case 'P_XU_LY': return g('p_xuLy');
         case 'P_LINK_FB': return g('p_linkFb');
         case 'TONG_DIEM': return c.tongDiem ?? '';
+        case 'XEP_LOAI': return c.xepLoai ?? '';
         case 'AI_RECOMMENDATION': return c.aiRecommendation ?? '';
         case 'AI_NOTE': return c.aiNote ?? '';
         case 'AI_CONFIDENCE': return c.aiConfidence ?? '';

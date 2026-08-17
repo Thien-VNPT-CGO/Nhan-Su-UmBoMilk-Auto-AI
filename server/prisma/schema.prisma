@@ -66,6 +66,7 @@ tenUv     String
 
   aiScore             Json? // breakdown D_* / P_*
   tongDiem            Int?
+  xepLoai             String? // DAT (7) | GIOI (8) | XUAT_SAC (>=9)
   aiRecommendation    String? // PASS | FAIL
   aiNote              String?
   aiConfidence        Float?

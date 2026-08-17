@@ -124,5 +124,8 @@ export const DEFAULT_SETTINGS = {
   autoDedup: {
     enabled: true,
   },
+  autoScoring: {
+    enabled: true,
+  },
   deletedFormResponses: [] as { sdt: string; thoiGian: string | null }[],
 };

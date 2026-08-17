@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BrainCircuit, RefreshCw, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
+import { BrainCircuit, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Star, TrendingUp } from 'lucide-react';
 import { api, ApiError } from '../api/client';
 import { Badge, Skeleton, EmptyState } from '../components/ui';
 import { useToast } from '../stores/Toast';
@@ -16,11 +16,19 @@ interface Row {
   chiNhanh: string;
   caLam: string;
   tongDiem: number | null;
+  xepLoai: string | null;
   aiRecommendation: string | null;
   aiScoredAt: string | null;
   aiNote: string | null;
   hrDecision: string | null;
   dataVersion: number;
+}
+
+function xepLoaiBadge(x: string | null) {
+  if (x === 'XUAT_SAC') return <Badge className="bg-amber-100 text-amber-700 border border-amber-200"><Star size={11} /> XUẤT SẮC</Badge>;
+  if (x === 'GIOI') return <Badge className="bg-sky-100 text-sky-700"><TrendingUp size={11} /> GIỎI</Badge>;
+  if (x === 'DAT') return <Badge className="bg-emerald-100 text-emerald-700"><CheckCircle2 size={11} /> ĐẠT</Badge>;
+  return null;
 }
 
 export default function Scoring() {
@@ -33,7 +41,7 @@ export default function Scoring() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api.get<{ rows: Row[] }>('/candidates?pageSize=100&sort=newest');
+      const data = await api.get<{ rows: Row[] }>('/candidates?pageSize=100&sort=priority');
       setRows(data.rows);
     } catch {
       toast('error', 'Không tải được danh sách.');
@@ -131,8 +139,14 @@ export default function Scoring() {
                       </span>
                     </td>
                     <td className="table-td">
-                      {r.aiRecommendation === 'PASS' && <Badge className="bg-emerald-100 text-emerald-700">ĐẠT</Badge>}
-                      {r.aiRecommendation === 'FAIL' && <Badge className="bg-slate-100 text-slate-500">LOẠI</Badge>}
+                      {r.xepLoai ? (
+                        xepLoaiBadge(r.xepLoai)
+                      ) : (
+                        <>
+                          {r.aiRecommendation === 'PASS' && <Badge className="bg-emerald-100 text-emerald-700">ĐẠT</Badge>}
+                          {r.aiRecommendation === 'FAIL' && <Badge className="bg-slate-100 text-slate-500">LOẠI</Badge>}
+                        </>
+                      )}
                       {!r.aiScoredAt && <Badge className="bg-amber-100 text-amber-700">Chưa chấm</Badge>}
                     </td>
                     <td className="table-td">

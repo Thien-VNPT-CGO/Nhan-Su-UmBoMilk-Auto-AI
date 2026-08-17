@@ -3,6 +3,7 @@ import { syncQueue } from '../services/SyncQueueService';
 import { getGoogleSheetService } from '../services/GoogleSheetService';
 import { importFormResponses } from '../services/FormImportService';
 import { dedupService } from '../services/DedupService';
+import { candidateScoringService } from '../services/CandidateScoringService';
 import { getSettings } from '../services/SettingsService';
 import { emit } from '../sockets';
 
@@ -15,6 +16,8 @@ export class SyncWorker {
   private provisioned = false;
   private importingForm = false;
   private runningDedup = false;
+  private scoring = false;
+  private scoreTimer: NodeJS.Timeout | null = null;
 
   constructor(intervalMs = 3000) {
     this.intervalMs = intervalMs;
@@ -32,9 +35,13 @@ export class SyncWorker {
     this.dedupTimer = setInterval(() => {
       void this.tickAutoDedup();
     }, 5 * 60_000);
+    this.scoreTimer = setInterval(() => {
+      void this.tickAutoScore();
+    }, 30_000);
     void this.tick();
     void this.tickFormImport();
     void this.tickAutoDedup();
+    void this.tickAutoScore();
     console.log('[SyncWorker] started');
   }
 
@@ -46,6 +53,37 @@ export class SyncWorker {
     this.formTimer = null;
     if (this.dedupTimer) clearInterval(this.dedupTimer);
     this.dedupTimer = null;
+    if (this.scoreTimer) clearInterval(this.scoreTimer);
+    this.scoreTimer = null;
+  }
+
+  /** AI tự chấm điểm hồ sơ vừa đăng ký: chạy mỗi 30s, tối đa 3 hồ sơ/lượt. */
+  private async tickAutoScore(): Promise<void> {
+    if (!this.running || this.scoring) return;
+    this.scoring = true;
+    try {
+      const settings = await getSettings();
+      const autoScoring = (settings as Record<string, unknown>).autoScoring as
+        | { enabled?: boolean }
+        | undefined;
+      if (autoScoring?.enabled === false) return;
+      const pending = await prisma.candidate.findMany({
+        where: { aiScoredAt: null, aiRecommendation: null },
+        orderBy: [{ thoiGian: 'asc' }, { id: 'asc' }],
+        take: 3,
+      });
+      for (const c of pending) {
+        await candidateScoringService.scoreCandidate(c, 'SYSTEM-AI');
+        console.log(`[SyncWorker] auto score: ${c.id} (${c.tenUv}) = ${c.tongDiem ?? ''}đ`);
+      }
+      if (pending.length > 0) {
+        console.log(`[SyncWorker] auto score: đã chấm ${pending.length} hồ sơ chưa có điểm`);
+      }
+    } catch (e) {
+      console.warn('[SyncWorker] auto score:', e instanceof Error ? e.message : String(e));
+    } finally {
+      this.scoring = false;
+    }
   }
 
   /** AI tự dọn dữ liệu trùng SĐT: giữ bản mới nhất, xóa các bản trùng + đồng bộ về Google Sheet. */

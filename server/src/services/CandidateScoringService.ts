@@ -10,9 +10,17 @@ import type { Candidate } from '@prisma/client';
 export interface ScoringResult {
   aiScore: Record<string, unknown>;
   tongDiem: number;
+  xepLoai: 'DAT' | 'GIOI' | 'XUAT_SAC' | null;
   aiRecommendation: 'PASS' | 'FAIL';
   aiNote: string;
   aiConfidence: number;
+}
+
+export function classifyXepLoai(tongDiem: number): 'DAT' | 'GIOI' | 'XUAT_SAC' | null {
+  if (tongDiem >= 9) return 'XUAT_SAC';
+  if (tongDiem >= 8) return 'GIOI';
+  if (tongDiem >= 7) return 'DAT';
+  return null;
 }
 
 export class CandidateScoringService {
@@ -66,6 +74,7 @@ export class CandidateScoringService {
     const tongDiem = p_hoTen + p_namSinh + p_queQuan + p_sdt + p_trinhDo + p_kinhNghiem + p_xuLy + p_linkFb;
     const threshold = settings.scoring.passThreshold ?? 7;
     const aiRecommendation = tongDiem >= threshold ? 'PASS' : 'FAIL';
+    const xepLoai = classifyXepLoai(tongDiem);
 
     const noteParts = [
       ai.kinhNghiem.reason,
@@ -118,6 +127,7 @@ export class CandidateScoringService {
       data: {
         aiScore: aiScore as object,
         tongDiem,
+        xepLoai,
         aiRecommendation,
         aiNote,
         aiConfidence,
@@ -133,7 +143,7 @@ export class CandidateScoringService {
       entity: 'candidate',
       entityId: candidate.id,
       oldValue: { tongDiem: candidate.tongDiem },
-      newValue: { tongDiem, aiRecommendation },
+      newValue: { tongDiem, xepLoai, aiRecommendation },
       version: newVersion,
     });
 
@@ -145,9 +155,9 @@ export class CandidateScoringService {
       idempotencyKey: `candidate:${candidate.id}:score:v${newVersion}`,
     });
 
-    emit('candidate:scored', { candidateId: candidate.id, tongDiem, aiRecommendation });
+    emit('candidate:scored', { candidateId: candidate.id, tongDiem, xepLoai, aiRecommendation });
 
-    return { aiScore, tongDiem, aiRecommendation, aiNote, aiConfidence };
+    return { aiScore, tongDiem, xepLoai, aiRecommendation, aiNote, aiConfidence };
   }
 }
 
