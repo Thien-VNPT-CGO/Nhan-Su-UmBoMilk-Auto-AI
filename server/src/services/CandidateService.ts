@@ -8,7 +8,8 @@ import { emit } from '../sockets';
 import { getGoogleSheetService } from './GoogleSheetService';
 import { getSettings, saveSettings } from './SettingsService';
 import { TRAINING_STATUS } from '../lib/constants';
-import type { Candidate, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import type { Candidate } from '@prisma/client';
 
 function computeHash(c: {
   id: string; tenUv: string; namSinh: string; trinhDo: string; queQuan: string;
@@ -68,13 +69,68 @@ export class CandidateService {
     if (existing) {
       const incoming = input.thoiGian ? new Date(input.thoiGian).getTime() : NaN;
       const isNewer = Number.isNaN(incoming) || incoming >= existing.thoiGian.getTime();
-      if (!isNewer) {
-        // Bản đang xử lý cũ hơn hồ sơ đã có → bỏ qua, giữ bản mới nhất
-        throw ApiError.conflict('DUPLICATE_CANDIDATE', `Ứng viên đã tồn tại (${existing.id}) với thời gian đăng ký mới hơn. Bản này được bỏ qua.`);
+      if (isNewer) {
+        // Cùng SĐT nhưng đăng ký mới hơn → thay thế hồ sơ cũ, giữ hồ sơ mới nhất
+        console.log(`[REPLACE] ${existing.id} -> bản đăng ký mới hơn, thay thế hồ sơ cũ (SĐT ${sdt})`);
+        await deleteCandidateWithCleanup(existing.id, 'SYSTEM-REPLACE', 'DELETE_CANDIDATE_REPLACE');
+      } else {
+        // Bản trong form cũ hơn hồ sơ đang có → đồng bộ dữ liệu + thời gian thật từ form
+        const humanEdited = existing.hrDecision !== null ||
+          (existing.updatedBy !== null && !existing.updatedBy.startsWith('SYSTEM'));
+        if (humanEdited) {
+          throw ApiError.conflict('DUPLICATE_CANDIDATE', `Ứng viên đã tồn tại (${existing.id}) với thời gian đăng ký mới hơn. Bản này được bỏ qua.`);
+        }
+        const newVersion = existing.dataVersion + 1;
+        const updated = await prisma.candidate.update({
+          where: { id: existing.id },
+          data: {
+            thoiGian: new Date(input.thoiGian!),
+            tenUv: input.tenUv,
+            gioiTinh: input.gioiTinh ?? '',
+            namSinh: input.namSinh,
+            trinhDo: input.trinhDo,
+            queQuan: input.queQuan,
+            caLam: input.caLam,
+            chiNhanh: input.chiNhanh,
+            kinhNghiem: input.kinhNghiem,
+            xuLy: input.xuLy,
+            linkFb: input.linkFb,
+            aiScore: Prisma.JsonNull,
+            tongDiem: null,
+            xepLoai: null,
+            aiRecommendation: null,
+            aiNote: null,
+            aiConfidence: null,
+            aiScoredAt: null,
+            dataHash: null,
+            dataVersion: newVersion,
+            updatedBy: 'SYSTEM-FORM',
+          },
+        });
+        const withHash = await prisma.candidate.update({
+          where: { id: existing.id },
+          data: { dataHash: computeHash(updated) },
+        });
+        await audit({
+          user: 'SYSTEM-FORM',
+          action: 'UPDATE_CANDIDATE_FROM_FORM',
+          entity: 'candidate',
+          entityId: existing.id,
+          oldValue: { thoiGian: existing.thoiGian.toISOString(), tongDiem: existing.tongDiem },
+          newValue: { thoiGian: updated.thoiGian.toISOString() },
+          version: newVersion,
+        });
+        await syncQueue.enqueue({
+          entity: 'candidate',
+          entityId: existing.id,
+          operation: 'UPDATE',
+          version: newVersion,
+          idempotencyKey: `candidate:${existing.id}:form-update:v${newVersion}`,
+        });
+        emit('candidate:updated', { candidateId: existing.id });
+        console.log(`[FORM-UPDATE] ${existing.id} đã cập nhật dữ liệu + thời gian thật từ form, AI sẽ chấm lại`);
+        return withHash;
       }
-      // Cùng SĐT nhưng đăng ký mới hơn → thay thế hồ sơ cũ, giữ hồ sơ mới nhất
-      console.log(`[REPLACE] ${existing.id} -> bản đăng ký mới hơn, thay thế hồ sơ cũ (SĐT ${sdt})`);
-      await deleteCandidateWithCleanup(existing.id, 'SYSTEM-REPLACE', 'DELETE_CANDIDATE_REPLACE');
     }
 
     const id = await nextCandidateId();

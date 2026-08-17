@@ -335,8 +335,8 @@ export class GoogleSheetService {
     headers.forEach((h, i) => {
       const f = mapHeaderToField(h);
       if (f === 'sdtZalo' && sdtIdx < 0) sdtIdx = i;
-      if (h.toLowerCase() === 'timestamp' && tsIdx < 0) tsIdx = i;
     });
+    tsIdx = findTimestampIndex(headers);
     if (sdtIdx < 0) return 0;
     const target = normalizePhone(phone);
     const rowsToClear: number[] = [];
@@ -626,6 +626,20 @@ function mapHeaderToField(header: string): string | null {
     if (aliases.some((a) => n.includes(a))) return field;
   }
   return null;
+}
+
+/** Tìm cột thời gian phản hồi của Google Form (Tiếng Anh: "Timestamp", Tiếng Việt: "Thời điểm ghi lại phản hồi"). */
+export function findTimestampIndex(headers: string[]): number {
+  return headers.findIndex((h) => {
+    const n = normalizeHeader(h);
+    return (
+      n.includes('timestamp') ||
+      n.includes('thoi diem') ||
+      n.includes('thoi gian') ||
+      n === 'ngay' ||
+      n.includes('ngay ghi')
+    );
+  });
 }
 
 /** Map 1 dòng dữ liệu sheet phản hồi form -> payload tạo hồ sơ. */

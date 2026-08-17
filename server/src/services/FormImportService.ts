@@ -3,6 +3,7 @@ import {
   fetchFormResponses,
   mapFormResponseRow,
   parseFormTimestamp,
+  findTimestampIndex,
 } from './GoogleSheetService';
 import { candidateService } from './CandidateService';
 import { normalizePhone } from './CandidateService';
@@ -57,7 +58,7 @@ export async function importFormResponses(): Promise<FormImportResult> {
         result.invalid++;
         continue;
       }
-      const timestampIdx = headers.findIndex((h) => h.toLowerCase() === 'timestamp');
+      const timestampIdx = findTimestampIndex(headers);
       const thoiGian = parseFormTimestamp(
         timestampIdx >= 0 ? String(row[timestampIdx] ?? '') : undefined,
       );
