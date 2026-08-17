@@ -79,6 +79,26 @@ router.put('/', requireRole('ADMIN'), async (req: AuthedRequest, res, next) => {
 
 let healthCache: { at: number; data: unknown } | null = null;
 
+/** Xóa dữ liệu kết nối Zalo (OA id + token) — icon trên web tắt ngay sau khi gọi. */
+router.post('/zalo/disconnect', requireRole('ADMIN'), async (req: AuthedRequest, res, next) => {
+  try {
+    await saveSettings(
+      { zalo: { oaId: '', accessToken: '', refreshToken: '' } },
+      req.user!.username,
+    );
+    await audit({
+      user: req.user!.username,
+      action: 'DISCONNECT_ZALO',
+      entity: 'system',
+      entityId: 'app_settings',
+    });
+    healthCache = null; // health check sẽ chạy lại ngay, icon Zalo tắt
+    res.json({ success: true });
+  } catch (e) {
+    next(e);
+  }
+});
+
 router.get('/health', async (_req, res, next) => {
   try {
     if (healthCache && Date.now() - healthCache.at < 10_000) {

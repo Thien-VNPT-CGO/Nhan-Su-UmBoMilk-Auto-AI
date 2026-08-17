@@ -147,6 +147,17 @@ export default function Settings() {
     }
   };
 
+  const disconnectZalo = async () => {
+    if (!window.confirm('Ngắt kết nối Zalo? Token sẽ bị xóa khỏi hệ thống.')) return;
+    try {
+      await api.post('/settings/zalo/disconnect', {});
+      toast('success', 'Đã ngắt kết nối Zalo.');
+      void load();
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Ngắt kết nối Zalo thất bại.');
+    }
+  };
+
   const s = data.settings;
   const TABS = [
     { key: 'sheet', label: 'Google Sheet', icon: FileSpreadsheet },
@@ -324,6 +335,9 @@ export default function Settings() {
                 </div>
                 <button className="btn-primary" onClick={connectZalo}>
                   <MessageCircle size={15} /> Kết nối Zalo OA
+                </button>
+                <button className="btn-danger" onClick={disconnectZalo}>
+                  Ngắt kết nối
                 </button>
               </div>
               <div>
