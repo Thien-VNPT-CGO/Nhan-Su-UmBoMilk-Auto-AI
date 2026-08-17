@@ -38,6 +38,9 @@ export const env = {
   zaloOaId: process.env.ZALO_OA_ID ?? '',
   zaloAccessToken: process.env.ZALO_ACCESS_TOKEN ?? '',
   zaloRefreshToken: process.env.ZALO_REFRESH_TOKEN ?? '',
+  zaloAppId: process.env.ZALO_APP_ID ?? '',
+  zaloAppSecret: process.env.ZALO_APP_SECRET ?? '',
+  zaloRedirectUri: process.env.ZALO_REDIRECT_URI ?? 'http://localhost:3000/api/zalo/oauth-callback',
 };
 
 export const isProd = env.nodeEnv === 'production';

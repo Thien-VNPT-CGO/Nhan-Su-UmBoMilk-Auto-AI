@@ -133,6 +133,15 @@ export default function Settings() {
     }
   };
 
+  const connectZalo = async () => {
+    try {
+      const r = await api.get<{ url: string; state: string }>('/zalo/oauth-url');
+      window.location.href = r.url;
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Không tạo được link kết nối Zalo.');
+    }
+  };
+
   const s = data.settings;
   const TABS = [
     { key: 'sheet', label: 'Google Sheet', icon: FileSpreadsheet },
@@ -300,6 +309,15 @@ export default function Settings() {
 
           {tab === 'zalo' && (
             <div className="space-y-4">
+              <div className="flex items-center justify-between rounded-xl bg-slate-50 p-4">
+                <div>
+                  <div className="font-bold text-slate-800 text-sm">Kết nối Zalo OA</div>
+                  <div className="text-xs text-slate-500">Bấm nút để mở trang duyệt quyền của Zalo — token sẽ được tự động lưu về hệ thống.</div>
+                </div>
+                <button className="btn-primary" onClick={connectZalo}>
+                  <MessageCircle size={15} /> Kết nối Zalo OA
+                </button>
+              </div>
               <div>
                 <label className="label">Zalo OA ID</label>
                 <input className="input" value={s.zalo.oaId} onChange={(e) => patch(['zalo', 'oaId'], e.target.value)} />

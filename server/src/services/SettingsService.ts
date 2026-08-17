@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { DEFAULT_SETTINGS } from '../lib/constants';
 import { dataHash } from '../lib/id';
+import { env } from '../config/env';
 
 export type Settings = typeof DEFAULT_SETTINGS;
 
@@ -30,8 +31,14 @@ export function mergeSettings(raw: unknown): Settings {
 
 export async function getSettings(): Promise<Settings> {
   const row = await prisma.systemSetting.findUnique({ where: { key: 'app_settings' } });
-  if (!row) return DEFAULT_SETTINGS;
-  return mergeSettings(row.value);
+  const base = row
+    ? mergeSettings(row.value)
+    : (JSON.parse(JSON.stringify(DEFAULT_SETTINGS)) as Settings);
+  // Fallback env -> settings (Zalo): .env có giá trị thì dùng khi DB chưa lưu
+  if (env.zaloOaId) base.zalo.oaId = env.zaloOaId;
+  if (env.zaloAccessToken) base.zalo.accessToken = env.zaloAccessToken;
+  if (env.zaloRefreshToken) base.zalo.refreshToken = env.zaloRefreshToken;
+  return base;
 }
 
 export async function saveSettings(patch: Record<string, unknown>, updatedBy: string): Promise<Settings> {

@@ -4,6 +4,7 @@ import { requireAuth, requireRole, AuthedRequest } from '../middleware/auth';
 import { getSettings, saveSettings } from '../services/SettingsService';
 import { getAIProvider } from '../services/ai/AIClient';
 import { getGoogleSheetService } from '../services/GoogleSheetService';
+import { zaloService } from '../services/ZaloService';
 import { audit } from '../services/AuditService';
 import { ApiError } from '../lib/errors';
 import { prisma } from '../lib/prisma';
@@ -84,7 +85,7 @@ router.get('/health', async (_req, res, next) => {
       prisma.$queryRaw`SELECT 1`.then(() => true).catch(() => false),
       sheet.ping().catch(() => false),
       ai.ping().catch(() => false),
-      Promise.resolve(false),
+      zaloService.ping().catch(() => false),
     ]);
     res.json({
       success: true,
