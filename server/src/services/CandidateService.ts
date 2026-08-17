@@ -68,68 +68,33 @@ export class CandidateService {
     const existing = await prisma.candidate.findFirst({ where: { sdtZalo: sdt } });
     if (existing) {
       const incoming = input.thoiGian ? new Date(input.thoiGian).getTime() : NaN;
-      const isNewer = Number.isNaN(incoming) || incoming >= existing.thoiGian.getTime();
+      const sameTs = !Number.isNaN(incoming) &&
+        Math.abs(incoming - existing.thoiGian.getTime()) < 1000;
+      if (sameTs) {
+        // Dòng form này đã được nhập rồi → KHÔNG tạo/thay thế lại (chống trùng lặp mỗi chu kỳ import)
+        const dataSame =
+          existing.tenUv === input.tenUv &&
+          (existing.gioiTinh ?? '') === (input.gioiTinh ?? '') &&
+          existing.namSinh === input.namSinh &&
+          existing.trinhDo === input.trinhDo &&
+          existing.queQuan === input.queQuan &&
+          existing.caLam === input.caLam &&
+          existing.chiNhanh === input.chiNhanh &&
+          existing.kinhNghiem === input.kinhNghiem &&
+          existing.xuLy === input.xuLy &&
+          existing.linkFb === input.linkFb;
+        if (dataSame) return existing;
+        // Cùng thời gian nhưng dữ liệu đã sửa trên web → chỉ cập nhật nếu chưa bị HR can thiệp
+        return this.updateFromForm(existing, input, existing.thoiGian);
+      }
+      const isNewer = Number.isNaN(incoming) || incoming > existing.thoiGian.getTime();
       if (isNewer) {
         // Cùng SĐT nhưng đăng ký mới hơn → thay thế hồ sơ cũ, giữ hồ sơ mới nhất
         console.log(`[REPLACE] ${existing.id} -> bản đăng ký mới hơn, thay thế hồ sơ cũ (SĐT ${sdt})`);
         await deleteCandidateWithCleanup(existing.id, 'SYSTEM-REPLACE', 'DELETE_CANDIDATE_REPLACE');
       } else {
         // Bản trong form cũ hơn hồ sơ đang có → đồng bộ dữ liệu + thời gian thật từ form
-        const humanEdited = existing.hrDecision !== null ||
-          (existing.updatedBy !== null && !existing.updatedBy.startsWith('SYSTEM'));
-        if (humanEdited) {
-          throw ApiError.conflict('DUPLICATE_CANDIDATE', `Ứng viên đã tồn tại (${existing.id}) với thời gian đăng ký mới hơn. Bản này được bỏ qua.`);
-        }
-        const newVersion = existing.dataVersion + 1;
-        const updated = await prisma.candidate.update({
-          where: { id: existing.id },
-          data: {
-            thoiGian: new Date(input.thoiGian!),
-            tenUv: input.tenUv,
-            gioiTinh: input.gioiTinh ?? '',
-            namSinh: input.namSinh,
-            trinhDo: input.trinhDo,
-            queQuan: input.queQuan,
-            caLam: input.caLam,
-            chiNhanh: input.chiNhanh,
-            kinhNghiem: input.kinhNghiem,
-            xuLy: input.xuLy,
-            linkFb: input.linkFb,
-            aiScore: Prisma.JsonNull,
-            tongDiem: null,
-            xepLoai: null,
-            aiRecommendation: null,
-            aiNote: null,
-            aiConfidence: null,
-            aiScoredAt: null,
-            dataHash: null,
-            dataVersion: newVersion,
-            updatedBy: 'SYSTEM-FORM',
-          },
-        });
-        const withHash = await prisma.candidate.update({
-          where: { id: existing.id },
-          data: { dataHash: computeHash(updated) },
-        });
-        await audit({
-          user: 'SYSTEM-FORM',
-          action: 'UPDATE_CANDIDATE_FROM_FORM',
-          entity: 'candidate',
-          entityId: existing.id,
-          oldValue: { thoiGian: existing.thoiGian.toISOString(), tongDiem: existing.tongDiem },
-          newValue: { thoiGian: updated.thoiGian.toISOString() },
-          version: newVersion,
-        });
-        await syncQueue.enqueue({
-          entity: 'candidate',
-          entityId: existing.id,
-          operation: 'UPDATE',
-          version: newVersion,
-          idempotencyKey: `candidate:${existing.id}:form-update:v${newVersion}`,
-        });
-        emit('candidate:updated', { candidateId: existing.id });
-        console.log(`[FORM-UPDATE] ${existing.id} đã cập nhật dữ liệu + thời gian thật từ form, AI sẽ chấm lại`);
-        return withHash;
+        return this.updateFromForm(existing, input, new Date(input.thoiGian!));
       }
     }
 
@@ -178,6 +143,77 @@ export class CandidateService {
 
     emit('candidate:new', { candidateId: withHash.id });
 
+    return withHash;
+  }
+
+  /** Cập nhật dữ liệu + thời gian thật từ form vào hồ sơ đang có (không tạo hồ sơ mới, AI chấm lại). */
+  private async updateFromForm(existing: Candidate, input: {
+    thoiGian?: string;
+    tenUv: string;
+    gioiTinh?: string;
+    namSinh: string;
+    trinhDo: string;
+    queQuan: string;
+    caLam: string;
+    chiNhanh: string;
+    kinhNghiem: string;
+    xuLy: string;
+    linkFb: string;
+  }, thoiGian: Date): Promise<Candidate> {
+    const humanEdited = existing.hrDecision !== null ||
+      (existing.updatedBy !== null && !existing.updatedBy.startsWith('SYSTEM'));
+    if (humanEdited) {
+      throw ApiError.conflict('DUPLICATE_CANDIDATE', `Ứng viên ${existing.id} đã được HR xử lý/sửa, không ghi đè từ form.`);
+    }
+    const newVersion = existing.dataVersion + 1;
+    const updated = await prisma.candidate.update({
+      where: { id: existing.id },
+      data: {
+        thoiGian,
+        tenUv: input.tenUv,
+        gioiTinh: input.gioiTinh ?? '',
+        namSinh: input.namSinh,
+        trinhDo: input.trinhDo,
+        queQuan: input.queQuan,
+        caLam: input.caLam,
+        chiNhanh: input.chiNhanh,
+        kinhNghiem: input.kinhNghiem,
+        xuLy: input.xuLy,
+        linkFb: input.linkFb,
+        aiScore: Prisma.JsonNull,
+        tongDiem: null,
+        xepLoai: null,
+        aiRecommendation: null,
+        aiNote: null,
+        aiConfidence: null,
+        aiScoredAt: null,
+        dataHash: null,
+        dataVersion: newVersion,
+        updatedBy: 'SYSTEM-FORM',
+      },
+    });
+    const withHash = await prisma.candidate.update({
+      where: { id: existing.id },
+      data: { dataHash: computeHash(updated) },
+    });
+    await audit({
+      user: 'SYSTEM-FORM',
+      action: 'UPDATE_CANDIDATE_FROM_FORM',
+      entity: 'candidate',
+      entityId: existing.id,
+      oldValue: { thoiGian: existing.thoiGian.toISOString(), tongDiem: existing.tongDiem },
+      newValue: { thoiGian: updated.thoiGian.toISOString() },
+      version: newVersion,
+    });
+    await syncQueue.enqueue({
+      entity: 'candidate',
+      entityId: existing.id,
+      operation: 'UPDATE',
+      version: newVersion,
+      idempotencyKey: `candidate:${existing.id}:form-update:v${newVersion}`,
+    });
+    emit('candidate:updated', { candidateId: existing.id });
+    console.log(`[FORM-UPDATE] ${existing.id} đã cập nhật dữ liệu + thời gian thật từ form, AI sẽ chấm lại`);
     return withHash;
   }
 

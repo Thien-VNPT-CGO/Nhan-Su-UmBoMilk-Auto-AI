@@ -182,6 +182,16 @@ export class GoogleSheetService {
     }
   }
 
+  /** Xóa (clear) các dòng theo số thứ tự thật trong sheet (bắt đầu từ 1). */
+  async clearRows(sheetName: string, rowNumbers: number[]): Promise<void> {
+    if (!this.configured || rowNumbers.length === 0) return;
+    const ranges = rowNumbers.map((r) => `${sheetName}!A${r}:ZZ${r}`);
+    await this.sheets!.spreadsheets.values.batchClear({
+      spreadsheetId: this.id,
+      requestBody: { ranges },
+    });
+  }
+
   private colLetter(n: number): string {
     let s = '';
     while (n > 0) {
