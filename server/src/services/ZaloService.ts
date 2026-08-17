@@ -37,7 +37,7 @@ export class ZaloService {
   async exchangeCode(
     code: string,
     state: string,
-  ): Promise<{ ok: boolean; accessToken?: string; refreshToken?: string; error?: string }> {
+  ): Promise<{ ok: boolean; accessToken?: string; refreshToken?: string; oaId?: string; error?: string }> {
     const exp = this.pendingStates.get(state);
     this.pendingStates.delete(state);
     if (!exp || exp < Date.now()) {
@@ -65,7 +65,18 @@ export class ZaloService {
       if (!data.access_token) {
         return { ok: false, error: data.error_description ?? `Zalo lỗi: ${data.error}` };
       }
-      return { ok: true, accessToken: data.access_token, refreshToken: data.refresh_token };
+      // Zalo redirect KHÔNG trả oa_id → tự lấy OA id từ graph /me để icon sáng + gửi tin thật
+      let oaId: string | undefined;
+      try {
+        const me = await fetch('https://graph.zalo.me/v2.0/me?fields=id,name', {
+          headers: { access_token: data.access_token },
+        });
+        const meData = (await me.json()) as { id?: string; name?: string; error?: number };
+        if (meData.id) oaId = String(meData.id);
+      } catch {
+        // bỏ qua - oaId sẽ lấy từ query/env nếu có
+      }
+      return { ok: true, accessToken: data.access_token, refreshToken: data.refresh_token, oaId };
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
@@ -74,7 +85,7 @@ export class ZaloService {
   /** Kiểm tra access token còn hiệu lực (dùng cho health check trên web). */
   async ping(): Promise<boolean> {
     const cfg = await this.getConfig();
-    if (!cfg.accessToken || !cfg.oaId) return false;
+    if (!cfg.accessToken) return false;
     let token = cfg.accessToken;
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
@@ -162,7 +173,7 @@ export class ZaloService {
       'Vui lòng có mặt đúng giờ và thực hiện điểm danh theo hướng dẫn.',
     ].join('\n');
 
-    const useRealApi = !env.demoMode && accessToken && cfg.oaId;
+    const useRealApi = !env.demoMode && accessToken;
     let status = 'PENDING';
     let error: string | null = null;
     let messageId: string | undefined;

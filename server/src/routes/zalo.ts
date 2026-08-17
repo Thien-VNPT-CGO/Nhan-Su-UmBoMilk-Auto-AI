@@ -30,7 +30,7 @@ router.get('/oauth-callback', async (req, res, next) => {
     await saveSettings(
       {
         zalo: {
-          oaId: String(req.query.oa_id ?? '') || env.zaloOaId,
+          oaId: result.oaId || String(req.query.oa_id ?? '') || env.zaloOaId,
           accessToken: result.accessToken,
           refreshToken: result.refreshToken,
         },
