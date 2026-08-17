@@ -95,14 +95,48 @@ export function createApp() {
 }
 
 export async function startSystem(server: http.Server) {
+  // Mỗi bước chạy độc lập: 1 bước lỗi KHÔNG được phép giết các bước khác
+  // (nếu không worker nền sẽ không bao giờ khởi động → auto-score/auto-dedup/import chết âm thầm)
   const { prisma } = await import('./lib/prisma');
-  await ensureSeedUsers(prisma);
+  try {
+    await ensureSeedUsers(prisma);
+  } catch (e) {
+    console.warn('[startSystem] ensureSeedUsers:', e instanceof Error ? e.message : String(e));
+  }
   const { getGoogleSheetService } = await import('./services/GoogleSheetService');
-  await getGoogleSheetService().refreshConfig().catch(() => undefined);
+  try {
+    await getGoogleSheetService().refreshConfig();
+  } catch (e) {
+    console.warn('[startSystem] refreshConfig:', e instanceof Error ? e.message : String(e));
+  }
+  try {
+    await backfillXepLoai();
+  } catch (e) {
+    console.warn('[startSystem] backfillXepLoai:', e instanceof Error ? e.message : String(e));
+  }
   initSocket(server);
   syncWorker.start();
   reconciliationService.start(5 * 60 * 1000);
   trainingRefreshTimer = setInterval(() => void trainingService.refreshAll().catch(() => undefined), 60 * 1000);
+}
+
+/** Gán xepLoai cho các hồ sơ đã chấm điểm từ trước (khi chưa có cột xepLoai) — idempotent, chạy 1 lần khi boot. */
+async function backfillXepLoai() {
+  const { prisma } = await import('./lib/prisma');
+  const { classifyXepLoai } = await import('./services/CandidateScoringService');
+  const rows = await prisma.candidate.findMany({
+    where: { xepLoai: null, tongDiem: { not: null } },
+    select: { id: true, tongDiem: true },
+  });
+  let fixed = 0;
+  for (const r of rows) {
+    const xepLoai = classifyXepLoai(r.tongDiem ?? 0);
+    if (xepLoai) {
+      await prisma.candidate.update({ where: { id: r.id }, data: { xepLoai } });
+      fixed++;
+    }
+  }
+  if (fixed > 0) console.log(`[startSystem] Đã xếp loại lại ${fixed} hồ sơ cũ (Xuất sắc/Giỏi/Đạt)`);
 }
 
 /** Tự tạo tài khoản mặc định khi DB trống (idempotent - an toàn cho deploy tự động). */

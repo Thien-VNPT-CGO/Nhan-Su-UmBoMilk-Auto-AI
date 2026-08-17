@@ -57,7 +57,7 @@ export class SyncWorker {
     this.scoreTimer = null;
   }
 
-  /** AI tự chấm điểm hồ sơ vừa đăng ký: chạy mỗi 60s, tối đa 3 hồ sơ/lượt. */
+  /** AI tự chấm điểm hồ sơ vừa đăng ký: chạy mỗi 60s, tối đa 10 hồ sơ/lượt. */
   private async tickAutoScore(): Promise<void> {
     if (!this.running || this.scoring) return;
     this.scoring = true;
@@ -70,7 +70,7 @@ export class SyncWorker {
       const pending = await prisma.candidate.findMany({
         where: { aiScoredAt: null, aiRecommendation: null },
         orderBy: [{ thoiGian: 'asc' }, { id: 'asc' }],
-        take: 3,
+        take: 10,
       });
       for (const c of pending) {
         await candidateScoringService.scoreCandidate(c, 'SYSTEM-AI');
