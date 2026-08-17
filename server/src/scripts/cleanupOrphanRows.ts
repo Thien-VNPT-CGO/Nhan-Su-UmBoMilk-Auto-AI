@@ -6,6 +6,8 @@ import { getGoogleSheetService } from '../services/GoogleSheetService';
  * 1. Báo cáo nhóm trùng SĐT trong DB (web).
  * 2. Xóa các dòng MỒ CÔI trong 3 tab Google Sheet (CANDIDATE_ID không còn tồn tại trong DB -
  *    sinh ra do các lần import thay thế trước đây mà DELETE sync không xóa kịp).
+ * 3. Xóa các dòng TRÙNG CANDIDATE_ID trong cùng 1 tab (dữ liệu bị double - giữ dòng mới nhất,
+ *    xóa các dòng cũ hơn).
  *
  * Chạy:  npx tsx src/scripts/cleanupOrphanRows.ts
  * (cần DATABASE_URL + cấu hình Google Sheets trong Settings hoặc .env)
@@ -42,17 +44,26 @@ async function main(): Promise<void> {
         continue;
       }
       const orphans: number[] = [];
+      const dups: number[] = [];
+      const seen = new Set<string>();
       let total = 0;
       for (let i = 1; i < rows.length; i++) {
         const id = String(rows[i][idIdx] ?? '').trim();
         if (!id) continue;
         total++;
-        if (!idSet.has(id)) orphans.push(i + 1);
+        if (!idSet.has(id)) {
+          orphans.push(i + 1);
+        } else if (seen.has(id)) {
+          // Dòng TRÙNG CANDIDATE_ID: giữ dòng mới nhất (đọc từ dưới lên nên dòng đầu tiên gặp là cũ nhất)
+          dups.push(i + 1);
+        }
+        seen.add(id);
       }
-      console.log(`  ${title}: ${total} dòng dữ liệu, ${orphans.length} dòng mồ côi`);
-      if (orphans.length > 0) {
-        await sheet.clearRows(title, orphans);
-        console.log(`  ${title}: đã xóa ${orphans.length} dòng mồ côi`);
+      console.log(`  ${title}: ${total} dòng dữ liệu, ${orphans.length} mồ côi, ${dups.length} dòng trùng CANDIDATE_ID`);
+      const toRemove = [...orphans, ...dups];
+      if (toRemove.length > 0) {
+        await sheet.clearRows(title, toRemove);
+        console.log(`  ${title}: đã xóa ${toRemove.length} dòng (mồ côi + trùng)`);
       }
     } catch (e) {
       console.log(`  ${title}: LỖI - ${e instanceof Error ? e.message : String(e)}`);

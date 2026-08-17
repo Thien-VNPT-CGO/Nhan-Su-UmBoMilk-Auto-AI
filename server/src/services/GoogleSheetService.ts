@@ -160,7 +160,7 @@ export class GoogleSheetService {
     return (res.data.values as string[][] | null) ?? null;
   }
 
-  /** Xóa dòng ứng viên ở cả 3 sheet theo CANDIDATE_ID. */
+  /** Xóa hẳn dòng ứng viên ở cả 3 sheet theo CANDIDATE_ID (không để lại dòng trống). */
   async deleteCandidateRows(candidateId: string): Promise<void> {
     if (!this.configured) return;
     for (const title of [this.sheetNames.locHoSo, this.sheetNames.diemUv, this.sheetNames.hoSoNv]) {
@@ -172,9 +172,18 @@ export class GoogleSheetService {
         const col = (res.data.values ?? []).map((r) => String(r[0] ?? '').trim());
         const idx = col.findIndex((v, i) => i > 0 && v === candidateId);
         if (idx <= 0) continue;
-        await this.sheets!.spreadsheets.values.batchClear({
+        // Xóa HẲN dòng (deleteDimension) để không còn dòng trống lưu lại trong sheet
+        await this.sheets!.spreadsheets.batchUpdate({
           spreadsheetId: this.id,
-          requestBody: { ranges: [`${title}!A${idx + 1}:ZZ${idx + 1}`] },
+          requestBody: {
+            requests: [
+              {
+                deleteDimension: {
+                  range: { sheetId: await this.sheetIdByTitle(title), dimension: 'ROWS', startIndex: idx, endIndex: idx + 1 },
+                },
+              },
+            ],
+          },
         });
       } catch {
         // bỏ qua tab lỗi, vẫn xóa tiếp tab khác
@@ -182,14 +191,27 @@ export class GoogleSheetService {
     }
   }
 
-  /** Xóa (clear) các dòng theo số thứ tự thật trong sheet (bắt đầu từ 1). */
+  private async sheetIdByTitle(title: string): Promise<number> {
+    const meta = await this.sheets!.spreadsheets.get({ spreadsheetId: this.id });
+    const sh = (meta.data.sheets ?? []).find((s) => String(s.properties?.title ?? '') === title);
+    if (!sh?.properties?.sheetId) throw new Error(`Không tìm thấy tab ${title}`);
+    return sh.properties.sheetId;
+  }
+
+  /** Xóa HẲN các dòng theo số thứ tự thật trong sheet (bắt đầu từ 1) - không để lại dòng trống. */
   async clearRows(sheetName: string, rowNumbers: number[]): Promise<void> {
     if (!this.configured || rowNumbers.length === 0) return;
-    const ranges = rowNumbers.map((r) => `${sheetName}!A${r}:ZZ${r}`);
-    await this.sheets!.spreadsheets.values.batchClear({
-      spreadsheetId: this.id,
-      requestBody: { ranges },
-    });
+    const sorted = [...new Set(rowNumbers)].sort((a, b) => b - a);
+    const sheetId = await this.sheetIdByTitle(sheetName);
+    for (let i = 0; i < sorted.length; i += 100) {
+      const requests = sorted.slice(i, i + 100).map((r) => ({
+        deleteDimension: { range: { sheetId, dimension: 'ROWS', startIndex: r - 1, endIndex: r } },
+      }));
+      await this.sheets!.spreadsheets.batchUpdate({
+        spreadsheetId: this.id,
+        requestBody: { requests },
+      });
+    }
   }
 
   private colLetter(n: number): string {
@@ -521,12 +543,27 @@ export class GoogleSheetService {
     await this.syncTraining(c);
   }
 
+  /** Hàng đợi tuần tự theo (sheet, candidateId): 2 luồng cùng sync 1 ứng viên sẽ không bao giờ append 2 dòng. */
+  private upsertQueues = new Map<string, Promise<unknown>>();
+
   private async upsert(sheetName: string, row: (string | number)[], candidateId: string, createIfMissing: boolean): Promise<void> {
-    const found = await this.findByCandidateId(sheetName, candidateId);
-    if (found) {
-      await this.updateRow(sheetName, found.rowIndex, row);
-    } else if (createIfMissing) {
-      await this.appendRow(sheetName, row);
+    const key = `${sheetName}\u0000${candidateId}`;
+    const prev = this.upsertQueues.get(key) ?? Promise.resolve();
+    const run = prev
+      .catch(() => undefined)
+      .then(async () => {
+        const found = await this.findByCandidateId(sheetName, candidateId);
+        if (found) {
+          await this.updateRow(sheetName, found.rowIndex, row);
+        } else if (createIfMissing) {
+          await this.appendRow(sheetName, row);
+        }
+      });
+    this.upsertQueues.set(key, run);
+    try {
+      await run;
+    } finally {
+      if (this.upsertQueues.get(key) === run) this.upsertQueues.delete(key);
     }
   }
 }

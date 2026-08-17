@@ -136,7 +136,8 @@ export class SyncWorker {
         return;
       }
       void this.provisionIfNeeded();
-      void this.process(claimed.jobId);
+      // Xử lý TUẦN TỰ (await) — 2 job cùng lúc sẽ gây append trùng dòng vào Google Sheet
+      await this.process(claimed.jobId);
       // process more jobs in the same tick (small batches)
       setTimeout(() => void this.tick(), 50);
     } catch (e) {
