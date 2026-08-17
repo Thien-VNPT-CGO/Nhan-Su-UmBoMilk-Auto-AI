@@ -24,6 +24,7 @@ import syncRoutes from './routes/sync';
 import auditRoutes from './routes/audit';
 import settingsRoutes from './routes/settings';
 import conflictRoutes from './routes/conflicts';
+import adminRoutes from './routes/admin';
 import webhookRoutes from './routes/webhooks';
 
 export function createApp() {
@@ -70,6 +71,7 @@ export function createApp() {
   app.use('/api/audit', apiLimiter, auditRoutes);
   app.use('/api/settings', apiLimiter, settingsRoutes);
   app.use('/api/conflicts', apiLimiter, conflictRoutes);
+  app.use('/api/admin', apiLimiter, adminRoutes);
   app.use('/api/webhooks', webhookRoutes);
 
   // ===== Serve frontend (client/dist) - 1 URL duy nhất cho production =====

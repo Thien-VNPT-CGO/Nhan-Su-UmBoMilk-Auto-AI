@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   FileSpreadsheet, BrainCircuit, MessageCircle, Scale, Clock, Users as UsersIcon,
-  Save, AlertTriangle, ShieldCheck, RefreshCw,
+  Save, AlertTriangle, ShieldCheck, RefreshCw, RotateCcw, Settings2, Trash2,
 } from 'lucide-react';
 import { api, ApiError } from '../api/client';
-import { Badge, Spinner } from '../components/ui';
+import { Badge, Spinner, Modal } from '../components/ui';
 import { useToast } from '../stores/Toast';
+import { useAuth } from '../stores/auth';
 import { cn } from '../utils/format';
 
 interface SettingsData {
@@ -53,9 +54,13 @@ interface SettingsData {
 
 export default function Settings() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [data, setData] = useState<SettingsData | null>(null);
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState('sheet');
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetConfirm, setResetConfirm] = useState('');
+  const [resetting, setResetting] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -151,6 +156,9 @@ export default function Settings() {
     { key: 'attendance', label: 'Chấm công', icon: Clock },
     { key: 'conflicts', label: 'Xung đột', icon: AlertTriangle },
     { key: 'users', label: 'Tài khoản', icon: UsersIcon },
+    ...(user?.role === 'ADMIN'
+      ? [{ key: 'system', label: 'Hệ thống', icon: Settings2 }]
+      : []),
   ];
 
   return (
@@ -518,8 +526,95 @@ export default function Settings() {
               </div>
             </div>
           )}
+
+          {tab === 'system' && user?.role === 'ADMIN' && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="rounded-xl p-2.5 bg-slate-100 text-slate-600">
+                  <Settings2 size={20} />
+                </div>
+                <div>
+                  <div className="font-bold text-slate-800">Hệ thống</div>
+                  <div className="text-xs text-slate-500">
+                    Reset hệ thống về trạng thái ban đầu khi cần bắt đầu lại từ đầu.
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2 font-bold text-rose-700">
+                      <Trash2 size={15} /> Reset toàn bộ dữ liệu
+                    </div>
+                    <div className="text-xs text-slate-600 mt-1 space-y-1">
+                      <div>Xóa: ứng viên, điểm AI, training, chấm công, ca trực, sync jobs, audit, Zalo, webhook, conflicts.</div>
+                      <div>Google Sheet: xóa dữ liệu 3 tab (giữ header). Xóa tombstone để form import lại từ đầu.</div>
+                      <div className="font-semibold text-slate-700">GIỮ NGUYÊN: tài khoản đăng nhập + cấu hình Settings.</div>
+                    </div>
+                  </div>
+                  <button className="btn-danger shrink-0" onClick={() => setResetOpen(true)}>
+                    <RotateCcw size={14} /> Reset hệ thống
+                  </button>
+                </div>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3.5 text-xs text-slate-500">
+                Sau khi reset, hệ thống sẽ tự nhập lại dữ liệu từ Google Form (nếu đã cấu hình Form Responses Sheet ID) mỗi 30 giây.
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      <Modal
+        open={resetOpen}
+        onClose={() => { setResetOpen(false); setResetConfirm(''); }}
+        title="Reset hệ thống về trạng thái ban đầu"
+      >
+        <div className="space-y-3">
+          <div className="flex items-start gap-2.5 rounded-xl bg-rose-50 border border-rose-200 px-4 py-3 text-sm text-rose-700">
+            <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+            <span>
+              Hành động này <b>xóa toàn bộ dữ liệu</b> (web + 3 tab Google Sheet) và <b>không thể hoàn tác</b>.
+              Tài khoản đăng nhập và cấu hình được giữ nguyên.
+            </span>
+          </div>
+          <div>
+            <label className="label">Gõ <b className="text-rose-600">RESET</b> để xác nhận</label>
+            <input
+              className="input font-mono"
+              value={resetConfirm}
+              onChange={(e) => setResetConfirm(e.target.value)}
+              placeholder="RESET"
+              autoFocus
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button className="btn-secondary" onClick={() => { setResetOpen(false); setResetConfirm(''); }}>Hủy</button>
+            <button
+              className="btn-danger"
+              disabled={resetConfirm !== 'RESET' || resetting}
+              onClick={async () => {
+                setResetting(true);
+                try {
+                  const r = await api.post<{ db: Record<string, number>; sheets: Record<string, number> }>('/admin/reset', { confirm: 'RESET' });
+                  const dbCount = Object.values(r.db).reduce((n, x) => n + x, 0);
+                  const sheetCount = Object.values(r.sheets).filter((x) => x > 0).reduce((n, x) => n + x, 0);
+                  toast('success', `Đã reset hệ thống: xóa ${dbCount} bản ghi web, ${sheetCount} dòng Google Sheet. Form sẽ tự nhập lại.`);
+                  setResetOpen(false);
+                  setResetConfirm('');
+                  void load();
+                } catch (e) {
+                  toast('error', e instanceof ApiError ? e.message : 'Reset hệ thống thất bại.');
+                } finally {
+                  setResetting(false);
+                }
+              }}
+            >
+              {resetting ? <Spinner size={14} /> : <Trash2 size={14} />} Xác nhận reset
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
