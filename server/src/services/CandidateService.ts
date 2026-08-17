@@ -7,6 +7,7 @@ import { syncQueue } from './SyncQueueService';
 import { emit } from '../sockets';
 import { getGoogleSheetService } from './GoogleSheetService';
 import { getSettings, saveSettings } from './SettingsService';
+import { zaloService } from './ZaloService';
 import { TRAINING_STATUS } from '../lib/constants';
 import { Prisma } from '@prisma/client';
 import type { Candidate } from '@prisma/client';
@@ -451,6 +452,16 @@ export class CandidateService {
       version: newVersion,
       idempotencyKey: `candidate:${id}:training-start:v${newVersion}`,
     });
+
+    // Tự động gửi thông báo lịch Training qua Zalo (không chặn lưu lịch nếu Zalo lỗi)
+    void zaloService
+      .sendTrainingNotice(id)
+      .then((r) => {
+        if (r.ok) console.log(`[CandidateService] đã gửi thông báo Training: ${id}`);
+      })
+      .catch((e) =>
+        console.warn('[CandidateService] gửi thông báo Training lỗi:', e instanceof Error ? e.message : String(e)),
+      );
 
     emit('training:updated', { candidateId: id });
     return final;

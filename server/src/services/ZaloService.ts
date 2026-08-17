@@ -148,31 +148,14 @@ export class ZaloService {
     }
   }
 
-  async sendTrainingNotice(candidateId: string): Promise<{ ok: boolean; provider: string; messageId?: string }> {
-    const c = await prisma.candidate.findUnique({ where: { id: candidateId } });
-    if (!c) throw new Error('Không tìm thấy ứng viên');
-    if (!c.ngayBatDauTraining) throw new Error('Chưa có ngày bắt đầu Training');
-
+  /** Gửi tin nhắn Zalo OA thật (refresh token nếu hết hạn) và lưu lịch sử. */
+  private async sendRaw(
+    phone: string,
+    content: string,
+    candidateId: string | null,
+  ): Promise<{ ok: boolean; provider: string; messageId?: string; status: string; error?: string | null }> {
     const cfg = await this.getConfig();
     let accessToken = cfg.accessToken;
-
-    const content = [
-      '🐮 UMBO MILK – THÔNG BÁO TRAINING',
-      '',
-      `Chào ${c.tenUv} ❤️`,
-      '',
-      'Ngày bắt đầu:',
-      formatDate(c.ngayBatDauTraining),
-      '',
-      'Chi nhánh:',
-      c.chiNhanh,
-      '',
-      'Ca:',
-      c.caLam,
-      '',
-      'Vui lòng có mặt đúng giờ và thực hiện điểm danh theo hướng dẫn.',
-    ].join('\n');
-
     const useRealApi = !env.demoMode && accessToken;
     let status = 'PENDING';
     let error: string | null = null;
@@ -190,7 +173,7 @@ export class ZaloService {
               access_token: accessToken,
             },
             body: JSON.stringify({
-              recipient: { user_id: c.sdtZalo },
+              recipient: { user_id: phone },
               message: { text: content },
             }),
           });
@@ -225,17 +208,71 @@ export class ZaloService {
     const msg = await prisma.zaloMessage.create({
       data: {
         id: nextId('ZAL'),
-        candidateId: c.id,
-        phone: c.sdtZalo,
+        candidateId,
+        phone,
         content,
         status,
         error,
         provider,
       },
     });
+    emit('zalo:status', { candidateId, status, messageId: msg.id });
+    return { ok: status === 'SENT', provider, messageId: msg.id, status };
+  }
 
-    emit('zalo:status', { candidateId: c.id, status, messageId: msg.id });
-    return { ok: status === 'SENT', provider, messageId: msg.id };
+  async sendTrainingNotice(candidateId: string): Promise<{ ok: boolean; provider: string; messageId?: string }> {
+    const c = await prisma.candidate.findUnique({ where: { id: candidateId } });
+    if (!c) throw new Error('Không tìm thấy ứng viên');
+    if (!c.ngayBatDauTraining) throw new Error('Chưa có ngày bắt đầu Training');
+
+    const content = [
+      '🐮 UMBO MILK – THÔNG BÁO TRAINING',
+      '',
+      `Chào ${c.tenUv} ❤️`,
+      '',
+      'Ngày bắt đầu:',
+      formatDate(c.ngayBatDauTraining),
+      '',
+      'Chi nhánh:',
+      c.chiNhanh,
+      '',
+      'Ca:',
+      c.caLam,
+      '',
+      'Vui lòng có mặt đúng giờ và thực hiện điểm danh theo hướng dẫn.',
+    ].join('\n');
+
+    const r = await this.sendRaw(c.sdtZalo, content, c.id);
+    return { ok: r.ok, provider: r.provider, messageId: r.messageId };
+  }
+
+  /** Nhắc điểm danh trước giờ làm 30 phút (1 ca = 1 tin/ngày, đánh dấu trong nội dung để không gửi trùng). */
+  async sendShiftReminder(
+    candidate: { id: string; tenUv: string; sdtZalo: string; chiNhanh: string },
+    date: string,
+    shift: string,
+    shiftStart: string,
+  ): Promise<{ ok: boolean; status: string }> {
+    const marker = `[NHAC:${date}:${shift}]`;
+    const content = [
+      marker,
+      '🐮 UMBO MILK – NHẮC ĐIỂM DANH',
+      '',
+      `Chào ${candidate.tenUv} ❤️`,
+      '',
+      `Hôm nay (${date}) bạn có ca ${shift} lúc ${shiftStart} tại ${candidate.chiNhanh}.`,
+      '',
+      'Vui lòng nhắn: điểm danh',
+      'đến OA UMBO MILK trong khung giờ cho phép.',
+    ].join('\n');
+
+    const existed = await prisma.zaloMessage.findFirst({
+      where: { phone: candidate.sdtZalo, content: { contains: marker } },
+    });
+    if (existed) return { ok: true, status: 'SKIP_DUP' };
+
+    const r = await this.sendRaw(candidate.sdtZalo, content, candidate.id);
+    return { ok: r.ok, status: r.status };
   }
 
   async webhook(payload: unknown): Promise<void> {

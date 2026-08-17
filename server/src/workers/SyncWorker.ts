@@ -5,7 +5,18 @@ import { importFormResponses } from '../services/FormImportService';
 import { dedupService } from '../services/DedupService';
 import { candidateScoringService } from '../services/CandidateScoringService';
 import { getSettings } from '../services/SettingsService';
+import { zaloService } from '../services/ZaloService';
 import { emit } from '../sockets';
+import { nextId } from '../lib/id';
+import { dateKey } from '../lib/date';
+import { TRAINING_STATUS } from '../lib/constants';
+
+const ENDED_TRAINING_STATUSES = [
+  TRAINING_STATUS.HOAN_THANH,
+  TRAINING_STATUS.KHONG_DU_NGAY,
+  TRAINING_STATUS.LOAI,
+  TRAINING_STATUS.NHAN_VIEN_CHINH_THUC,
+];
 
 export class SyncWorker {
   private running = false;
@@ -18,6 +29,8 @@ export class SyncWorker {
   private runningDedup = false;
   private scoring = false;
   private scoreTimer: NodeJS.Timeout | null = null;
+  private noticeTimer: NodeJS.Timeout | null = null;
+  private runningNotices = false;
 
   constructor(intervalMs = 3000) {
     this.intervalMs = intervalMs;
@@ -38,10 +51,14 @@ export class SyncWorker {
     this.scoreTimer = setInterval(() => {
       void this.tickAutoScore();
     }, 60_000);
+    this.noticeTimer = setInterval(() => {
+      void this.tickTrainingNotices();
+    }, 60_000);
     void this.tick();
     void this.tickFormImport();
     void this.tickAutoDedup();
     void this.tickAutoScore();
+    void this.tickTrainingNotices();
     console.log('[SyncWorker] started');
   }
 
@@ -55,6 +72,8 @@ export class SyncWorker {
     this.dedupTimer = null;
     if (this.scoreTimer) clearInterval(this.scoreTimer);
     this.scoreTimer = null;
+    if (this.noticeTimer) clearInterval(this.noticeTimer);
+    this.noticeTimer = null;
   }
 
   /** AI tự chấm điểm hồ sơ vừa đăng ký: chạy mỗi 60s, tối đa 10 hồ sơ/lượt. */
@@ -123,6 +142,82 @@ export class SyncWorker {
       console.warn('[SyncWorker] form import:', e instanceof Error ? e.message : String(e));
     } finally {
       this.importingForm = false;
+    }
+  }
+
+  /** Tự động hóa điểm danh: trước giờ làm 30 phút nhắc qua Zalo; hết khung giờ chưa điểm danh → đánh VẮNG. */
+  private async tickTrainingNotices(): Promise<void> {
+    if (!this.running || this.runningNotices) return;
+    this.runningNotices = true;
+    try {
+      const settings = await getSettings();
+      if (!settings.zalo?.accessToken) return; // chưa kết nối Zalo thì không gửi
+      const today = dateKey(new Date());
+      const now = Date.now();
+
+      const candidates = await prisma.candidate.findMany({
+        where: {
+          hrDecision: 'PASS',
+          ngayBatDauTraining: { not: null },
+          trangThaiTraining: { notIn: ENDED_TRAINING_STATUSES },
+          sdtZalo: { not: '' },
+        },
+      });
+
+      for (const c of candidates) {
+        const shiftRow = await prisma.shift.findUnique({
+          where: { candidateId_date: { candidateId: c.id, date: today } },
+        });
+        if (!shiftRow) continue;
+        const shifts = shiftRow.shifts.split('|').filter((s) => s && s !== 'OFF');
+        for (const shift of shifts) {
+          const cfg =
+            settings.attendance.shifts[shift as keyof typeof settings.attendance.shifts];
+          if (!cfg) continue;
+          // Giờ bắt đầu ca tính theo múi giờ VN (+07:00) cho đúng kể cả khi server chạy UTC
+          const start = new Date(`${today}T${cfg.start}:00+07:00`).getTime();
+          if (Number.isNaN(start)) continue;
+
+          // 1) Nhắc điểm danh: 30 phút trước giờ làm (gửi 1 lần/ca/ngày, chống trùng bằng marker)
+          if (now >= start - 30 * 60_000 && now < start) {
+            const r = await zaloService.sendShiftReminder(
+              { id: c.id, tenUv: c.tenUv, sdtZalo: c.sdtZalo, chiNhanh: c.chiNhanh },
+              today,
+              shift,
+              cfg.start,
+            );
+            if (r.ok) console.log(`[SyncWorker] nhắc điểm danh: ${c.tenUv} ca ${shift}`);
+          }
+
+          // 2) Đánh VẮNG: hết khung giờ cho phép mà chưa có lần điểm danh hợp lệ
+          const windowEnd = start + (cfg.windowMinutesAfter ?? 0) * 60_000;
+          if (now >= windowEnd) {
+            const existing = await prisma.attendanceEvent.findUnique({
+              where: { candidateId_date_shift: { candidateId: c.id, date: today, shift } },
+            });
+            if (!existing) {
+              await prisma.attendanceEvent.create({
+                data: {
+                  id: nextId('ATT'),
+                  candidateId: c.id,
+                  date: today,
+                  shift,
+                  checkinAt: new Date(),
+                  method: 'SYSTEM',
+                  valid: false,
+                  reason: 'VANG',
+                },
+              });
+              console.log(`[SyncWorker] đánh VẮNG: ${c.tenUv} ca ${shift} ${today}`);
+              emit('attendance:checked', { candidateId: c.id, date: today, shift, valid: false });
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[SyncWorker] training notices:', e instanceof Error ? e.message : String(e));
+    } finally {
+      this.runningNotices = false;
     }
   }
 
