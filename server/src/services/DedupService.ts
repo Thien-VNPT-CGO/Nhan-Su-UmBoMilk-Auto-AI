@@ -1,9 +1,5 @@
 import { prisma } from '../lib/prisma';
-import { syncQueue } from './SyncQueueService';
-import { audit } from './AuditService';
-import { getGoogleSheetService } from './GoogleSheetService';
-import { getSettings, saveSettings } from './SettingsService';
-import { normalizePhone } from './CandidateService';
+import { deleteCandidateWithCleanup } from './CandidateService';
 
 export interface DuplicateRow {
   id: string;
@@ -71,46 +67,6 @@ async function findDuplicateGroups(): Promise<DuplicateGroup[]> {
 }
 
 /** Xóa 1 ứng viên kèm đầy đủ dọn dẹp: dòng phản hồi form, tombstone, DELETE sync về Google Sheet. */
-async function deleteCandidateWithCleanup(id: string, user: string): Promise<void> {
-  const candidate = await prisma.candidate.findUnique({ where: { id } });
-  if (!candidate) return;
-  try {
-    const cleared = await getGoogleSheetService().clearFormResponseRows(candidate.sdtZalo, candidate.thoiGian);
-    if (cleared > 0) console.log(`[DEDUP] Đã xóa ${cleared} dòng phản hồi form của ${candidate.id}`);
-  } catch (e) {
-    console.warn('[DEDUP] clearFormResponseRows:', e instanceof Error ? e.message : String(e));
-  }
-  try {
-    const settings = await getSettings();
-    const tomb = Array.isArray((settings as Record<string, unknown>).deletedFormResponses)
-      ? ((settings as Record<string, unknown>).deletedFormResponses as { sdt: string; thoiGian: string | null }[])
-      : [];
-    const entry = { sdt: normalizePhone(candidate.sdtZalo), thoiGian: candidate.thoiGian?.toISOString() ?? null };
-    if (!tomb.some((t) => t.sdt === entry.sdt && t.thoiGian === entry.thoiGian)) {
-      tomb.unshift(entry);
-      await saveSettings({ deletedFormResponses: tomb.slice(0, 500) }, user);
-    }
-  } catch (e) {
-    console.warn('[DEDUP] tombstone:', e instanceof Error ? e.message : String(e));
-  }
-  await syncQueue.enqueue({
-    entity: 'candidate',
-    entityId: id,
-    operation: 'DELETE',
-    version: candidate.dataVersion + 1,
-    idempotencyKey: `candidate:${id}:delete:v1`,
-  });
-  await prisma.candidate.delete({ where: { id } });
-  await audit({
-    user,
-    action: 'DELETE_CANDIDATE_DUP',
-    entity: 'candidate',
-    entityId: id,
-    oldValue: { tenUv: candidate.tenUv, sdtZalo: candidate.sdtZalo },
-    version: candidate.dataVersion,
-  });
-}
-
 export class DedupService {
   async findDuplicates(): Promise<DuplicateGroup[]> {
     return findDuplicateGroups();

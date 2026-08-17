@@ -164,7 +164,7 @@ export default function Candidates() {
         toast('success', `AI đã tự loại ${r.removed} hồ sơ trùng SĐT và đồng bộ xóa về Google Sheet.`);
       }
     };
-    const events = ['candidate:new', 'candidate:updated', 'candidate:scored', 'candidate:decision', 'candidate:sync', 'training:updated', 'sync:success'];
+    const events = ['candidate:new', 'candidate:updated', 'candidate:deleted', 'candidate:scored', 'candidate:decision', 'candidate:sync', 'training:updated', 'sync:success'];
     events.forEach((ev) => socket.on(ev, refresh));
     socket.on('dedup:auto', onAutoDedup);
     return () => {

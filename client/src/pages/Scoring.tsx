@@ -57,8 +57,8 @@ export default function Scoring() {
   useEffect(() => {
     const socket = getSocket();
     const refresh = () => void load();
-    ['candidate:new', 'candidate:scored', 'candidate:decision'].forEach((ev) => socket.on(ev, refresh));
-    return () => ['candidate:new', 'candidate:scored', 'candidate:decision'].forEach((ev) => socket.off(ev, refresh));
+    ['candidate:new', 'candidate:scored', 'candidate:decision', 'candidate:deleted'].forEach((ev) => socket.on(ev, refresh));
+    return () => ['candidate:new', 'candidate:scored', 'candidate:decision', 'candidate:deleted'].forEach((ev) => socket.off(ev, refresh));
   }, [load]);
 
   const score = async (id: string) => {

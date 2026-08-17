@@ -1,4 +1,3 @@
-import { prisma } from '../lib/prisma';
 import { getSettings } from './SettingsService';
 import {
   fetchFormResponses,
@@ -7,6 +6,7 @@ import {
 } from './GoogleSheetService';
 import { candidateService } from './CandidateService';
 import { normalizePhone } from './CandidateService';
+import { isApiError } from '../lib/errors';
 
 export interface FormImportResult {
   enabled: boolean;
@@ -69,27 +69,31 @@ export async function importFormResponses(): Promise<FormImportResult> {
         result.duplicates++;
         continue;
       }
-      const existing = await prisma.candidate.findFirst({ where: { sdtZalo: sdt } });
-      if (existing) {
-        result.duplicates++;
-        continue;
+      try {
+        await candidateService.createFromForm({
+          thoiGian: thoiGian?.toISOString(),
+          tenUv: mapped.tenUv,
+          gioiTinh: mapped.gioiTinh,
+          namSinh: mapped.namSinh,
+          trinhDo: mapped.trinhDo,
+          queQuan: mapped.queQuan,
+          sdtZalo: sdt,
+          caLam: mapped.caLam,
+          chiNhanh: mapped.chiNhanh,
+          kinhNghiem: mapped.kinhNghiem,
+          xuLy: mapped.xuLy,
+          linkFb: mapped.linkFb,
+          source: 'GOOGLE_FORM',
+        });
+        result.imported++;
+      } catch (e) {
+        if (isApiError(e) && e.code === 'DUPLICATE_CANDIDATE') {
+          // SĐT đã có hồ sơ mới hơn → bỏ qua bản cũ
+          result.duplicates++;
+        } else {
+          throw e;
+        }
       }
-      await candidateService.createFromForm({
-        thoiGian: thoiGian?.toISOString(),
-        tenUv: mapped.tenUv,
-        gioiTinh: mapped.gioiTinh,
-        namSinh: mapped.namSinh,
-        trinhDo: mapped.trinhDo,
-        queQuan: mapped.queQuan,
-        sdtZalo: sdt,
-        caLam: mapped.caLam,
-        chiNhanh: mapped.chiNhanh,
-        kinhNghiem: mapped.kinhNghiem,
-        xuLy: mapped.xuLy,
-        linkFb: mapped.linkFb,
-        source: 'GOOGLE_FORM',
-      });
-      result.imported++;
     }
     lastRunAt = new Date();
     lastError = null;

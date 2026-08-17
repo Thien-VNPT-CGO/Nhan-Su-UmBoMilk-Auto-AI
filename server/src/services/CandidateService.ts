@@ -5,6 +5,8 @@ import { ApiError } from '../lib/errors';
 import { audit } from './AuditService';
 import { syncQueue } from './SyncQueueService';
 import { emit } from '../sockets';
+import { getGoogleSheetService } from './GoogleSheetService';
+import { getSettings, saveSettings } from './SettingsService';
 import { TRAINING_STATUS } from '../lib/constants';
 import type { Candidate, Prisma } from '@prisma/client';
 
@@ -64,7 +66,15 @@ export class CandidateService {
 
     const existing = await prisma.candidate.findFirst({ where: { sdtZalo: sdt } });
     if (existing) {
-      throw ApiError.conflict('DUPLICATE_CANDIDATE', `Ứng viên đã tồn tại (${existing.id}).`);
+      const incoming = input.thoiGian ? new Date(input.thoiGian).getTime() : NaN;
+      const isNewer = Number.isNaN(incoming) || incoming >= existing.thoiGian.getTime();
+      if (!isNewer) {
+        // Bản đang xử lý cũ hơn hồ sơ đã có → bỏ qua, giữ bản mới nhất
+        throw ApiError.conflict('DUPLICATE_CANDIDATE', `Ứng viên đã tồn tại (${existing.id}) với thời gian đăng ký mới hơn. Bản này được bỏ qua.`);
+      }
+      // Cùng SĐT nhưng đăng ký mới hơn → thay thế hồ sơ cũ, giữ hồ sơ mới nhất
+      console.log(`[REPLACE] ${existing.id} -> bản đăng ký mới hơn, thay thế hồ sơ cũ (SĐT ${sdt})`);
+      await deleteCandidateWithCleanup(existing.id, 'SYSTEM-REPLACE', 'DELETE_CANDIDATE_REPLACE');
     }
 
     const id = await nextCandidateId();
@@ -403,6 +413,48 @@ export class CandidateService {
     ]);
     return { today, scored, pendingDecision, passToday, failToday, training, done, needReview };
   }
+}
+
+/** Xóa 1 ứng viên kèm đầy đủ dọn dẹp: dòng phản hồi form, tombstone, DELETE sync về Google Sheet. */
+export async function deleteCandidateWithCleanup(id: string, user: string, action = 'DELETE_CANDIDATE_DUP'): Promise<void> {
+  const candidate = await prisma.candidate.findUnique({ where: { id } });
+  if (!candidate) return;
+  try {
+    const cleared = await getGoogleSheetService().clearFormResponseRows(candidate.sdtZalo, candidate.thoiGian);
+    if (cleared > 0) console.log(`[CLEANUP] Đã xóa ${cleared} dòng phản hồi form của ${candidate.id}`);
+  } catch (e) {
+    console.warn('[CLEANUP] clearFormResponseRows:', e instanceof Error ? e.message : String(e));
+  }
+  try {
+    const settings = await getSettings();
+    const tomb = Array.isArray((settings as Record<string, unknown>).deletedFormResponses)
+      ? ((settings as Record<string, unknown>).deletedFormResponses as { sdt: string; thoiGian: string | null }[])
+      : [];
+    const entry = { sdt: normalizePhone(candidate.sdtZalo), thoiGian: candidate.thoiGian?.toISOString() ?? null };
+    if (!tomb.some((t) => t.sdt === entry.sdt && t.thoiGian === entry.thoiGian)) {
+      tomb.unshift(entry);
+      await saveSettings({ deletedFormResponses: tomb.slice(0, 500) }, user);
+    }
+  } catch (e) {
+    console.warn('[CLEANUP] tombstone:', e instanceof Error ? e.message : String(e));
+  }
+  await syncQueue.enqueue({
+    entity: 'candidate',
+    entityId: id,
+    operation: 'DELETE',
+    version: candidate.dataVersion + 1,
+    idempotencyKey: `candidate:${id}:delete:v1`,
+  });
+  await prisma.candidate.delete({ where: { id } });
+  await audit({
+    user,
+    action,
+    entity: 'candidate',
+    entityId: id,
+    oldValue: { tenUv: candidate.tenUv, sdtZalo: candidate.sdtZalo },
+    version: candidate.dataVersion,
+  });
+  emit('candidate:deleted', { candidateId: id });
 }
 
 export const candidateService = new CandidateService();
