@@ -42,6 +42,21 @@ const STATUS_FILTERS = [
   { key: 'TRAINING', label: 'Đang đào tạo' },
 ];
 
+interface DuplicateRow {
+  id: string;
+  tenUv: string;
+  thoiGian: string;
+  sdtZalo: string;
+  chiNhanh: string;
+}
+
+interface DuplicateGroup {
+  sdtZalo: string;
+  count: number;
+  keep: DuplicateRow;
+  remove: DuplicateRow[];
+}
+
 const SORTS = [
   { key: 'newest', label: 'Mới nhất' },
   { key: 'oldest', label: 'Cũ nhất' },
@@ -74,6 +89,20 @@ export default function Candidates() {
   const [selected, setSelected] = useState<CandidateRow | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<CandidateRow | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [dups, setDups] = useState<DuplicateGroup[]>([]);
+  const [dupOpen, setDupOpen] = useState(false);
+  const [cleaning, setCleaning] = useState(false);
+
+  const loadDups = useCallback(() => {
+    api
+      .get<DuplicateGroup[]>('/candidates/duplicates')
+      .then(setDups)
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    loadDups();
+  }, [loadDups]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -138,10 +167,25 @@ export default function Candidates() {
           <h1 className="text-xl font-extrabold text-slate-800">Ứng viên</h1>
           <p className="text-sm text-slate-500">{total} hồ sơ</p>
         </div>
-        <button className="btn-secondary" onClick={() => void load()}>
+        <button className="btn-secondary" onClick={() => { void load(); loadDups(); }}>
           <RefreshCw size={15} /> Làm mới
         </button>
       </div>
+
+      {dups.length > 0 && (
+        <div className="flex items-center justify-between gap-3 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
+          <div className="flex items-center gap-2.5 text-sm text-amber-800">
+            <AlertTriangle size={16} className="shrink-0" />
+            <span>
+              Có <b>{dups.reduce((n, g) => n + g.remove.length, 0)}</b> hồ sơ trùng số điện thoại
+              (<b>{dups.length}</b> nhóm). Hệ thống chỉ giữ 1 hồ sơ mới nhất mỗi SĐT, các bản trùng sẽ bị loại khỏi web và Google Sheet (cả 3 tab).
+            </span>
+          </div>
+          <button className="btn-secondary !py-1.5 shrink-0" onClick={() => setDupOpen(true)}>
+            <AlertTriangle size={14} /> Xem & dọn dẹp
+          </button>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="card p-3.5 flex flex-wrap items-center gap-2.5">
@@ -342,6 +386,66 @@ export default function Candidates() {
               }}
             >
               {deleting ? 'Đang xóa...' : 'Xóa'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={dupOpen}
+        onClose={() => setDupOpen(false)}
+        title="Dữ liệu trùng số điện thoại"
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-slate-600">
+            Mỗi SĐT chỉ giữ <b className="text-slate-800">1 hồ sơ mới nhất</b>. Các bản trùng sẽ bị xóa
+            khỏi hệ thống và đồng bộ xóa về Google Sheet (LOC_HO_SO_PV, DIEM_UV, HO_SO_NHAN_VIEN_UNG_TUYEN).
+          </p>
+          {dups.map((g) => (
+            <div key={g.sdtZalo} className="rounded-xl border border-slate-100 overflow-hidden">
+              <div className="bg-slate-50 px-3.5 py-2 flex items-center justify-between text-sm">
+                <span className="font-bold text-slate-700">SĐT {g.sdtZalo}</span>
+                <span className="text-xs text-amber-600 font-semibold">{g.remove.length} bản trùng</span>
+              </div>
+              <div className="divide-y divide-slate-50 text-xs">
+                <div className="px-3.5 py-2 flex items-center gap-2 bg-emerald-50/60">
+                  <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
+                  <span className="font-mono text-emerald-700">{g.keep.id}</span>
+                  <span className="font-semibold text-slate-700">{g.keep.tenUv}</span>
+                  <span className="text-slate-500 ml-auto">GIỮ LẠI · {formatDateTime(g.keep.thoiGian)}</span>
+                </div>
+                {g.remove.map((r) => (
+                  <div key={r.id} className="px-3.5 py-2 flex items-center gap-2">
+                    <XCircle size={13} className="text-rose-400 shrink-0" />
+                    <span className="font-mono text-slate-500">{r.id}</span>
+                    <span className="text-slate-600">{r.tenUv}</span>
+                    <span className="text-slate-400 ml-auto">{formatDateTime(r.thoiGian)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+          <div className="flex justify-end gap-2 pt-1">
+            <button className="btn-secondary" onClick={() => setDupOpen(false)}>Đóng</button>
+            <button
+              className="btn-danger"
+              disabled={cleaning}
+              onClick={async () => {
+                setCleaning(true);
+                try {
+                  const r = await api.post<{ removed: number }>('/candidates/duplicates/cleanup');
+                  toast('success', `Đã loại bỏ ${r.removed} hồ sơ trùng. Đang đồng bộ xóa về Google Sheet...`);
+                  setDupOpen(false);
+                  setDups([]);
+                  void load();
+                } catch (e) {
+                  toast('error', e instanceof ApiError ? e.message : 'Dọn dẹp trùng lặp thất bại.');
+                } finally {
+                  setCleaning(false);
+                }
+              }}
+            >
+              {cleaning ? 'Đang dọn dẹp...' : 'Loại bỏ tất cả bản trùng'}
             </button>
           </div>
         </div>

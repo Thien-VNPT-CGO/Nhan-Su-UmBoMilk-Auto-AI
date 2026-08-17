@@ -204,6 +204,17 @@ export class CandidateService {
       throw ApiError.conflict('VERSION_CONFLICT', `Dữ liệu đã được người khác cập nhật (version ${candidate.dataVersion}). Vui lòng tải lại.`);
     }
 
+    // Ràng buộc SĐT duy nhất: không cho sửa thành SĐT đã thuộc ứng viên khác
+    const sdtZalo = String(patch.sdtZalo ?? '');
+    if (sdtZalo) {
+      const dup = await prisma.candidate.findFirst({
+        where: { sdtZalo: normalizePhone(sdtZalo), id: { not: id } },
+      });
+      if (dup) {
+        throw ApiError.conflict('DUPLICATE_CANDIDATE', `SĐT ${dup.sdtZalo} đã thuộc ứng viên ${dup.id}. Mỗi SĐT chỉ được giữ 1 hồ sơ.`);
+      }
+    }
+
     const newVersion = candidate.dataVersion + 1;
     const oldSnapshot: Record<string, unknown> = {};
     const newSnapshot: Record<string, unknown> = {};

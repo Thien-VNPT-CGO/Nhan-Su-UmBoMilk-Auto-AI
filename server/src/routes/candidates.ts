@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth, requireWrite, requireRole, AuthedRequest } from '../middleware/auth';
 import { candidateService, normalizePhone } from '../services/CandidateService';
+import { dedupService } from '../services/DedupService';
 import { candidateScoringService } from '../services/CandidateScoringService';
 import { syncQueue } from '../services/SyncQueueService';
 import { audit } from '../services/AuditService';
@@ -56,6 +57,24 @@ router.get('/filters', async (_req, res, next) => {
         caLam: shifts.map((s) => s.caLam),
       },
     });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.get('/duplicates', async (_req, res, next) => {
+  try {
+    const groups = await dedupService.findDuplicates();
+    res.json({ success: true, data: groups });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post('/duplicates/cleanup', requireRole('ADMIN', 'HR'), async (req: AuthedRequest, res, next) => {
+  try {
+    const result = await dedupService.removeDuplicates(req.user!.username);
+    res.json({ success: true, data: result });
   } catch (e) {
     next(e);
   }
