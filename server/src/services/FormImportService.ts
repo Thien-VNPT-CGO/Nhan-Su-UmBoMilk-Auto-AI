@@ -1,4 +1,5 @@
 import { getSettings } from './SettingsService';
+import { prisma } from '../lib/prisma';
 import {
   fetchFormResponses,
   mapFormResponseRow,
@@ -19,10 +20,21 @@ export interface FormImportResult {
 
 let lastRunAt: Date | null = null;
 let lastError: string | null = null;
+let fullScanDone = false;
 
 export function getFormImportStatus(): { lastRunAt: Date | null; lastError: string | null } {
   return { lastRunAt, lastError };
 }
+
+/** Reset trạng thái import (gọi sau khi reset hệ thống để quét lại toàn bộ form). */
+export function resetImportState(): void {
+  fullScanDone = false;
+  lastRunAt = null;
+  lastError = null;
+}
+
+/** Dòng mới nhất mỗi chu kỳ (form xếp dòng mới trên đầu). Dòng cũ chỉ quét lại sau khi reset. */
+const LIMIT_ROWS = 40;
 
 /**
  * Đọc sheet phản hồi Google Form và tạo hồ sơ ứng viên cho các dòng mới.
@@ -43,7 +55,11 @@ export async function importFormResponses(): Promise<FormImportResult> {
       result.enabled = false;
       return result;
     }
-    const { headers, rows } = await fetchFormResponses();
+    const { headers, rows } = await fetchFormResponses(fullScanDone ? LIMIT_ROWS : undefined);
+    // Baseline: dòng cũ hơn mốc đã xử lý (max thoiGian trong DB) thì bỏ qua, chỉ xử lý dòng mới
+    const baseline = fullScanDone
+      ? (await prisma.candidate.aggregate({ _max: { thoiGian: true } }))._max.thoiGian
+      : null;
     const tomb = Array.isArray((settings as Record<string, unknown>).deletedFormResponses)
       ? ((settings as Record<string, unknown>).deletedFormResponses as { sdt: string; thoiGian: string | null }[])
       : [];
@@ -62,6 +78,10 @@ export async function importFormResponses(): Promise<FormImportResult> {
       const thoiGian = parseFormTimestamp(
         timestampIdx >= 0 ? String(row[timestampIdx] ?? '') : undefined,
       );
+      if (baseline && thoiGian && thoiGian.getTime() <= baseline.getTime()) {
+        // Dòng cũ đã được xử lý từ trước → bỏ qua (giảm tải DB rất nhiều)
+        continue;
+      }
       const isDeleted = tomb.some((t) =>
         t.sdt === sdt &&
         (!t.thoiGian || !thoiGian || t.thoiGian === thoiGian.toISOString()),
@@ -98,6 +118,7 @@ export async function importFormResponses(): Promise<FormImportResult> {
     }
     lastRunAt = new Date();
     lastError = null;
+    fullScanDone = true;
   } catch (e) {
     lastError = e instanceof Error ? e.message : String(e);
     result.lastError = lastError;

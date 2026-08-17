@@ -6,6 +6,7 @@ import { Badge, Skeleton, EmptyState } from '../components/ui';
 import { useToast } from '../stores/Toast';
 import { getSocket } from '../api/socket';
 import { formatDateTime } from '../utils/date';
+import { debounce } from '../utils/debounce';
 import { cn } from '../utils/format';
 
 interface Row {
@@ -56,9 +57,12 @@ export default function Scoring() {
 
   useEffect(() => {
     const socket = getSocket();
-    const refresh = () => void load();
+    const refresh = debounce(() => void load(), 500);
     ['candidate:new', 'candidate:scored', 'candidate:decision', 'candidate:deleted'].forEach((ev) => socket.on(ev, refresh));
-    return () => ['candidate:new', 'candidate:scored', 'candidate:decision', 'candidate:deleted'].forEach((ev) => socket.off(ev, refresh));
+    return () => {
+      ['candidate:new', 'candidate:scored', 'candidate:decision', 'candidate:deleted'].forEach((ev) => socket.off(ev, refresh));
+      refresh.cancel();
+    };
   }, [load]);
 
   const score = async (id: string) => {

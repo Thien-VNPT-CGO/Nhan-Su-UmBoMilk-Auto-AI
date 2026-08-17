@@ -6,6 +6,7 @@ import { Badge, Skeleton, EmptyState, Modal, Field, ConfirmDialog } from '../com
 import { useToast } from '../stores/Toast';
 import { getSocket } from '../api/socket';
 import { trainingStatusLabel } from '../utils/format';
+import { debounce } from '../utils/debounce';
 import { formatDate, dateKey, addDays } from '../utils/date';
 
 interface TrainingRow {
@@ -53,9 +54,12 @@ export default function Training() {
 
   useEffect(() => {
     const socket = getSocket();
-    const refresh = () => void load();
+    const refresh = debounce(() => void load(), 500);
     ['training:updated', 'shift:updated', 'attendance:checked', 'candidate:decision'].forEach((ev) => socket.on(ev, refresh));
-    return () => ['training:updated', 'shift:updated', 'attendance:checked', 'candidate:decision'].forEach((ev) => socket.off(ev, refresh));
+    return () => {
+      ['training:updated', 'shift:updated', 'attendance:checked', 'candidate:decision'].forEach((ev) => socket.off(ev, refresh));
+      refresh.cancel();
+    };
   }, [load]);
 
   const saveStart = async () => {

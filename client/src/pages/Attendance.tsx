@@ -6,6 +6,7 @@ import { useToast } from '../stores/Toast';
 import { getSocket } from '../api/socket';
 import { dateKey, formatDateTime } from '../utils/date';
 import { cn, shiftColor } from '../utils/format';
+import { debounce } from '../utils/debounce';
 
 interface EventRow {
   id: string;
@@ -58,10 +59,11 @@ export default function Attendance() {
 
   useEffect(() => {
     const socket = getSocket();
-    const refresh = () => void load();
+    const refresh = debounce(() => void load(), 500);
     socket.on('attendance:checked', refresh);
     return () => {
       socket.off('attendance:checked', refresh);
+      refresh.cancel();
     };
   }, [load]);
 

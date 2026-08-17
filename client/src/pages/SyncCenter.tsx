@@ -5,6 +5,7 @@ import { Badge, Skeleton, EmptyState, StatCard, ConfirmDialog } from '../compone
 import { useToast } from '../stores/Toast';
 import { getSocket } from '../api/socket';
 import { syncStatusStyle } from '../utils/format';
+import { debounce } from '../utils/debounce';
 import { formatDateTime } from '../utils/date';
 
 interface SyncRow {
@@ -76,9 +77,12 @@ export default function SyncCenter() {
 
   useEffect(() => {
     const socket = getSocket();
-    const refresh = () => void load();
+    const refresh = debounce(() => void load(), 600);
     ['sync:status', 'sync:success', 'sync:failed', 'sync:conflict', 'sync:pending'].forEach((ev) => socket.on(ev, refresh));
-    return () => ['sync:status', 'sync:success', 'sync:failed', 'sync:conflict', 'sync:pending'].forEach((ev) => socket.off(ev, refresh));
+    return () => {
+      ['sync:status', 'sync:success', 'sync:failed', 'sync:conflict', 'sync:pending'].forEach((ev) => socket.off(ev, refresh));
+      refresh.cancel();
+    };
   }, [load]);
 
   const retry = async (id: string) => {

@@ -548,8 +548,8 @@ export function getGoogleSheetService(): GoogleSheetService {
   return _service;
 }
 
-/** Đọc toàn bộ dữ liệu sheet phản hồi của Google Form (không cần Apps Script). */
-export async function fetchFormResponses(): Promise<{ headers: string[]; rows: string[][] }> {
+/** Đọc dữ liệu sheet phản hồi của Google Form (không cần Apps Script). limit > 0: chỉ đọc N dòng đầu (dòng mới nhất nằm trên). */
+export async function fetchFormResponses(limit?: number): Promise<{ headers: string[]; rows: string[][] }> {
   const sheet = getGoogleSheetService();
   if (!sheet.configured) throw new Error('Google Sheets chưa được cấu hình');
   const formId = sheet.formResponsesId;
@@ -558,7 +558,8 @@ export async function fetchFormResponses(): Promise<{ headers: string[]; rows: s
   const meta = await sheet.fetchSpreadsheetMeta(formId);
   const tab = meta.tabs[0];
   if (!tab) throw new Error('Spreadsheet phản hồi không có sheet nào');
-  const res = await sheet.fetchValues(formId, `${tab.title}!A1:${tab.lastCol}${tab.rowCount}`);
+  const maxRow = limit && limit > 0 ? Math.min(limit + 1, tab.rowCount) : tab.rowCount;
+  const res = await sheet.fetchValues(formId, `${tab.title}!A1:${tab.lastCol}${maxRow}`);
   const values = res ?? [];
   if (values.length === 0) return { headers: [], rows: [] };
   const headers = (values[0] ?? []).map((h) => String(h ?? '').trim());

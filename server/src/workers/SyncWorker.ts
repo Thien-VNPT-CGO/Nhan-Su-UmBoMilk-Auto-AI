@@ -129,7 +129,11 @@ export class SyncWorker {
   private async tick(): Promise<void> {
     if (!this.running) return;
     const claimed = await syncQueue.claimNext();
-    if (!claimed) return;
+    if (!claimed) {
+      // Không có việc → đợi 1s trước khi poll lại (giảm tải DB rất nhiều)
+      setTimeout(() => void this.tick(), 1000);
+      return;
+    }
     void this.provisionIfNeeded();
     void this.process(claimed.jobId);
     // process more jobs in the same tick (small batches)

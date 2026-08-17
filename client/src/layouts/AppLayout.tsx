@@ -10,6 +10,7 @@ import { useToast } from '../stores/Toast';
 import { api } from '../api/client';
 import { getSocket } from '../api/socket';
 import { cn } from '../utils/format';
+import { debounce } from '../utils/debounce';
 import { formatDate, weekdayVi } from '../utils/date';
 
 const NAV = [
@@ -46,22 +47,27 @@ function useClock() {
 
 function useSyncCounts() {
   const [counts, setCounts] = useState<SyncCounts | null>(null);
-  const load = () => {
-    api.get<SyncCounts & { rows: unknown[]; total: number }>('/sync?limit=1')
-      .then((d) => setCounts({ ...d }))
-      .catch(() => undefined);
-  };
   useEffect(() => {
+    const load = () => {
+      api.get<SyncCounts & { rows: unknown[]; total: number }>('/sync?limit=1')
+        .then((d) => setCounts({ ...d }))
+        .catch(() => undefined);
+    };
+    const debounced = debounce(load, 800);
     load();
     const t = setInterval(load, 15000);
     const socket = getSocket();
-    socket.on('sync:status', load);
-    socket.on('sync:success', load);
-    socket.on('sync:failed', load);
-    socket.on('sync:conflict', load);
+    socket.on('sync:status', debounced);
+    socket.on('sync:success', debounced);
+    socket.on('sync:failed', debounced);
+    socket.on('sync:conflict', debounced);
     return () => {
       clearInterval(t);
-      socket.off('sync:status', load);
+      socket.off('sync:status', debounced);
+      socket.off('sync:success', debounced);
+      socket.off('sync:failed', debounced);
+      socket.off('sync:conflict', debounced);
+      debounced.cancel();
     };
   }, []);
   return counts;

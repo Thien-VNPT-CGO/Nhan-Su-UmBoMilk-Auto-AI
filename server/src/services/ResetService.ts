@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { getGoogleSheetService } from './GoogleSheetService';
 import { saveSettings } from './SettingsService';
+import { resetImportState } from './FormImportService';
 
 export interface ResetResult {
   db: Record<string, number>;
@@ -58,6 +59,7 @@ export class ResetService {
     }
 
     await saveSettings({ deletedFormResponses: [] }, user);
+    resetImportState();
     console.log(`[RESET] ${user} đã reset hệ thống: db=${JSON.stringify(db)} sheets=${JSON.stringify(sheets)}`);
     return { db, sheets };
   }

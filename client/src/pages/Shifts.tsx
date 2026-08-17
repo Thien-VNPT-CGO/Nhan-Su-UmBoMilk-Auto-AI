@@ -6,6 +6,7 @@ import { useToast } from '../stores/Toast';
 import { getSocket } from '../api/socket';
 import { dateKey, addDays, weekdayVi } from '../utils/date';
 import { cn, shiftColor } from '../utils/format';
+import { debounce } from '../utils/debounce';
 
 interface RowData {
   candidateId: string;
@@ -55,7 +56,7 @@ export default function Shifts() {
 
   useEffect(() => {
     const socket = getSocket();
-    const refresh = () => void load();
+    const refresh = debounce(() => void load(), 500);
     socket.on('shift:updated', refresh);
     socket.on('candidate:decision', refresh);
     socket.on('training:updated', refresh);
@@ -63,6 +64,7 @@ export default function Shifts() {
       socket.off('shift:updated', refresh);
       socket.off('candidate:decision', refresh);
       socket.off('training:updated', refresh);
+      refresh.cancel();
     };
   }, [load]);
 

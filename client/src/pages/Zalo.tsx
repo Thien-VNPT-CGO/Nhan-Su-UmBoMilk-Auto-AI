@@ -4,6 +4,7 @@ import { api, ApiError } from '../api/client';
 import { Badge, Skeleton, EmptyState } from '../components/ui';
 import { useToast } from '../stores/Toast';
 import { getSocket } from '../api/socket';
+import { debounce } from '../utils/debounce';
 import { formatDateTime } from '../utils/date';
 
 interface ZaloRow {
@@ -42,10 +43,11 @@ export default function Zalo() {
 
   useEffect(() => {
     const socket = getSocket();
-    const refresh = () => void load();
+    const refresh = debounce(() => void load(), 500);
     socket.on('zalo:status', refresh);
     return () => {
       socket.off('zalo:status', refresh);
+      refresh.cancel();
     };
   }, [load]);
 

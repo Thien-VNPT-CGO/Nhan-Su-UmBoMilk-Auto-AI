@@ -10,6 +10,7 @@ import CandidateDrawer from '../components/CandidateDrawer';
 import { useToast } from '../stores/Toast';
 import { getSocket } from '../api/socket';
 import { cn, trainingStatusLabel, syncStatusStyle } from '../utils/format';
+import { debounce } from '../utils/debounce';
 import { formatDateTime } from '../utils/date';
 
 interface CandidateRow {
@@ -151,25 +152,27 @@ export default function Candidates() {
 
   useEffect(() => {
     const socket = getSocket();
-    const refresh = () => {
+    const refresh = debounce(() => {
       void load();
       if (selected) {
         api.get<CandidateRow>(`/candidates/${selected.id}`).then(setSelected).catch(() => undefined);
       }
-    };
-    const onAutoDedup = (r: { removed?: number; groups?: number }) => {
+    }, 600);
+    const onAutoDedup = debounce((r: { removed?: number; groups?: number }) => {
       loadDups();
       void load();
       if (r.removed && r.removed > 0) {
         toast('success', `AI đã tự loại ${r.removed} hồ sơ trùng SĐT và đồng bộ xóa về Google Sheet.`);
       }
-    };
+    }, 600);
     const events = ['candidate:new', 'candidate:updated', 'candidate:deleted', 'candidate:scored', 'candidate:decision', 'candidate:sync', 'training:updated', 'sync:success'];
     events.forEach((ev) => socket.on(ev, refresh));
     socket.on('dedup:auto', onAutoDedup);
     return () => {
       events.forEach((ev) => socket.off(ev, refresh));
       socket.off('dedup:auto', onAutoDedup);
+      refresh.cancel();
+      onAutoDedup.cancel();
     };
   }, [load, selected, loadDups, toast]);
 
