@@ -75,19 +75,65 @@ export class ZaloService {
   async ping(): Promise<boolean> {
     const cfg = await this.getConfig();
     if (!cfg.accessToken || !cfg.oaId) return false;
-    try {
-      let url = 'https://graph.zalo.me/v2.0/me?fields=id,name';
-      if (env.zaloAppSecret) {
-        const proof = createHmac('sha256', env.zaloAppSecret).update(cfg.accessToken).digest('hex');
-        url += `&appsecret_proof=${proof}`;
+    let token = cfg.accessToken;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        let url = 'https://graph.zalo.me/v2.0/me?fields=id,name';
+        if (env.zaloAppSecret) {
+          const proof = createHmac('sha256', env.zaloAppSecret).update(token).digest('hex');
+          url += `&appsecret_proof=${proof}`;
+        }
+        const res = await fetch(url, { headers: { access_token: token } });
+        const data = (await res.json()) as { error?: number; message?: string; id?: string };
+        if (!res.ok) return false;
+        if (data.error === 452) {
+          // Token hết hạn: thử refresh 1 lần rồi kiểm tra lại
+          if (attempt === 0) {
+            const fresh = await this.refreshAccessToken();
+            if (!fresh) return false;
+            token = fresh.accessToken;
+            continue;
+          }
+          return false;
+        }
+        return data.error === 453 ? true : !!data.id; // 453: token hợp lệ, thiếu appsecret_proof
+      } catch {
+        return false;
       }
-      const res = await fetch(url, { headers: { access_token: cfg.accessToken } });
-      const data = (await res.json()) as { error?: number; message?: string; id?: string };
-      if (!res.ok) return false;
-      if (data.error === 452) return false; // token bị thu hồi / hết hạn
-      return data.error === 453 ? true : !!data.id; // 453: token hợp lệ, thiếu appsecret_proof
+    }
+    return false;
+  }
+
+  /** Tự động đổi refresh token lấy access token mới khi token hết hạn (lưu lại settings). */
+  private async refreshAccessToken(): Promise<{ accessToken: string; refreshToken: string } | null> {
+    const cfg = await this.getConfig();
+    if (!cfg.refreshToken || !env.zaloAppId || !env.zaloAppSecret) return null;
+    try {
+      const res = await fetch('https://oauth.zaloapp.com/v4/oa/access_token', {
+        method: 'POST',
+        headers: { secret_key: env.zaloAppSecret },
+        body: new URLSearchParams({
+          app_id: env.zaloAppId,
+          grant_type: 'refresh_token',
+          refresh_token: cfg.refreshToken,
+        }),
+      });
+      const data = (await res.json()) as { access_token?: string; refresh_token?: string; error?: number };
+      if (!data.access_token || !data.refresh_token) return null;
+      const { saveSettings } = await import('./SettingsService');
+      await saveSettings(
+        {
+          zalo: {
+            oaId: cfg.oaId,
+            accessToken: data.access_token,
+            refreshToken: data.refresh_token,
+          },
+        },
+        'zalo-auto-refresh',
+      );
+      return { accessToken: data.access_token, refreshToken: data.refresh_token };
     } catch {
-      return false;
+      return null;
     }
   }
 
@@ -97,6 +143,7 @@ export class ZaloService {
     if (!c.ngayBatDauTraining) throw new Error('Chưa có ngày bắt đầu Training');
 
     const cfg = await this.getConfig();
+    let accessToken = cfg.accessToken;
 
     const content = [
       '🐮 UMBO MILK – THÔNG BÁO TRAINING',
@@ -115,7 +162,7 @@ export class ZaloService {
       'Vui lòng có mặt đúng giờ và thực hiện điểm danh theo hướng dẫn.',
     ].join('\n');
 
-    const useRealApi = !env.demoMode && cfg.accessToken && cfg.oaId;
+    const useRealApi = !env.demoMode && accessToken && cfg.oaId;
     let status = 'PENDING';
     let error: string | null = null;
     let messageId: string | undefined;
@@ -123,27 +170,42 @@ export class ZaloService {
 
     if (useRealApi) {
       provider = 'ZALO_OA';
-      try {
-        const res = await fetch('https://business.openapi.zalo.me/v3.0/message/official_account/text', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            access_token: cfg.accessToken,
-          },
-          body: JSON.stringify({
-            recipient: { user_id: c.sdtZalo },
-            message: { text: content },
-          }),
-        });
-        const data = await res.json();
-        if (data.error && data.error !== 0) {
-          throw new Error(`Zalo API lỗi: ${data.error} ${data.message ?? ''}`);
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const res = await fetch('https://business.openapi.zalo.me/v3.0/message/official_account/text', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              access_token: accessToken,
+            },
+            body: JSON.stringify({
+              recipient: { user_id: c.sdtZalo },
+              message: { text: content },
+            }),
+          });
+          const data = (await res.json()) as {
+            error?: number;
+            message?: string;
+            data?: { message_id?: string };
+          };
+          if (data.error && data.error !== 0) {
+            // Token hết hạn (452): refresh 1 lần rồi gửi lại
+            if (data.error === 452 && attempt === 0) {
+              const fresh = await this.refreshAccessToken();
+              if (!fresh) throw new Error(`Zalo API lỗi: ${data.error} ${data.message ?? ''} (refresh thất bại)`);
+              accessToken = fresh.accessToken;
+              continue;
+            }
+            throw new Error(`Zalo API lỗi: ${data.error} ${data.message ?? ''}`);
+          }
+          messageId = data.data?.message_id;
+          status = 'SENT';
+          break;
+        } catch (e) {
+          status = 'FAILED';
+          error = e instanceof Error ? e.message : String(e);
+          break;
         }
-        messageId = data.data?.message_id;
-        status = 'SENT';
-      } catch (e) {
-        status = 'FAILED';
-        error = e instanceof Error ? e.message : String(e);
       }
     } else {
       status = 'SENT';
