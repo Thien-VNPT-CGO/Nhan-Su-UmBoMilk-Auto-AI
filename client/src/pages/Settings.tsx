@@ -147,14 +147,17 @@ export default function Settings() {
     }
   };
 
-  const disconnectZalo = async () => {
-    if (!window.confirm('Ngắt kết nối Zalo? Token sẽ bị xóa khỏi hệ thống.')) return;
+  const resetZalo = async () => {
+    if (!window.confirm('Reset dữ liệu setup Zalo (OA ID + token)?')) return;
+    patch(['zalo', 'oaId'], '');
+    patch(['zalo', 'accessToken'], '');
+    patch(['zalo', 'refreshToken'], '');
     try {
       await api.post('/settings/zalo/disconnect', {});
-      toast('success', 'Đã ngắt kết nối Zalo.');
+      toast('success', 'Đã reset dữ liệu Zalo.');
       void load();
     } catch (e) {
-      toast('error', e instanceof ApiError ? e.message : 'Ngắt kết nối Zalo thất bại.');
+      toast('error', e instanceof ApiError ? e.message : 'Reset dữ liệu Zalo thất bại.');
     }
   };
 
@@ -336,8 +339,8 @@ export default function Settings() {
                 <button className="btn-primary" onClick={connectZalo}>
                   <MessageCircle size={15} /> Kết nối Zalo OA
                 </button>
-                <button className="btn-danger" onClick={disconnectZalo}>
-                  Ngắt kết nối
+                <button className="btn-danger" onClick={resetZalo}>
+                  Reset dữ liệu Zalo
                 </button>
               </div>
               <div>
