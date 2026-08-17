@@ -31,13 +31,13 @@ export class SyncWorker {
     }, this.intervalMs);
     this.formTimer = setInterval(() => {
       void this.tickFormImport();
-    }, 30_000);
+    }, 60_000);
     this.dedupTimer = setInterval(() => {
       void this.tickAutoDedup();
     }, 5 * 60_000);
     this.scoreTimer = setInterval(() => {
       void this.tickAutoScore();
-    }, 30_000);
+    }, 60_000);
     void this.tick();
     void this.tickFormImport();
     void this.tickAutoDedup();
@@ -57,7 +57,7 @@ export class SyncWorker {
     this.scoreTimer = null;
   }
 
-  /** AI tự chấm điểm hồ sơ vừa đăng ký: chạy mỗi 30s, tối đa 3 hồ sơ/lượt. */
+  /** AI tự chấm điểm hồ sơ vừa đăng ký: chạy mỗi 60s, tối đa 3 hồ sơ/lượt. */
   private async tickAutoScore(): Promise<void> {
     if (!this.running || this.scoring) return;
     this.scoring = true;

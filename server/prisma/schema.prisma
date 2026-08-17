@@ -11,14 +11,14 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  username  String   @unique
+  id        String    @id @default(cuid())
+  username  String    @unique
   password  String
   fullName  String
-  role      String   @default("HR") // ADMIN | HR | VIEWER
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  role      String    @default("HR") // ADMIN | HR | VIEWER
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   sessions  Session[]
 }
 
@@ -50,48 +50,48 @@ model AuditLog {
 }
 
 model Candidate {
-  id                  String   @id // UV-YYYYMMDD-NNNNN
-  thoiGian            DateTime
-tenUv     String
-  gioiTinh  String? // Nam | Nữ (từ Google Form)
-  namSinh             String
-  trinhDo             String
-  queQuan             String
-  sdtZalo             String
-  caLam               String
-  chiNhanh            String
-  kinhNghiem          String
-  xuLy                String
-  linkFb              String
+  id         String   @id // UV-YYYYMMDD-NNNNN
+  thoiGian   DateTime
+  tenUv      String
+  gioiTinh   String? // Nam | Nữ (từ Google Form)
+  namSinh    String
+  trinhDo    String
+  queQuan    String
+  sdtZalo    String
+  caLam      String
+  chiNhanh   String
+  kinhNghiem String
+  xuLy       String
+  linkFb     String
 
-  aiScore             Json? // breakdown D_* / P_*
-  tongDiem            Int?
-  xepLoai             String? // DAT (7) | GIOI (8) | XUAT_SAC (>=9)
-  aiRecommendation    String? // PASS | FAIL
-  aiNote              String?
-  aiConfidence        Float?
-  aiScoredAt          DateTime?
+  aiScore          Json? // breakdown D_* / P_*
+  tongDiem         Int?
+  xepLoai          String? // DAT (7) | GIOI (8) | XUAT_SAC (>=9)
+  aiRecommendation String? // PASS | FAIL
+  aiNote           String?
+  aiConfidence     Float?
+  aiScoredAt       DateTime?
 
-  hrDecision          String? // PASS | FAIL | REVIEW
-  hrUser              String?
-  hrReason            String?
-  hrDecisionAt        DateTime?
+  hrDecision   String? // PASS | FAIL | REVIEW
+  hrUser       String?
+  hrReason     String?
+  hrDecisionAt DateTime?
 
-  ngayBatDauTraining  DateTime?
-  trangThaiTraining   String? // CHUA_THAM_GIA | SAP_BAT_DAU | BAT_DAU | HOAN_THANH | KHONG_DU_NGAY | LOAI
-  soNgayDaTraining    Int      @default(0)
+  ngayBatDauTraining DateTime?
+  trangThaiTraining  String? // CHUA_THAM_GIA | SAP_BAT_DAU | BAT_DAU | HOAN_THANH | KHONG_DU_NGAY | LOAI
+  soNgayDaTraining   Int       @default(0)
 
-  dataVersion         Int      @default(1)
-  dataHash            String?
-  updatedAt           DateTime @updatedAt
-  updatedBy           String?
-  source              String   @default("GOOGLE_FORM")
+  dataVersion Int      @default(1)
+  dataHash    String?
+  updatedAt   DateTime @updatedAt
+  updatedBy   String?
+  source      String   @default("GOOGLE_FORM")
 
-  shifts             Shift[]
-  syncJobs           SyncJob[]
-  attendanceEvents   AttendanceEvent[]
-  conflicts          Conflict[]
-  zaloMessages       ZaloMessage[]
+  shifts           Shift[]
+  syncJobs         SyncJob[]
+  attendanceEvents AttendanceEvent[]
+  conflicts        Conflict[]
+  zaloMessages     ZaloMessage[]
 
   @@index([chiNhanh])
   @@index([sdtZalo])
@@ -99,7 +99,7 @@ tenUv     String
 }
 
 model SyncJob {
-  id             String    @id // SYNC-000001
+  id             String     @id // SYNC-000001
   entity         String
   entityId       String
   operation      String // CREATE | UPDATE | UPSERT
@@ -107,22 +107,24 @@ model SyncJob {
   oldValue       String?
   newValue       String? // JSON snapshot
   version        Int
-  status         String    @default("PENDING") // PENDING | PROCESSING | SYNCED | RETRY | FAILED | CONFLICT
-  retryCount     Int       @default(0)
+  status         String     @default("PENDING") // PENDING | PROCESSING | SYNCED | RETRY | FAILED | CONFLICT
+  retryCount     Int        @default(0)
   nextAttemptAt  DateTime?
   lastError      String?
-  idempotencyKey String    @unique
+  idempotencyKey String     @unique
   candidateId    String?
   candidate      Candidate? @relation(fields: [candidateId], references: [id], onDelete: SetNull)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 
   @@index([status, nextAttemptAt])
   @@index([candidateId])
+  @@index([createdAt])
+  @@index([entityId, operation])
 }
 
 model AttendanceEvent {
-  id          String   @id
+  id          String    @id
   candidateId String
   candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   date        String // yyyy-MM-dd
@@ -132,46 +134,46 @@ model AttendanceEvent {
   valid       Boolean
   reason      String?
   trainingDay Int?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
 
   @@unique([candidateId, date, shift])
   @@index([date])
 }
 
 model Shift {
-  id          String   @id
+  id          String    @id
   candidateId String
   candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   date        String // yyyy-MM-dd
   shifts      String // SANG|CHIEU|TOI|OFF
   note        String?
   updatedBy   String?
-  dataVersion Int      @default(1)
-  updatedAt   DateTime @updatedAt
+  dataVersion Int       @default(1)
+  updatedAt   DateTime  @updatedAt
 
   @@unique([candidateId, date])
   @@index([date])
 }
 
 model ZaloMessage {
-  id          String    @id
+  id          String     @id
   candidateId String?
   phone       String
   content     String
-  status      String    @default("PENDING") // PENDING | SENT | FAILED
+  status      String     @default("PENDING") // PENDING | SENT | FAILED
   error       String?
-  provider    String    @default("MOCK")
-  createdAt   DateTime  @default(now())
+  provider    String     @default("MOCK")
+  createdAt   DateTime   @default(now())
   candidate   Candidate? @relation(fields: [candidateId], references: [id], onDelete: SetNull)
 }
 
 model WebhookEvent {
-  id          String   @id
+  id          String    @id
   source      String // GOOGLE_SHEET | ZALO
   payload     Json
-  processed   Boolean  @default(false)
+  processed   Boolean   @default(false)
   error       String?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
   processedAt DateTime?
 }
 
@@ -190,7 +192,7 @@ model IdempotencyKey {
 }
 
 model Conflict {
-  id           String    @id
+  id           String     @id
   entity       String
   entityId     String
   field        String
@@ -198,10 +200,10 @@ model Conflict {
   sheetValue   String?
   webVersion   Int
   sheetVersion Int?
-  status       String    @default("OPEN") // OPEN | RESOLVED_WEB | RESOLVED_SHEET
+  status       String     @default("OPEN") // OPEN | RESOLVED_WEB | RESOLVED_SHEET
   resolvedBy   String?
   resolvedAt   DateTime?
-  createdAt    DateTime  @default(now())
+  createdAt    DateTime   @default(now())
   candidate    Candidate? @relation(fields: [entityId], references: [id], onDelete: Cascade)
 
   @@index([entityId, status])
@@ -219,13 +221,13 @@ model ApiLog {
 }
 
 model ReconciliationRun {
-  id         String   @id
-  startedAt  DateTime @default(now())
+  id         String    @id
+  startedAt  DateTime  @default(now())
   finishedAt DateTime?
-  checked    Int      @default(0)
-  mismatches Int      @default(0)
-  repaired   Int      @default(0)
-  conflicts  Int      @default(0)
-  status     String   @default("RUNNING")
+  checked    Int       @default(0)
+  mismatches Int       @default(0)
+  repaired   Int       @default(0)
+  conflicts  Int       @default(0)
+  status     String    @default("RUNNING")
   details    String?
 }

@@ -48,6 +48,9 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
 export function apiLog(req: Request, res: Response, next: NextFunction) {
   const start = Date.now();
   res.on('finish', () => {
+    const durationMs = Date.now() - start;
+    // Chỉ ghi log request CHẬM (>1s) hoặc LỖI để giảm tải DB - không ghi mọi request
+    if (res.statusCode < 400 && durationMs <= 1000) return;
     prisma.apiLog
       .create({
         data: {
@@ -55,7 +58,7 @@ export function apiLog(req: Request, res: Response, next: NextFunction) {
           method: req.method,
           path: req.originalUrl.slice(0, 255),
           status: res.statusCode,
-          durationMs: Date.now() - start,
+          durationMs,
           ip: req.ip ?? null,
         },
       })

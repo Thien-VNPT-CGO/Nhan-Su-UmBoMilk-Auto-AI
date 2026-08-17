@@ -55,7 +55,7 @@ function useSyncCounts() {
     };
     const debounced = debounce(load, 800);
     load();
-    const t = setInterval(load, 15000);
+    const t = setInterval(load, 60000);
     const socket = getSocket();
     socket.on('sync:status', debounced);
     socket.on('sync:success', debounced);
@@ -82,7 +82,7 @@ function useHealth() {
         .catch(() => undefined);
     };
     load();
-    const t = setInterval(load, 30000);
+    const t = setInterval(load, 60000);
     return () => clearInterval(t);
   }, []);
   return health;

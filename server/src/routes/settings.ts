@@ -77,8 +77,14 @@ router.put('/', requireRole('ADMIN'), async (req: AuthedRequest, res, next) => {
   }
 });
 
+let healthCache: { at: number; data: unknown } | null = null;
+
 router.get('/health', async (_req, res, next) => {
   try {
+    if (healthCache && Date.now() - healthCache.at < 10_000) {
+      res.json({ success: true, data: healthCache.data });
+      return;
+    }
     const sheet = getGoogleSheetService();
     const ai = await getAIProvider();
     const [dbOk, sheetOk, aiOk, zaloOk] = await Promise.all([
@@ -87,17 +93,16 @@ router.get('/health', async (_req, res, next) => {
       ai.ping().catch(() => false),
       zaloService.ping().catch(() => false),
     ]);
-    res.json({
-      success: true,
-      data: {
-        node: true,
-        database: dbOk,
-        googleSheet: sheetOk,
-        ai: aiOk,
-        zalo: zaloOk,
-        demoMode: !sheet.configured,
-      },
-    });
+    const data = {
+      node: true,
+      database: dbOk,
+      googleSheet: sheetOk,
+      ai: aiOk,
+      zalo: zaloOk,
+      demoMode: !sheet.configured,
+    };
+    healthCache = { at: Date.now(), data };
+    res.json({ success: true, data });
   } catch (e) {
     next(e);
   }
