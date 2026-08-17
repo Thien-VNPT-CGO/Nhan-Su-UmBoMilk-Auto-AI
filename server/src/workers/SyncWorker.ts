@@ -207,7 +207,8 @@ export class SyncWorker {
           if (job.operation === 'CREATE' || job.operation === 'UPSERT' || job.operation === 'UPDATE') {
             await sheet.syncCandidate(candidate);
             await sheet.syncScore(candidate);
-            await sheet.syncTraining(candidate);
+            // HO_SO_NV chỉ ghi khi ứng viên ĐÃ CÓ LỊCH TRAINING (tránh gọi API thừa)
+            if (candidate.ngayBatDauTraining) await sheet.syncTraining(candidate);
           }
           break;
         }

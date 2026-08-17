@@ -495,7 +495,18 @@ export class GoogleSheetService {
   }
 
   // ================= SYNC TRAINING -> HO_SO_NHAN_VIEN_UNG_TUYEN =================
+  // QUY TẮC: chỉ ứng viên ĐÃ CÓ LỊCH TRAINING (HR đặt ngày bắt đầu) mới nằm trong sheet này.
+  // Chưa có lịch → xóa dòng cũ nếu còn (không bao giờ tạo dòng).
   async syncTraining(c: Candidate): Promise<void> {
+    if (!c.ngayBatDauTraining) {
+      try {
+        const found = await this.findByCandidateId(this.sheetNames.hoSoNv, c.id);
+        if (found) await this.clearRows(this.sheetNames.hoSoNv, [found.rowIndex]);
+      } catch {
+        // tab lỗi → bỏ qua
+      }
+      return;
+    }
     const attended = await prisma.attendanceEvent.findMany({
       where: { candidateId: c.id, valid: true },
       orderBy: { date: 'asc' },

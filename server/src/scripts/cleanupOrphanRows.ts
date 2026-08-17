@@ -32,6 +32,12 @@ async function main(): Promise<void> {
 
   const ids = await prisma.candidate.findMany({ select: { id: true } });
   const idSet = new Set(ids.map((i) => i.id));
+  // HO_SO_NV chỉ chứa ứng viên CÓ LỊCH TRAINING — các dòng khác phải bị xóa
+  const trainingIds = await prisma.candidate.findMany({
+    where: { ngayBatDauTraining: { not: null } },
+    select: { id: true },
+  });
+  const trainingIdSet = new Set(trainingIds.map((i) => i.id));
 
   for (const name of ['locHoSo', 'diemUv', 'hoSoNv'] as const) {
     const title = sheet.sheetNames[name];
@@ -56,6 +62,9 @@ async function main(): Promise<void> {
         } else if (seen.has(id)) {
           // Dòng TRÙNG CANDIDATE_ID: giữ dòng mới nhất (đọc từ dưới lên nên dòng đầu tiên gặp là cũ nhất)
           dups.push(i + 1);
+        } else if (name === 'hoSoNv' && !trainingIdSet.has(id)) {
+          // HO_SO_NV chỉ dành cho ứng viên CÓ LỊCH TRAINING
+          orphans.push(i + 1);
         }
         seen.add(id);
       }

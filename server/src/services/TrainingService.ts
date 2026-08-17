@@ -41,6 +41,17 @@ export class TrainingService {
         where: { id: candidateId },
         data: { trangThaiTraining: status, soNgayDaTraining: soNgay },
       });
+      // Đồng bộ trạng thái/ngày đã training xuống HO_SO_NV (chỉ khi có lịch training)
+      if (c.ngayBatDauTraining) {
+        await syncQueue.enqueue({
+          entity: 'training',
+          entityId: candidateId,
+          operation: 'UPSERT',
+          version: c.dataVersion,
+          idempotencyKey: `candidate:${candidateId}:training-status:v${c.dataVersion}:${status}`,
+        });
+        emit('training:updated', { candidateId });
+      }
     }
   }
 
