@@ -148,10 +148,21 @@ export default function Candidates() {
         api.get<CandidateRow>(`/candidates/${selected.id}`).then(setSelected).catch(() => undefined);
       }
     };
+    const onAutoDedup = (r: { removed?: number; groups?: number }) => {
+      loadDups();
+      void load();
+      if (r.removed && r.removed > 0) {
+        toast('success', `AI đã tự loại ${r.removed} hồ sơ trùng SĐT và đồng bộ xóa về Google Sheet.`);
+      }
+    };
     const events = ['candidate:new', 'candidate:updated', 'candidate:scored', 'candidate:decision', 'candidate:sync', 'training:updated', 'sync:success'];
     events.forEach((ev) => socket.on(ev, refresh));
-    return () => events.forEach((ev) => socket.off(ev, refresh));
-  }, [load, selected]);
+    socket.on('dedup:auto', onAutoDedup);
+    return () => {
+      events.forEach((ev) => socket.off(ev, refresh));
+      socket.off('dedup:auto', onAutoDedup);
+    };
+  }, [load, selected, loadDups, toast]);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 

@@ -2,6 +2,8 @@ import { prisma } from '../lib/prisma';
 import { syncQueue } from '../services/SyncQueueService';
 import { getGoogleSheetService } from '../services/GoogleSheetService';
 import { importFormResponses } from '../services/FormImportService';
+import { dedupService } from '../services/DedupService';
+import { getSettings } from '../services/SettingsService';
 import { emit } from '../sockets';
 
 export class SyncWorker {
@@ -9,8 +11,10 @@ export class SyncWorker {
   private intervalMs: number;
   private timer: NodeJS.Timeout | null = null;
   private formTimer: NodeJS.Timeout | null = null;
+  private dedupTimer: NodeJS.Timeout | null = null;
   private provisioned = false;
   private importingForm = false;
+  private runningDedup = false;
 
   constructor(intervalMs = 3000) {
     this.intervalMs = intervalMs;
@@ -25,8 +29,12 @@ export class SyncWorker {
     this.formTimer = setInterval(() => {
       void this.tickFormImport();
     }, 60_000);
+    this.dedupTimer = setInterval(() => {
+      void this.tickAutoDedup();
+    }, 5 * 60_000);
     void this.tick();
     void this.tickFormImport();
+    void this.tickAutoDedup();
     console.log('[SyncWorker] started');
   }
 
@@ -36,6 +44,30 @@ export class SyncWorker {
     this.timer = null;
     if (this.formTimer) clearInterval(this.formTimer);
     this.formTimer = null;
+    if (this.dedupTimer) clearInterval(this.dedupTimer);
+    this.dedupTimer = null;
+  }
+
+  /** AI tự dọn dữ liệu trùng SĐT: giữ bản mới nhất, xóa các bản trùng + đồng bộ về Google Sheet. */
+  private async tickAutoDedup(): Promise<void> {
+    if (!this.running || this.runningDedup) return;
+    this.runningDedup = true;
+    try {
+      const settings = await getSettings();
+      const autoDedup = (settings as Record<string, unknown>).autoDedup as
+        | { enabled?: boolean }
+        | undefined;
+      if (autoDedup?.enabled === false) return;
+      const result = await dedupService.removeDuplicates('SYSTEM-AUTO');
+      if (result.removed > 0) {
+        console.log(`[SyncWorker] auto dedup: đã loại ${result.removed} bản trùng (${result.groups} nhóm)`);
+        emit('dedup:auto', result);
+      }
+    } catch (e) {
+      console.warn('[SyncWorker] auto dedup:', e instanceof Error ? e.message : String(e));
+    } finally {
+      this.runningDedup = false;
+    }
   }
 
   /** Tự nhập ứng viên mới từ sheet phản hồi Google Form (không cần Apps Script). */

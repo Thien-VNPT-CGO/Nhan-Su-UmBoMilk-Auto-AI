@@ -121,5 +121,8 @@ export const DEFAULT_SETTINGS = {
     accessToken: '',
     refreshToken: '',
   },
+  autoDedup: {
+    enabled: true,
+  },
   deletedFormResponses: [] as { sdt: string; thoiGian: string | null }[],
 };
