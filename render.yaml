@@ -19,7 +19,19 @@ services:
       - key: WEBHOOK_SECRET
         sync: false
       - key: DEMO_MODE
-        value: "true"
+        value: "false"
+      - key: ZALO_OA_ID
+        sync: false
+      - key: ZALO_APP_ID
+        sync: false
+      - key: ZALO_APP_SECRET
+        sync: false
+      - key: ZALO_ACCESS_TOKEN
+        sync: false
+      - key: ZALO_REFRESH_TOKEN
+        sync: false
+      - key: ZALO_REDIRECT_URI
+        sync: false
 
 databases:
   - name: umbomilk-db
