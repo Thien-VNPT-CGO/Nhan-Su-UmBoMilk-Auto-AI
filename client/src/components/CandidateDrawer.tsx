@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   User, BrainCircuit, ThumbsUp, GraduationCap, ClipboardCheck, MessageCircle,
-  ScrollText, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Send, Briefcase, CalendarDays, Video,
+  ScrollText, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Send, Briefcase, CalendarDays, Video, Pencil,
 } from 'lucide-react';
 import { api, ApiError } from '../api/client';
 import { Drawer, Tabs, Badge, Spinner, ConfirmDialog, Field, Skeleton, Modal } from './ui';
@@ -17,6 +17,7 @@ interface CandidateDetail {
   trinhDo: string;
   queQuan: string;
   sdtZalo: string;
+  zaloUserId: string | null;
   caLam: string;
   chiNhanh: string;
   kinhNghiem: string;
@@ -85,6 +86,9 @@ export default function CandidateDrawer({
   const [calendarEnabled, setCalendarEnabled] = useState(false);
   const [auditRows, setAuditRows] = useState<unknown[]>([]);
   const [syncRows, setSyncRows] = useState<unknown[]>([]);
+  const [zaloUserIdDraft, setZaloUserIdDraft] = useState('');
+  const [zaloUserIdEditing, setZaloUserIdEditing] = useState(false);
+  const [zaloUserIdSaving, setZaloUserIdSaving] = useState(false);
 
   useEffect(() => {
     if (!candidateId || !open) return;
@@ -134,6 +138,23 @@ export default function CandidateDrawer({
 
   const score = () =>
     act(() => api.post(`/candidates/${candidateId}/score`, {}), 'AI đã chấm xong hồ sơ.');
+
+  const saveZaloUserId = async () => {
+    if (!c) return;
+    setZaloUserIdSaving(true);
+    try {
+      await api.patch(`/candidates/${c.id}`, { patch: { zaloUserId: zaloUserIdDraft.trim() }, version: c.dataVersion });
+      toast('success', 'Đã lưu Zalo User ID.');
+      setZaloUserIdEditing(false);
+      const d = await api.get<CandidateDetail>(`/candidates/${candidateId}`);
+      setC(d);
+      onChanged();
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Lưu Zalo User ID thất bại.');
+    } finally {
+      setZaloUserIdSaving(false);
+    }
+  };
 
   const decide = (decision: 'PASS' | 'FAIL' | 'REVIEW', phongVanAt?: string, ggMeetLink?: string) =>
     act(
@@ -275,6 +296,41 @@ export default function CandidateDrawer({
                     <div className="text-sm text-slate-800 whitespace-pre-wrap break-words">{String(value ?? '') || '—'}</div>
                   </div>
                 ))}
+                <div className="sm:col-span-2 rounded-xl bg-slate-50 p-3.5">
+                  <div className="label">Zalo User ID (bắt buộc để gửi tin OA)</div>
+                  {zaloUserIdEditing ? (
+                    <div className="flex gap-2">
+                      <input
+                        className="input flex-1"
+                        value={zaloUserIdDraft}
+                        onChange={(e) => setZaloUserIdDraft(e.target.value)}
+                        placeholder="Ví dụ: 4312345678901234567"
+                      />
+                      <button className="btn-primary px-3" onClick={saveZaloUserId} disabled={zaloUserIdSaving}>
+                        {zaloUserIdSaving ? <Spinner size={14} /> : 'Lưu'}
+                      </button>
+                      <button className="btn-secondary px-3" onClick={() => setZaloUserIdEditing(false)}>Hủy</button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm text-slate-800 break-all">{c.zaloUserId ?? '—'}</span>
+                      <button
+                        className="flex items-center gap-1 text-xs text-slate-400 hover:text-brand-600"
+                        onClick={() => {
+                          setZaloUserIdDraft(c.zaloUserId ?? '');
+                          setZaloUserIdEditing(true);
+                        }}
+                      >
+                        <Pencil size={13} /> Sửa
+                      </button>
+                    </div>
+                  )}
+                  {!c.zaloUserId && (
+                    <p className="text-[11px] text-amber-600 mt-1">
+                      Chưa có — nhờ ứng viên nhắn 1 tin bất kỳ cho OA (hệ thống tự lưu), hoặc nhập mã thủ công ở đây để gửi tin được.
+                    </p>
+                  )}
+                </div>
                 <div className="sm:col-span-2 rounded-xl bg-slate-50 p-3.5">
                   <div className="label">Thời gian nhận hồ sơ</div>
                   <div className="text-sm">{formatDateTime(c.thoiGian)}</div>

@@ -61,6 +61,7 @@ model Candidate {
   trinhDo    String
   queQuan    String
   sdtZalo    String
+  zaloUserId String? // Mã định danh Zalo (appuser_id) của ứng viên — bắt buộc để gửi tin OA, tự lưu từ webhook/tra cứu theo SĐT
   caLam      String
   chiNhanh   String
   kinhNghiem String
@@ -105,6 +106,7 @@ model Candidate {
 
   @@index([chiNhanh])
   @@index([sdtZalo])
+  @@index([zaloUserId])
   @@index([thoiGian])
 }
 

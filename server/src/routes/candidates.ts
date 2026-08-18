@@ -22,6 +22,7 @@ const CANDIDATE_FIELDS: Record<string, { label: string; schema: z.ZodTypeAny }> 
   trinhDo: { label: 'TRINH_DO', schema: z.string() },
   queQuan: { label: 'QUE_QUAN', schema: z.string() },
   sdtZalo: { label: 'SDT_ZALO', schema: z.string() },
+  zaloUserId: { label: 'ZALO_USER_ID', schema: z.string().max(64) },
   caLam: { label: 'CA_LAM', schema: z.string() },
   chiNhanh: { label: 'CHI_NHANH', schema: z.string() },
   kinhNghiem: { label: 'KINH_NGHIEM', schema: z.string() },
@@ -173,6 +174,7 @@ router.patch('/:id', requireWrite(), async (req: AuthedRequest, res, next) => {
       const fv = field.schema.safeParse(v);
       if (!fv.success) throw ApiError.badRequest('INVALID_VALUE', `Giá trị ${k} không hợp lệ.`);
       if (k === 'sdtZalo') patch[k] = normalizePhone(String(v));
+      else if (k === 'zaloUserId') patch[k] = String(v).trim() || null;
       else patch[k] = v;
       labels[k] = field.label;
     }

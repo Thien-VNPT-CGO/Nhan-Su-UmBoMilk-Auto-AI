@@ -15,6 +15,12 @@ function formatInterviewTime(d: Date): string {
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
   return `${get('day')}/${get('month')}/${get('year')} lúc ${get('hour')}:${get('minute')}`;
 }
+
+interface ZaloMessageResponse {
+  error?: number;
+  message?: string;
+  data?: { message_id?: string };
+}
 export class ZaloService {
   private pendingStates = new Map<string, number>();
 
@@ -157,7 +163,22 @@ export class ZaloService {
     }
   }
 
-  /** Gửi tin nhắn Zalo OA thật (refresh token nếu hết hạn) và lưu lịch sử. */
+  /** Tra cứu appuser_id (mã định danh người dùng trong app) của ứng viên theo SĐT hoặc user_id đã biết. */
+  private async resolveUserId(accessToken: string, uid: string): Promise<string | null> {
+    try {
+      const res = await fetch(`https://openapi.zalo.me/v2.0/oa/getprofile?uid=${encodeURIComponent(uid)}`, {
+        headers: { access_token: accessToken },
+      });
+      const data = (await res.json()) as { error?: number; data?: { user_id?: string; id?: string } };
+      if (data.error && data.error !== 0) return null;
+      return String(data.data?.user_id ?? data.data?.id ?? '').trim() || null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Gửi tin nhắn Zalo OA thật (refresh token nếu hết hạn) và lưu lịch sử.
+   *  recipient.user_id phải là appuser_id (mã 19 số) — tra cứu/lưu tự động qua zaloUserId của ứng viên. */
   private async sendRaw(
     phone: string,
     content: string,
@@ -174,41 +195,84 @@ export class ZaloService {
 
     if (useRealApi) {
       provider = 'ZALO_OA';
-      for (let attempt = 0; attempt < 2; attempt++) {
-        try {
-          const res = await fetch('https://business.openapi.zalo.me/v3.0/message/official_account/text', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              access_token: accessToken,
-            },
-            body: JSON.stringify({
-              recipient: { user_id: phone },
-              message: { text: content },
-            }),
-          });
-          const data = (await res.json()) as {
-            error?: number;
-            message?: string;
-            data?: { message_id?: string };
-          };
-          if (data.error && data.error !== 0) {
-            // Token hết hạn (452): refresh 1 lần rồi gửi lại
-            if (data.error === 452 && attempt === 0) {
-              const fresh = await this.refreshAccessToken();
-              if (!fresh) throw new Error(`Zalo API lỗi: ${data.error} ${data.message ?? ''} (refresh thất bại)`);
-              accessToken = fresh.accessToken;
-              continue;
-            }
-            throw new Error(`Zalo API lỗi: ${data.error} ${data.message ?? ''}`);
-          }
-          messageId = data.data?.message_id;
-          status = 'SENT';
-          break;
-        } catch (e) {
+
+      // Bước 0: xác định appuser_id của người nhận (bắt buộc theo API Zalo, không phải SĐT)
+      let userId = '';
+      let candidate: { id: string; zaloUserId: string | null } | null = null;
+      if (candidateId) {
+        candidate = await prisma.candidate.findUnique({
+          where: { id: candidateId },
+          select: { id: true, zaloUserId: true },
+        });
+        userId = candidate?.zaloUserId ?? '';
+      }
+      if (!userId) {
+        const resolved = await this.resolveUserId(accessToken, phone);
+        if (!resolved) {
           status = 'FAILED';
-          error = e instanceof Error ? e.message : String(e);
-          break;
+          error =
+            'Chưa có Zalo User ID của ứng viên. Hãy nhờ ứng viên nhắn 1 tin bất kỳ cho OA (để hệ thống tự lưu mã) rồi gửi lại, hoặc mở hồ sơ ứng viên để nhập mã.';
+        } else {
+          userId = resolved;
+          if (candidate) {
+            await prisma.candidate
+              .update({ where: { id: candidate.id }, data: { zaloUserId: userId } })
+              .catch(() => undefined);
+          }
+        }
+      }
+
+      if (userId) {
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            let res = await fetch('https://openapi.zalo.me/v2.0/oa/message', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                access_token: accessToken,
+              },
+              body: JSON.stringify({
+                recipient: { user_id: userId },
+                message: { text: content },
+              }),
+            });
+            let data: ZaloMessageResponse | null = null;
+            try {
+              data = (await res.json()) as ZaloMessageResponse;
+            } catch {
+              // endpoint v2.0 không phản hồi JSON → thử endpoint v3.0 cũ (message là chuỗi, cần oa_id trong path)
+              data = null;
+              if (!cfg.oaId) throw new Error(`Zalo API không phản hồi (HTTP ${res.status}) và thiếu OA ID để fallback.`);
+              const fb = await fetch(`https://openapi.zalo.me/v3.0/message/officialaccount/${cfg.oaId}/text`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', access_token: accessToken },
+                body: JSON.stringify({ recipient: { user_id: userId }, message: content }),
+              });
+              try {
+                data = (await fb.json()) as ZaloMessageResponse;
+              } catch {
+                throw new Error(`Zalo API không phản hồi (HTTP ${fb.status}).`);
+              }
+            }
+            if (data?.error && data.error !== 0) {
+              // Token hết hạn/không hợp lệ (452, -201, -216): refresh 1 lần rồi gửi lại
+              const tokenDead = data.error === 452 || data.error === -201 || data.error === -216;
+              if (tokenDead && attempt === 0) {
+                const fresh = await this.refreshAccessToken();
+                if (!fresh) throw new Error(`Zalo API lỗi: ${data.error} ${data.message ?? ''} (refresh thất bại)`);
+                accessToken = fresh.accessToken;
+                continue;
+              }
+              throw new Error(`Zalo API lỗi: ${data.error} ${data.message ?? ''}`);
+            }
+            messageId = data?.data?.message_id;
+            status = 'SENT';
+            break;
+          } catch (e) {
+            status = 'FAILED';
+            error = e instanceof Error ? e.message : String(e);
+            break;
+          }
         }
       }
     } else {
@@ -365,8 +429,21 @@ export class ZaloService {
         location?: { lat?: number | string; long?: number | string };
       };
     };
-    const phone = p.sender?.phone ?? String(p.sender?.user_id ?? p.sender?.id ?? '');
+    const zaloUserId = String(p.sender?.user_id ?? p.sender?.id ?? '').trim();
+    const phoneRaw = String(p.sender?.phone ?? '').trim();
+
+    // Tìm ứng viên: ưu tiên theo SĐT, nếu không có SĐT thì theo Zalo User ID; lưu lại user_id để gửi tin sau
+    let candidate = phoneRaw ? await prisma.candidate.findFirst({ where: { sdtZalo: phoneRaw } }) : null;
+    if (!candidate && zaloUserId) {
+      candidate = await prisma.candidate.findFirst({ where: { zaloUserId } });
+    }
+    if (candidate && zaloUserId && candidate.zaloUserId !== zaloUserId) {
+      await prisma.candidate.update({ where: { id: candidate.id }, data: { zaloUserId } });
+    }
+    const phone = phoneRaw || zaloUserId;
     if (!phone) return;
+    const candidateId = candidate?.id ?? null;
+
     const message = p.message ?? {};
     const text = String(message.text ?? '').trim();
     const upper = text.toUpperCase();
@@ -380,10 +457,6 @@ export class ZaloService {
       }
       location = { lat, lng };
     }
-
-    // Tìm ứng viên theo SĐT để gắn tin nhắn + gửi auto-reply có ngữ cảnh
-    const candidate = await prisma.candidate.findFirst({ where: { sdtZalo: phone } });
-    const candidateId = candidate?.id ?? null;
 
     // Lưu tin nhắn NHẬN vào lịch sử (direction = IN)
     const incoming = await prisma.zaloMessage.create({
@@ -414,7 +487,7 @@ export class ZaloService {
     if (upper.includes('ĐIỂM DANH') || upper.includes('DIEM DANH') || isLocation) {
       const { attendanceService, checkinReasonText } = await import('./AttendanceService');
       const result = await attendanceService.checkin({
-        phone,
+        phone: phoneRaw || candidate?.sdtZalo || zaloUserId,
         method: 'ZALO',
         location,
       });
