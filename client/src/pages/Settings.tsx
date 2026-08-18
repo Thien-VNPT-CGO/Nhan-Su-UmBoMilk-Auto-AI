@@ -152,6 +152,7 @@ export default function Settings() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const err = params.get('calendar_error');
+    const zaloErr = params.get('zalo_error');
     if (err) {
       toast('error', decodeURIComponent(err));
       params.delete('calendar_error');
@@ -159,6 +160,14 @@ export default function Settings() {
     } else if (params.get('calendar_ok')) {
       toast('success', 'Đã kết nối Google Calendar thành công!');
       params.delete('calendar_ok');
+      window.history.replaceState({}, '', `${window.location.pathname}${params.toString() ? `?${params}` : ''}${window.location.hash}`);
+    } else if (zaloErr) {
+      toast('error', decodeURIComponent(zaloErr));
+      params.delete('zalo_error');
+      window.history.replaceState({}, '', `${window.location.pathname}${params.toString() ? `?${params}` : ''}${window.location.hash}`);
+    } else if (params.get('zalo_ok')) {
+      toast('success', 'Đã kết nối Zalo OA thành công! Token đã được lưu.');
+      params.delete('zalo_ok');
       window.history.replaceState({}, '', `${window.location.pathname}${params.toString() ? `?${params}` : ''}${window.location.hash}`);
     }
   }, []);
@@ -259,6 +268,22 @@ export default function Settings() {
       void load();
     } catch (e) {
       toast('error', e instanceof ApiError ? e.message : 'Reset dữ liệu Zalo thất bại.');
+    }
+  };
+
+  const [zaloOk, setZaloOk] = useState<boolean | null>(null);
+  const [zaloChecking, setZaloChecking] = useState(false);
+
+  const checkZalo = async () => {
+    setZaloChecking(true);
+    try {
+      const r = await api.get<{ ok: boolean }>('/zalo/ping');
+      setZaloOk(r.ok);
+      toast(r.ok ? 'success' : 'error', r.ok ? 'Token Zalo hợp lệ — sẵn sàng gửi tin.' : 'Token Zalo không hợp lệ — bấm "Kết nối Zalo OA" để cấp lại.');
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Không kiểm tra được token Zalo.');
+    } finally {
+      setZaloChecking(false);
     }
   };
 
@@ -603,19 +628,44 @@ export default function Settings() {
           {tab === 'zalo' && (
             <div className="space-y-4">
               <div className="flex items-center justify-between rounded-xl bg-slate-50 p-4 flex-wrap gap-3 dark:bg-slate-800/60">
-                <div>
-                  <div className="font-bold text-slate-800 text-sm dark:text-slate-100">Kết nối Zalo OA</div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400">Bấm nút để mở trang duyệt quyền của Zalo — token sẽ được tự động lưu về hệ thống.</div>
+                <div className="flex items-center gap-3">
+                  <div className={cn('rounded-xl p-2.5', s.zalo.accessToken ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400')}>
+                    <MessageCircle size={20} />
+                  </div>
+                  <div>
+                    <div className="font-bold text-slate-800 text-sm dark:text-slate-100">
+                      {s.zalo.accessToken ? 'Đã kết nối Zalo OA' : 'Chưa kết nối Zalo OA'}
+                    </div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">
+                      {s.zalo.oaId ? `OA ID: ${s.zalo.oaId}` : 'Chưa có OA ID — sẽ tự lấy sau khi kết nối.'}
+                    </div>
+                  </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <button className="btn-primary" onClick={connectZalo}>
                     <MessageCircle size={15} /> Kết nối Zalo OA
                   </button>
+                  {s.zalo.accessToken && (
+                    <button className="btn-secondary" onClick={checkZalo} disabled={zaloChecking}>
+                      <RefreshCw size={15} /> {zaloChecking ? 'Đang kiểm tra…' : zaloOk === null ? 'Kiểm tra token' : zaloOk ? 'Token OK' : 'Token lỗi — kết nối lại'}
+                    </button>
+                  )}
                   <button className="btn-danger" onClick={resetZalo}>
                     Reset dữ liệu Zalo
                   </button>
                 </div>
               </div>
+
+              <div className="rounded-xl bg-slate-50 p-4 text-xs text-slate-600 space-y-2 dark:bg-slate-800/60 dark:text-slate-300">
+                <div className="font-bold text-slate-700 text-sm dark:text-slate-100">Setup 1 lần trên developers.zalo.me (đăng nhập = admin OA):</div>
+                <div>1. Tạo ứng dụng → chọn loại <b>Official Account API</b> → bật quyền <b>Nhắn tin</b> + <b>Lấy thông tin người dùng</b> (chờ xét duyệt).</div>
+                <div>2. Ứng dụng → Official Account → Thiết lập chung → <b>Callback URL</b> phải chính xác là: <b>{window.location.origin}/api/zalo/oauth-callback</b>.</div>
+                <div>3. Ứng dụng → <b>Miền ứng dụng</b>: <b>{window.location.origin.replace(/^https?:\/\//, '')}</b> (không có / ở cuối).</div>
+                <div>4. Ứng dụng → Thông tin → copy <b>App ID</b> + <b>Secret Key</b> → khai báo biến môi trường <b>ZALO_APP_ID</b> / <b>ZALO_APP_SECRET</b> trên Render (Settings → Environment) → deploy.</div>
+                <div>5. Quay lại trang này → bấm <b>"Kết nối Zalo OA"</b> → duyệt quyền → token tự lưu về hệ thống.</div>
+                <div className="pt-1 border-t border-slate-200 dark:border-slate-700">Nếu dùng <b>Manual Deploy</b>: cập nhật biến môi trường xong phải bấm Deploy lại 1 lần.</div>
+              </div>
+
               <div className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-800/60">
                 <div>
                   <div className="font-semibold text-slate-800 text-sm dark:text-slate-100">AI tự trả lời tin nhắn Zalo</div>
@@ -624,6 +674,11 @@ export default function Settings() {
                 <input type="checkbox" className="w-5 h-5 accent-brand-600" checked={s.zalo.autoReply}
                   onChange={(e) => patch(['zalo', 'autoReply'], e.target.checked)} />
               </div>
+
+              <div className="rounded-xl bg-slate-50 p-3.5 text-xs text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
+                Webhook Zalo (đăng ký trong Zalo để nhận tin ứng viên gửi): POST <b>{window.location.origin}/api/zalo/webhook</b> (header <b>x-webhook-secret</b>). Khi ứng viên nhắn "ĐIỂM DANH" trong khung giờ ca, hệ thống tự điểm danh.
+              </div>
+
               <div>
                 <label className="label">Zalo OA ID</label>
                 <input className="input" value={s.zalo.oaId} onChange={(e) => patch(['zalo', 'oaId'], e.target.value)} />
@@ -635,9 +690,6 @@ export default function Settings() {
               <div>
                 <label className="label">Refresh Token</label>
                 <input type="password" className="input" value={s.zalo.refreshToken} onChange={(e) => patch(['zalo', 'refreshToken'], e.target.value)} />
-              </div>
-              <div className="rounded-xl bg-slate-50 p-3.5 text-xs text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
-                Webhook Zalo: POST <b>/api/zalo/webhook</b> (header x-webhook-secret). Khi ứng viên nhắn "ĐIỂM DANH" trong khung giờ ca, hệ thống tự điểm danh.
               </div>
             </div>
           )}

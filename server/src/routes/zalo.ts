@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request } from 'express';
 import { z } from 'zod';
 import { requireAuth, requireWrite, requireRole, AuthedRequest } from '../middleware/auth';
 import { zaloService } from '../services/ZaloService';
@@ -10,34 +10,44 @@ import { nextId } from '../lib/id';
 
 const router = Router();
 
+/** Redirect URI lấy từ request thật (domain Render) — phải khớp Callback URL đã khai báo trên developers.zalo.me. */
+const redirectUriOf = (req: Request) => `${req.protocol}://${req.get('host')}/api/zalo/oauth-callback`;
+
 router.get('/oauth-url', requireAuth, async (req, res, next) => {
   try {
-    const result = await zaloService.getAuthUrl();
+    const result = await zaloService.getAuthUrl(redirectUriOf(req));
     res.json({ success: true, data: result });
   } catch (e) {
     next(e);
   }
 });
 
-router.get('/oauth-callback', async (req, res, next) => {
-  try {
-    const code = String(req.query.code ?? '');
-    const state = String(req.query.state ?? '');
-    const result = await zaloService.exchangeCode(code, state);
-    if (!result.ok) {
-      throw ApiError.badRequest('ZALO_OAUTH_FAILED', result.error ?? 'Kết nối Zalo thất bại.');
-    }
-    await saveSettings(
-      {
-        zalo: {
-          oaId: result.oaId || String(req.query.oa_id ?? '') || env.zaloOaId,
-          accessToken: result.accessToken,
-          refreshToken: result.refreshToken,
-        },
+router.get('/oauth-callback', async (req, res) => {
+  const code = String(req.query.code ?? '');
+  const state = String(req.query.state ?? '');
+  const oaIdFromQuery = String(req.query.oa_id ?? '');
+  const result = await zaloService.exchangeCode(code, state, redirectUriOf(req));
+  if (!result.ok) {
+    res.redirect(`/settings?zalo_error=${encodeURIComponent(result.error ?? 'Kết nối Zalo thất bại.')}`);
+    return;
+  }
+  await saveSettings(
+    {
+      zalo: {
+        oaId: result.oaId || oaIdFromQuery || env.zaloOaId,
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
       },
-      'zalo-oauth',
-    );
-    res.redirect('/settings');
+    },
+    'zalo-oauth',
+  );
+  res.redirect('/settings?zalo_ok=1');
+});
+
+/** Kiểm tra access token Zalo còn hiệu lực (nút "Kiểm tra" trên trang Cài đặt). */
+router.get('/ping', requireAuth, async (req: AuthedRequest, res, next) => {
+  try {
+    res.json({ success: true, data: { ok: await zaloService.ping() } });
   } catch (e) {
     next(e);
   }

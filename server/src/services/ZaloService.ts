@@ -4,7 +4,7 @@ import { env } from '../config/env';
 import { getSettings } from './SettingsService';
 import { emit } from '../sockets';
 import { formatDate, TZ } from '../lib/date';
-import { createHmac, randomBytes } from 'crypto';
+import { createHmac, createHash, randomBytes } from 'crypto';
 
 /** Định dạng giờ phỏng vấn "dd/MM/yyyy lúc HH:mm" theo múi giờ hệ thống. */
 function formatInterviewTime(d: Date): string {
@@ -22,7 +22,7 @@ interface ZaloMessageResponse {
   data?: { message_id?: string };
 }
 export class ZaloService {
-  private pendingStates = new Map<string, number>();
+  private pendingStates = new Map<string, { exp: number; codeVerifier: string }>();
 
   private async getConfig() {
     const settings = await getSettings();
@@ -34,17 +34,22 @@ export class ZaloService {
     };
   }
 
-  /** Tạo link OAuth để user duyệt quyền trên Zalo rồi tự động lưu token về. */
-  async getAuthUrl(): Promise<{ url: string; state: string }> {
+  /** Tạo link OAuth để user duyệt quyền trên Zalo rồi tự động lưu token về.
+   *  redirectUri lấy từ request thật (domain Render) + PKCE (Zalo yêu cầu code_challenge từ 2024). */
+  async getAuthUrl(redirectUri: string): Promise<{ url: string; state: string }> {
     if (!env.zaloAppId || !env.zaloAppSecret) {
-      throw new Error('Thiếu ZALO_APP_ID / ZALO_APP_SECRET trong .env');
+      throw new Error('Thiếu ZALO_APP_ID / ZALO_APP_SECRET trong .env (khai báo trên Render → Settings → Environment).');
     }
     const state = randomBytes(16).toString('hex');
-    this.pendingStates.set(state, Date.now() + 10 * 60 * 1000);
+    const codeVerifier = randomBytes(32).toString('base64url');
+    const codeChallenge = createHash('sha256').update(codeVerifier).digest('base64url');
+    this.pendingStates.set(state, { exp: Date.now() + 10 * 60 * 1000, codeVerifier });
     const url = new URL('https://oauth.zaloapp.com/v4/oa/permission');
     url.searchParams.set('app_id', env.zaloAppId);
-    url.searchParams.set('redirect_uri', env.zaloRedirectUri);
+    url.searchParams.set('redirect_uri', redirectUri);
     url.searchParams.set('state', state);
+    url.searchParams.set('code_challenge', codeChallenge);
+    url.searchParams.set('code_challenge_method', 'S256');
     return { url: url.toString(), state };
   }
 
@@ -52,10 +57,11 @@ export class ZaloService {
   async exchangeCode(
     code: string,
     state: string,
+    redirectUri: string,
   ): Promise<{ ok: boolean; accessToken?: string; refreshToken?: string; oaId?: string; error?: string }> {
-    const exp = this.pendingStates.get(state);
+    const pending = this.pendingStates.get(state);
     this.pendingStates.delete(state);
-    if (!exp || exp < Date.now()) {
+    if (!pending || pending.exp < Date.now()) {
       return { ok: false, error: 'State không hợp lệ hoặc đã hết hạn. Thử kết nối lại.' };
     }
     if (!env.zaloAppId || !env.zaloAppSecret) {
@@ -69,6 +75,7 @@ export class ZaloService {
           app_id: env.zaloAppId,
           code,
           grant_type: 'authorization_code',
+          code_verifier: pending.codeVerifier,
         }),
       });
       const data = (await res.json()) as {
