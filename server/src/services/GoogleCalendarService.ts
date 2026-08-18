@@ -28,8 +28,9 @@ export class GoogleCalendarService {
     };
   }
 
-  /** Bước 1: tạo URL OAuth để admin duyệt quyền trên Google rồi tự lưu token. */
-  async getAuthUrl(): Promise<{ url: string; state: string }> {
+  /** Bước 1: tạo URL OAuth để admin duyệt quyền trên Google rồi tự lưu token.
+   *  redirectUri lấy từ request thật (domain Render) — tránh lỗi redirect_uri_mismatch khi dùng mặc định localhost. */
+  async getAuthUrl(redirectUri: string): Promise<{ url: string; state: string }> {
     const cfg = await this.getConfig();
     if (!cfg.clientId || !cfg.clientSecret) {
       throw new Error('Thiếu GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET trong .env hoặc Cài đặt');
@@ -38,7 +39,7 @@ export class GoogleCalendarService {
     this.pendingStates.set(state, Date.now());
     const params = new URLSearchParams({
       client_id: cfg.clientId,
-      redirect_uri: env.googleRedirectUri,
+      redirect_uri: redirectUri,
       response_type: 'code',
       scope: SCOPES,
       access_type: 'offline',
@@ -49,7 +50,7 @@ export class GoogleCalendarService {
   }
 
   /** Bước 2+3: đổi code lấy refresh token + lưu vào settings (chạy 1 lần duy nhất). */
-  async exchangeCode(code: string, state: string): Promise<{ ok: boolean; refreshToken?: string }> {
+  async exchangeCode(code: string, state: string, redirectUri: string): Promise<{ ok: boolean; refreshToken?: string }> {
     const cfg = await this.getConfig();
     const issuedAt = this.pendingStates.get(state);
     this.pendingStates.delete(state);
@@ -60,7 +61,7 @@ export class GoogleCalendarService {
       code,
       client_id: cfg.clientId,
       client_secret: cfg.clientSecret,
-      redirect_uri: env.googleRedirectUri,
+      redirect_uri: redirectUri,
       grant_type: 'authorization_code',
     });
     const r = await fetch('https://oauth2.googleapis.com/token', {

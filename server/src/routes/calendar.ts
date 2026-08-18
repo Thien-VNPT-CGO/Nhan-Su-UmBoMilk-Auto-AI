@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request } from 'express';
 import { requireAuth, requireRole, AuthedRequest } from '../middleware/auth';
 import { calendarService } from '../services/GoogleCalendarService';
 import { saveSettings } from '../services/SettingsService';
@@ -7,26 +7,31 @@ import { ApiError } from '../lib/errors';
 
 const router = Router();
 
+/** Redirect URI lấy từ request thật (domain Render) — phải khớp chính xác với URI đã đăng ký trong Google Cloud Console. */
+const redirectUriOf = (req: Request) => `${req.protocol}://${req.get('host')}/api/calendar/oauth-callback`;
+
 /** Bước 1 OAuth: trả URL Google để admin bấm duyệt quyền (state TTL 10 phút). */
-router.get('/oauth-url', requireAuth, async (_req, res, next) => {
+router.get('/oauth-url', requireAuth, async (req, res, next) => {
   try {
-    res.json({ success: true, data: await calendarService.getAuthUrl() });
+    res.json({ success: true, data: await calendarService.getAuthUrl(redirectUriOf(req)) });
   } catch (e) {
     next(e);
   }
 });
 
 /** Bước 2+3 OAuth: đổi code → lưu refresh token vào settings → quay về trang Cài đặt. */
-router.get('/oauth-callback', async (req, res, next) => {
-  try {
-    const { code, state } = req.query as { code?: string; state?: string };
-    if (!code) throw ApiError.badRequest('MISSING_CODE', 'Thiếu mã code từ Google.');
-    const result = await calendarService.exchangeCode(code, state ?? '');
-    if (!result.ok) throw ApiError.badRequest('CALENDAR_OAUTH_FAILED', 'Xác thực Google thất bại hoặc liên kết hết hạn. Hãy thử lại.');
-    res.redirect('/settings');
-  } catch (e) {
-    next(e);
+router.get('/oauth-callback', async (req, res) => {
+  const { code, state, error } = req.query as { code?: string; state?: string; error?: string };
+  if (!code) {
+    res.redirect(`/settings?calendar_error=${encodeURIComponent(error ? `Google từ chối: ${error}` : 'Thiếu mã code từ Google.')}`);
+    return;
   }
+  const result = await calendarService.exchangeCode(code, state ?? '', redirectUriOf(req));
+  if (!result.ok) {
+    res.redirect(`/settings?calendar_error=${encodeURIComponent('Xác thực Google thất bại hoặc liên kết hết hạn. Hãy kiểm tra Client ID/Secret và thử lại.')}`);
+    return;
+  }
+  res.redirect('/settings?calendar_ok=1');
 });
 
 /** Xóa kết nối Google Calendar (token) — icon/trạng thái trong Cài đặt tắt ngay. */

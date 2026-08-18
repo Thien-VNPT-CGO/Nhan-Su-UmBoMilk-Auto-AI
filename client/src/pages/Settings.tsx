@@ -149,6 +149,20 @@ export default function Settings() {
     }
   }, [data]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const err = params.get('calendar_error');
+    if (err) {
+      toast('error', decodeURIComponent(err));
+      params.delete('calendar_error');
+      window.history.replaceState({}, '', `${window.location.pathname}${params.toString() ? `?${params}` : ''}${window.location.hash}`);
+    } else if (params.get('calendar_ok')) {
+      toast('success', 'Đã kết nối Google Calendar thành công!');
+      params.delete('calendar_ok');
+      window.history.replaceState({}, '', `${window.location.pathname}${params.toString() ? `?${params}` : ''}${window.location.hash}`);
+    }
+  }, []);
+
   if (!data) {
     return <div className="flex justify-center py-20"><Spinner className="text-brand-500" size={28} /></div>;
   }
@@ -637,7 +651,11 @@ export default function Settings() {
                   </div>
                   <div>
                     <div className="font-bold text-slate-800 text-sm dark:text-slate-100">
-                      {s.googleCalendar.enabled && s.googleCalendar.refreshToken ? 'Đã kết nối Google Calendar' : 'Chưa kết nối Google Calendar'}
+                      {s.googleCalendar.enabled && s.googleCalendar.refreshToken
+                        ? 'Đã kết nối Google Calendar'
+                        : s.googleCalendar.clientId && s.googleCalendar.clientSecret
+                          ? 'Đã lưu Client ID/Secret — chưa duyệt quyền (bấm "Kết nối Google Calendar" để hoàn tất)'
+                          : 'Chưa kết nối Google Calendar'}
                     </div>
                     <div className="text-xs text-slate-500 dark:text-slate-400">
                       Khi chấm PASS: hệ thống tự tạo sự kiện + link Google Meet mới và gửi cho ứng viên (thay thế link chi nhánh).
