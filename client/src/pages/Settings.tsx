@@ -141,9 +141,26 @@ export default function Settings() {
     void loadBackups();
   }, [load, loadBackups]);
 
+  const [branchMeetRows, setBranchMeetRows] = useState<{ name: string; link: string }[]>([]);
+
+  useEffect(() => {
+    if (data) {
+      setBranchMeetRows(Object.entries(data.settings.interview?.branchMeetLinks ?? {}).map(([name, link]) => ({ name, link })));
+    }
+  }, [data]);
+
   if (!data) {
     return <div className="flex justify-center py-20"><Spinner className="text-brand-500" size={28} /></div>;
   }
+
+  const applyBranchMeetRows = (rows: { name: string; link: string }[]) => {
+    setBranchMeetRows(rows);
+    const links: Record<string, string> = {};
+    rows.forEach((r) => {
+      if (r.name.trim()) links[r.name.trim()] = r.link.trim();
+    });
+    patch(['interview', 'branchMeetLinks'], links);
+  };
 
   const patch = (path: (string | number)[], value: unknown) => {
     setData((d) => {
@@ -258,23 +275,6 @@ export default function Settings() {
     } catch (e) {
       toast('error', e instanceof ApiError ? e.message : 'Ngắt kết nối thất bại.');
     }
-  };
-
-  const [branchMeetRows, setBranchMeetRows] = useState<{ name: string; link: string }[]>([]);
-
-  useEffect(() => {
-    if (data) {
-      setBranchMeetRows(Object.entries(data.settings.interview?.branchMeetLinks ?? {}).map(([name, link]) => ({ name, link })));
-    }
-  }, [data]);
-
-  const applyBranchMeetRows = (rows: { name: string; link: string }[]) => {
-    setBranchMeetRows(rows);
-    const links: Record<string, string> = {};
-    rows.forEach((r) => {
-      if (r.name.trim()) links[r.name.trim()] = r.link.trim();
-    });
-    patch(['interview', 'branchMeetLinks'], links);
   };
 
   const updateUserScope = async (userId: string, branchScope: string[] | null) => {
