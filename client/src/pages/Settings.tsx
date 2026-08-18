@@ -24,7 +24,7 @@ interface SettingsData {
       passThreshold: number;
       rules: {
         hoTen: { enabled: boolean; score: number };
-        namSinh: { enabled: boolean; score: number };
+        namSinh: { enabled: boolean; score: number; tiers: { min: number | null; max: number | null; score: number }[] };
         queQuan: { enabled: boolean; score: number; allowed: string[] };
         sdt: { enabled: boolean; score: number };
         trinhDo: { enabled: boolean; scores: { SinhVienDaiHoc_CaoDang: number; NghiHoc: number } };
@@ -583,7 +583,6 @@ export default function Settings() {
 
               {([
                 ['hoTen', 'Họ tên (có dữ liệu)', 'score'],
-                ['namSinh', 'Năm sinh (có dữ liệu)', 'score'],
                 ['queQuan', 'Quê quán (Miền Tây / TP.HCM)', 'score'],
                 ['sdt', 'SĐT hợp lệ', 'score'],
                 ['xuLy', 'Xử lý tình huống (có trả lời)', 'score'],
@@ -607,6 +606,38 @@ export default function Settings() {
                   </div>
                 );
               })}
+
+              <div className="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-800/60">
+                <div className="flex items-center gap-3 mb-2">
+                  <input type="checkbox" checked={s.scoring.rules.namSinh.enabled}
+                    onChange={(e) => patch(['scoring', 'rules', 'namSinh', 'enabled'], e.target.checked)}
+                    className="w-4 h-4 accent-brand-600" />
+                  <div>
+                    <div className="font-semibold text-slate-800 text-sm dark:text-slate-100">Năm sinh (theo giai đoạn)</div>
+                    <div className="text-xs text-slate-400">Chấm theo năm sinh: min–max (bỏ trống = không giới hạn đầu đó)</div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {(s.scoring.rules.namSinh.tiers ?? []).map((t, i) => (
+                    <div key={i} className="flex items-center gap-2 text-xs text-slate-500">
+                      <span className="w-16 shrink-0">Giai đoạn {i + 1}:</span>
+                      <input type="number" className="input !w-20"
+                        value={t.min ?? ''}
+                        placeholder="min"
+                        onChange={(e) => { const v = e.target.value; patch(['scoring', 'rules', 'namSinh', 'tiers', i, 'min'], v === '' ? null : Number(v)); }} />
+                      <span>→</span>
+                      <input type="number" className="input !w-20"
+                        value={t.max ?? ''}
+                        placeholder="max"
+                        onChange={(e) => { const v = e.target.value; patch(['scoring', 'rules', 'namSinh', 'tiers', i, 'max'], v === '' ? null : Number(v)); }} />
+                      <input type="number" min="0" max="5" className="input !w-16 text-center font-extrabold"
+                        value={t.score}
+                        onChange={(e) => patch(['scoring', 'rules', 'namSinh', 'tiers', i, 'score'], Number(e.target.value))} />
+                      <span>điểm</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
 
               <div className="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-800/60">
                 <div className="font-semibold text-slate-800 text-sm mb-2 dark:text-slate-100">Trình độ học vấn</div>

@@ -5,28 +5,38 @@ import { env } from '../config/env';
 
 export type Settings = typeof DEFAULT_SETTINGS;
 
+/** Merge đệ quy: giá trị đã lưu (DB) giữ nguyên, chỉ điền thiếu key từ default (không lấn sâu vào mảng). */
+function deepMerge(base: Record<string, unknown>, patch: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...base };
+  for (const key of Object.keys(patch)) {
+    const pv = patch[key];
+    if (pv === undefined || pv === null) continue;
+    const bv = out[key];
+    if (Array.isArray(pv)) {
+      out[key] = pv;
+      continue;
+    }
+    if (typeof pv === 'object') {
+      const keys = Object.keys(pv);
+      // Object dạng { "0":..., "1":... } (lưu từ SQLite cũ) -> chuyển về mảng
+      if (keys.length > 0 && keys.every((k) => /^\d+$/.test(k))) {
+        out[key] = Object.values(pv as object);
+      } else if (typeof bv === 'object' && bv !== null && !Array.isArray(bv)) {
+        out[key] = deepMerge(bv as Record<string, unknown>, pv as Record<string, unknown>);
+      } else {
+        out[key] = pv;
+      }
+      continue;
+    }
+    out[key] = pv;
+  }
+  return out;
+}
+
 export function mergeSettings(raw: unknown): Settings {
   const base = JSON.parse(JSON.stringify(DEFAULT_SETTINGS)) as Settings;
   if (!raw || typeof raw !== 'object') return base;
-  const r = raw as Record<string, unknown>;
-  for (const key of Object.keys(base) as (keyof Settings)[]) {
-    const v = r[key];
-    if (v === undefined || v === null) continue;
-    if (Array.isArray(v)) {
-      (base as Record<string, unknown>)[key] = v;
-    } else if (typeof v === 'object') {
-      const keys = Object.keys(v);
-      const arrLike = keys.length > 0 && keys.every((k) => /^\d+$/.test(k));
-      if (arrLike) {
-        (base as Record<string, unknown>)[key] = Object.values(v as object);
-      } else {
-        (base as Record<string, unknown>)[key] = { ...(base[key] as object), ...(v as object) };
-      }
-    } else {
-      (base as Record<string, unknown>)[key] = v;
-    }
-  }
-  return base;
+  return deepMerge(base as unknown as Record<string, unknown>, raw as Record<string, unknown>) as Settings;
 }
 
 // getSettings() được gọi rất thường xuyên (mỗi worker tick, mỗi lần chấm điểm, mỗi route).

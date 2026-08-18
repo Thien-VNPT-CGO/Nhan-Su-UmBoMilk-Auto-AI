@@ -51,7 +51,31 @@ export class CandidateScoringService {
 
     // ===== P_* point computation from rules =====
     const p_hoTen = rules.hoTen.enabled && candidate.tenUv.trim() ? rules.hoTen.score : 0;
-    const p_namSinh = rules.namSinh.enabled && candidate.namSinh.trim() ? rules.namSinh.score : 0;
+
+    // Năm sinh: chấm theo giai đoạn (2000–2004: +2, 2005–2008: +1, ≥2009: +0) — các giai đoạn chỉnh được trong Cài đặt
+    let p_namSinh = 0;
+    let namSinhNote = 'Thiếu dữ liệu';
+    if (rules.namSinh.enabled) {
+      const year = Number.parseInt(candidate.namSinh.trim(), 10);
+      if (Number.isFinite(year)) {
+        const tier = (rules.namSinh.tiers ?? []).find(
+          (t) =>
+            (t.min === undefined || t.min === null || year >= t.min) &&
+            (t.max === undefined || t.max === null || year <= t.max),
+        );
+        if (tier) {
+          p_namSinh = tier.score;
+          const from = tier.min === null || tier.min === undefined ? '' : `từ ${tier.min}`;
+          const to = tier.max === null || tier.max === undefined ? '' : `đến ${tier.max}`;
+          namSinhNote = `Năm ${year}: ${[from, to].filter(Boolean).join(' ') || 'không giới hạn'} (+${tier.score}đ)`;
+        } else {
+          namSinhNote = `Năm ${year}: ngoài giai đoạn cộng điểm (+0đ)`;
+        }
+      } else if (candidate.namSinh.trim()) {
+        p_namSinh = rules.namSinh.score ?? 0;
+        namSinhNote = `Năm sinh không xác định được (+${p_namSinh}đ)`;
+      }
+    }
 
     let p_queQuan = 0;
     if (rules.queQuan.enabled) {
@@ -120,7 +144,7 @@ export class CandidateScoringService {
       ai_provider: ai.provider,
       chi_tiet: {
         hoTen: { diem: p_hoTen, nhanXet: candidate.tenUv.trim() ? 'Có dữ liệu' : 'Thiếu dữ liệu' },
-        namSinh: { diem: p_namSinh, nhanXet: candidate.namSinh.trim() ? 'Có dữ liệu' : 'Thiếu dữ liệu' },
+        namSinh: { diem: p_namSinh, nhanXet: namSinhNote },
         queQuan: { diem: p_queQuan, nhanXet: ai.queQuan.reason },
         sdt: { diem: p_sdt, nhanXet: ai.sdt.status },
         trinhDo: { diem: p_trinhDo, nhanXet: ai.trinhDo.reason },

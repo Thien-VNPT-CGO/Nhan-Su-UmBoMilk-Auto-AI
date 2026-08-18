@@ -61,7 +61,16 @@ export const DEFAULT_SETTINGS = {
   scoring: {
     rules: {
       hoTen: { enabled: true, score: 1 },
-      namSinh: { enabled: true, score: 1 },
+      // Chấm điểm theo giai đoạn năm sinh (min ≤ năm ≤ max; min/max null = không giới hạn đầu)
+      namSinh: {
+        enabled: true,
+        score: 1,
+        tiers: [
+          { min: 2000, max: 2004, score: 2 },
+          { min: 2005, max: 2008, score: 1 },
+          { min: 2009, max: null, score: 0 },
+        ],
+      },
       queQuan: {
         enabled: true,
         score: 1,
