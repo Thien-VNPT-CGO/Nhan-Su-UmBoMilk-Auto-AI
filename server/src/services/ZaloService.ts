@@ -104,10 +104,10 @@ export class ZaloService {
     }
   }
 
-  /** Kiểm tra access token còn hiệu lực (dùng cho health check trên web). */
-  async ping(): Promise<boolean> {
+  /** Kiểm tra access token còn hiệu lực (dùng cho health check trên web) + lý do để hiển thị rõ cho admin. */
+  async ping(): Promise<{ ok: boolean; reason: string }> {
     const cfg = await this.getConfig();
-    if (!cfg.accessToken) return false;
+    if (!cfg.accessToken) return { ok: false, reason: 'NO_TOKEN' };
     let token = cfg.accessToken;
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
@@ -118,23 +118,27 @@ export class ZaloService {
         }
         const res = await fetch(url, { headers: { access_token: token } });
         const data = (await res.json()) as { error?: number; message?: string; id?: string };
-        if (!res.ok) return false;
-        if (data.error === 452) {
-          // Token hết hạn: thử refresh 1 lần rồi kiểm tra lại
+        if (!res.ok) return { ok: false, reason: `API_ERROR_${res.status}` };
+        // Token hết hạn/không hợp lệ → thử refresh 1 lần (cần ZALO_APP_ID/SECRET + refresh token lưu từ OAuth)
+        if (data.error === 452 || data.error === -201 || data.error === -216) {
           if (attempt === 0) {
             const fresh = await this.refreshAccessToken();
-            if (!fresh) return false;
+            if (!fresh) return { ok: false, reason: 'EXPIRED_REFRESH_FAILED' };
             token = fresh.accessToken;
             continue;
           }
-          return false;
+          return { ok: false, reason: 'EXPIRED_REFRESH_FAILED' };
         }
-        return data.error === 453 ? true : !!data.id; // 453: token hợp lệ, thiếu appsecret_proof
+        // 453: token hợp lệ nhưng app bật chế độ appsecret_proof mà server không có secret
+        if (data.error === 453) return { ok: true, reason: 'VALID_NO_PROOF' };
+        return data.id
+          ? { ok: true, reason: 'VALID' }
+          : { ok: false, reason: `INVALID (${data.error ?? ''} ${data.message ?? ''})`.trim() };
       } catch {
-        return false;
+        return { ok: false, reason: 'API_ERROR' };
       }
     }
-    return false;
+    return { ok: false, reason: 'API_ERROR' };
   }
 
   /** Tự động đổi refresh token lấy access token mới khi token hết hạn (lưu lại settings). */

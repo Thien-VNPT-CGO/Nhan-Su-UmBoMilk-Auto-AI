@@ -91,10 +91,10 @@ function useSyncCounts() {
 }
 
 function useHealth() {
-  const [health, setHealth] = useState<{ database: boolean; googleSheet: boolean; ai: boolean; zalo: boolean; demoMode: boolean; queueAgeMs?: number } | null>(null);
+  const [health, setHealth] = useState<{ database: boolean; googleSheet: boolean; ai: boolean; zalo: boolean; zaloReason?: string; demoMode: boolean; queueAgeMs?: number } | null>(null);
   useEffect(() => {
     const load = () => {
-      api.get<{ database: boolean; googleSheet: boolean; ai: boolean; zalo: boolean; demoMode: boolean; queueAgeMs?: number }>('/settings/health')
+      api.get<{ database: boolean; googleSheet: boolean; ai: boolean; zalo: boolean; zaloReason?: string; demoMode: boolean; queueAgeMs?: number }>('/settings/health')
         .then(setHealth)
         .catch(() => undefined);
     };
@@ -104,6 +104,19 @@ function useHealth() {
   }, []);
   return health;
 }
+
+const zaloReasonLabel = (reason?: string) =>
+  reason === 'NO_TOKEN'
+    ? 'Zalo: chưa có token — vào Cài đặt → Zalo → Kết nối Zalo OA'
+    : reason === 'EXPIRED_REFRESH_FAILED'
+      ? 'Zalo: token hết hạn, refresh thất bại — cần ZALO_APP_ID/SECRET trên Render (deploy lại) và kết nối lại'
+      : reason === 'VALID_NO_PROOF' || reason === 'VALID'
+        ? 'Zalo: token hợp lệ'
+        : reason?.startsWith('INVALID')
+          ? 'Zalo: token không hợp lệ — kết nối lại'
+          : reason
+            ? 'Zalo: lỗi kiểm tra (' + reason + ')'
+            : 'Zalo: chưa có token';
 
 function useNotifications() {
   const [open, setOpen] = useState(false);
@@ -346,7 +359,10 @@ export default function AppLayout() {
             <span className={cn('flex items-center gap-1', health?.ai ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400')}>
               {health?.ai ? <Wifi size={12} /> : <WifiOff size={12} />} AI
             </span>
-            <span className={cn('flex items-center gap-1', health?.zalo ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400')}>
+            <span
+              title={zaloReasonLabel(health?.zaloReason)}
+              className={cn('flex items-center gap-1 cursor-help', health?.zalo ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400')}
+            >
               {health?.zalo ? <Wifi size={12} /> : <WifiOff size={12} />} Zalo
             </span>
             <Database size={13} className="text-slate-300 dark:text-slate-600" />

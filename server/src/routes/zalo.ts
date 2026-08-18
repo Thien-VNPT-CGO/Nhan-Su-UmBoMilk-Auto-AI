@@ -47,7 +47,7 @@ router.get('/oauth-callback', async (req, res) => {
 /** Kiểm tra access token Zalo còn hiệu lực (nút "Kiểm tra" trên trang Cài đặt). */
 router.get('/ping', requireAuth, async (req: AuthedRequest, res, next) => {
   try {
-    res.json({ success: true, data: { ok: await zaloService.ping() } });
+    res.json({ success: true, data: await zaloService.ping() });
   } catch (e) {
     next(e);
   }

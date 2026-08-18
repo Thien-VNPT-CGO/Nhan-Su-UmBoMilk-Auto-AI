@@ -173,11 +173,11 @@ router.get('/health', async (_req, res, next) => {
     const sheet = getGoogleSheetService();
     const ai = await getAIProvider();
     const settings = await getSettings();
-    const [dbOk, sheetOk, aiOk, zaloOk, queueAgeMs, lastSyncAt] = await Promise.all([
+    const [dbOk, sheetOk, aiOk, zaloPing, queueAgeMs, lastSyncAt] = await Promise.all([
       prisma.$queryRaw`SELECT 1`.then(() => true).catch(() => false),
       sheet.ping().catch(() => false),
       ai.ping().catch(() => false),
-      zaloService.ping().catch(() => false),
+      zaloService.ping().catch(() => ({ ok: false, reason: 'API_ERROR' })),
       // Monitoring: job đồng bộ mắc kẹt lâu nhất (PENDING/RETRY/PROCESSING)
       prisma.syncJob
         .findFirst({
@@ -192,12 +192,14 @@ router.get('/health', async (_req, res, next) => {
         .then((j) => j?.updatedAt.toISOString() ?? null)
         .catch(() => null),
     ]);
+    const zaloOk = zaloPing.ok;
     const data = {
       node: true,
       database: dbOk,
       googleSheet: sheetOk,
       ai: aiOk,
       zalo: zaloOk,
+      zaloReason: zaloPing.reason,
       demoMode: !sheet.configured,
       autoReply: settings.zalo.autoReply,
       queueAgeMs,

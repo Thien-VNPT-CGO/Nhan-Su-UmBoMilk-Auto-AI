@@ -276,9 +276,17 @@ export default function Settings() {
   const checkZalo = async () => {
     setZaloChecking(true);
     try {
-      const r = await api.get<{ ok: boolean }>('/zalo/ping');
+      const r = await api.get<{ ok: boolean; reason?: string }>('/zalo/ping');
       setZaloOk(r.ok);
-      toast(r.ok ? 'success' : 'error', r.ok ? 'Token Zalo hợp lệ — sẵn sàng gửi tin.' : 'Token Zalo không hợp lệ — bấm "Kết nối Zalo OA" để cấp lại.');
+      const label =
+        r.reason === 'NO_TOKEN'
+          ? 'Chưa có token Zalo — bấm "Kết nối Zalo OA" để cấp quyền.'
+          : r.reason === 'EXPIRED_REFRESH_FAILED'
+            ? 'Token hết hạn và refresh thất bại — kiểm tra ZALO_APP_ID/SECRET trên Render (phải bấm Deploy lại sau khi đổi) rồi kết nối lại.'
+            : r.ok
+              ? 'Token Zalo hợp lệ — sẵn sàng gửi tin.'
+              : 'Token Zalo không hợp lệ — bấm "Kết nối Zalo OA" để cấp lại.';
+      toast(r.ok ? 'success' : 'error', label);
     } catch (e) {
       toast('error', e instanceof ApiError ? e.message : 'Không kiểm tra được token Zalo.');
     } finally {
