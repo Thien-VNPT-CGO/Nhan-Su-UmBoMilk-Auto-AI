@@ -573,7 +573,7 @@ export default function Settings() {
               <div className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-800/60">
                 <div>
                   <div className="font-bold text-slate-800 text-sm dark:text-slate-100">Ngưỡng PASS (TONG_DIEM ≥)</div>
-                  <div className="text-xs text-slate-500">AI_RECOMMENDATION = PASS nếu tổng điểm đạt ngưỡng</div>
+                  <div className="text-xs text-slate-500">Xếp loại: 8–9 Đạt · 10–11 Giỏi · ≥12 Xuất Sắc · AI_RECOMMENDATION = PASS nếu đạt ngưỡng</div>
                 </div>
                 <input
                   type="number" min="0" max="12" className="input !w-20 text-center font-extrabold"
@@ -588,7 +588,6 @@ export default function Settings() {
                 ['sdt', 'SĐT hợp lệ', 'score'],
                 ['xuLy', 'Xử lý tình huống (có trả lời)', 'score'],
                 ['linkFb', 'Facebook (CO_VE_CHINH_CHU)', 'score'],
-                ['kenhBietTin', 'Bạn bè / người quen giới thiệu', 'score'],
               ] as const).map(([key, label, field]) => {
                 const rule = s.scoring.rules[key];
                 return (
@@ -638,6 +637,20 @@ export default function Settings() {
                       <span>điểm</span>
                     </div>
                   ))}
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-800/60">
+                <div className="flex items-center gap-3 mb-1">
+                  <input type="checkbox" checked={s.scoring.rules.kenhBietTin.enabled}
+                    onChange={(e) => patch(['scoring', 'rules', 'kenhBietTin', 'enabled'], e.target.checked)}
+                    className="w-4 h-4 accent-brand-600" />
+                  <div>
+                    <div className="font-semibold text-slate-800 text-sm dark:text-slate-100">Kênh biết tin ứng tuyển</div>
+                    <div className="text-xs text-slate-400">
+                      Chọn "Bạn Bè, Người quen giới thiệu" → AI chấm <b>LOẠI (FAIL)</b> dù điểm cao · Quảng cáo FB/Tiktok/Instagram → bình thường
+                    </div>
+                  </div>
                 </div>
               </div>
 

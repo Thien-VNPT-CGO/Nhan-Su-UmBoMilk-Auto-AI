@@ -18,9 +18,9 @@ export interface ScoringResult {
 }
 
 export function classifyXepLoai(tongDiem: number): 'DAT' | 'GIOI' | 'XUAT_SAC' | null {
-  if (tongDiem >= 9) return 'XUAT_SAC';
-  if (tongDiem >= 8) return 'GIOI';
-  if (tongDiem >= 7) return 'DAT';
+  if (tongDiem >= 12) return 'XUAT_SAC'; // 12-14 điểm: Xuất Sắc
+  if (tongDiem >= 10) return 'GIOI';     // 10-11 điểm: Giỏi
+  if (tongDiem >= 8) return 'DAT';       // 8-9 điểm: Đạt
   return null;
 }
 
@@ -104,21 +104,22 @@ export class CandidateScoringService {
     const p_xuLy = rules.xuLy.enabled && ai.xuLy.score > 0 ? rules.xuLy.score : 0;
     const p_linkFb = rules.linkFb.enabled ? ai.linkFb.score : 0;
 
-    // Kênh biết tin: chọn "Bạn Bè, Người quen giới thiệu" → AI tự chấm loại ứng viên (cộng điểm)
+    // Kênh biết tin: "Quảng cáo FB/Tiktok..." = bình thường; "Bạn Bè, Người quen giới thiệu" = AI chấm LOẠI (FAIL) dù điểm cao
     let p_kenhBietTin = 0;
     let kenhBietTinNote = 'Không có dữ liệu';
+    let isReferral = false;
     if (rules.kenhBietTin.enabled) {
       const raw = (candidate.kenhBietTin ?? '').trim();
       if (raw) {
         const norm = normalizeNoAccent(raw);
-        const isReferral = (rules.kenhBietTin.keywords ?? ['gioi thieu', 'ban be', 'nguoi quen']).some((k) =>
+        isReferral = (rules.kenhBietTin.keywords ?? ['gioi thieu', 'ban be', 'nguoi quen']).some((k) =>
           norm.includes(normalizeNoAccent(String(k))),
         );
         if (isReferral) {
           p_kenhBietTin = rules.kenhBietTin.score ?? 0;
-          kenhBietTinNote = `Bạn bè/người quen giới thiệu (+${p_kenhBietTin}đ)`;
+          kenhBietTinNote = `Bạn bè/người quen giới thiệu (+${p_kenhBietTin}đ) — AI chấm LOẠI (FAIL) dù điểm cao`;
         } else {
-          kenhBietTinNote = `Quảng cáo/kênh khác (+0đ)`;
+          kenhBietTinNote = `Quảng cáo FB/Tiktok/Instagram... (+0đ)`;
         }
       } else {
         kenhBietTinNote = 'Không có dữ liệu (+0đ)';
@@ -126,15 +127,21 @@ export class CandidateScoringService {
     }
 
     const tongDiem = p_hoTen + p_namSinh + p_queQuan + p_sdt + p_trinhDo + p_kinhNghiem + p_xuLy + p_linkFb + p_kenhBietTin;
-    const threshold = settings.scoring.passThreshold ?? 7;
-    const aiRecommendation = tongDiem >= threshold ? 'PASS' : 'FAIL';
-    const xepLoai = classifyXepLoai(tongDiem);
+    const threshold = settings.scoring.passThreshold ?? 8;
+    let aiRecommendation: 'PASS' | 'FAIL' = tongDiem >= threshold ? 'PASS' : 'FAIL';
+    let xepLoai = classifyXepLoai(tongDiem);
+    // Ràng buộc: chọn "Bạn Bè, Người quen giới thiệu" → AI tự chấm LOẠI cho dù điểm cao đến mấy
+    if (isReferral) {
+      aiRecommendation = 'FAIL';
+      xepLoai = null;
+    }
 
     const noteParts = [
       ai.kinhNghiem.reason,
       ai.xuLy.note,
       ai.queQuan.reason,
       ai.linkFb.reason,
+      isReferral ? 'Kênh biết tin: Bạn bè/Người quen giới thiệu → AI chấm LOẠI (FAIL)' : '',
     ].filter(Boolean);
     const aiNote = noteParts.join(' | ');
     const aiConfidence = ai.confidence;

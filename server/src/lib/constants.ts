@@ -102,7 +102,7 @@ export const DEFAULT_SETTINGS = {
         keywords: ['gioi thieu', 'ban be', 'nguoi quen'],
       },
     },
-    passThreshold: 7,
+    passThreshold: 8,
   },
   attendance: {
     shifts: {
