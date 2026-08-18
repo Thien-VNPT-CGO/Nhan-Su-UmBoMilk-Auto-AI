@@ -9,7 +9,7 @@ export const MESSAGES: Record<string, Msg> = {
   'nav.dashboard': { vi: 'Tổng quan', en: 'Dashboard' },
   'nav.candidates': { vi: 'Ứng viên', en: 'Candidates' },
   'nav.scoring': { vi: 'AI chấm hồ sơ', en: 'AI Scoring' },
-  'nav.training': { vi: 'Đào tạo', en: 'Training' },
+  'nav.training': { vi: 'Nhân Viên Training', en: 'Staff Training' },
   'nav.shifts': { vi: 'Lịch làm việc', en: 'Shifts' },
   'nav.attendance': { vi: 'Điểm danh', en: 'Attendance' },
   'nav.zalo': { vi: 'Zalo', en: 'Zalo' },

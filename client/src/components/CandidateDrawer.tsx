@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import {
   User, BrainCircuit, ThumbsUp, GraduationCap, ClipboardCheck, MessageCircle,
-  ScrollText, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Send, Briefcase,
+  ScrollText, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Send, Briefcase, CalendarDays, Video,
 } from 'lucide-react';
 import { api, ApiError } from '../api/client';
-import { Drawer, Tabs, Badge, Spinner, ConfirmDialog, Field, Skeleton } from './ui';
+import { Drawer, Tabs, Badge, Spinner, ConfirmDialog, Field, Skeleton, Modal } from './ui';
 import { useToast } from '../stores/Toast';
 import { cn, trainingStatusLabel, syncStatusStyle, decisionLabel } from '../utils/format';
 import { formatDateTime, formatDate } from '../utils/date';
@@ -33,6 +33,8 @@ interface CandidateDetail {
   hrUser: string | null;
   hrReason: string | null;
   hrDecisionAt: string | null;
+  phongVanAt: string | null;
+  ggMeetLink: string | null;
   ngayBatDauTraining: string | null;
   trangThaiTraining: string | null;
   soNgayDaTraining: number;
@@ -73,6 +75,9 @@ export default function CandidateDrawer({
   const [tab, setTab] = useState('profile');
   const [confirm, setConfirm] = useState<null | 'PASS' | 'FAIL' | 'REVIEW'>(null);
   const [reason, setReason] = useState('');
+  const [interviewOpen, setInterviewOpen] = useState(false);
+  const [phongVanAt, setPhongVanAt] = useState('');
+  const [ggMeetLink, setGgMeetLink] = useState('');
   const [auditRows, setAuditRows] = useState<unknown[]>([]);
   const [syncRows, setSyncRows] = useState<unknown[]>([]);
 
@@ -80,6 +85,8 @@ export default function CandidateDrawer({
     if (!candidateId || !open) return;
     setTab('profile');
     setReason('');
+    setPhongVanAt('');
+    setGgMeetLink('');
     setLoading(true);
     api
       .get<CandidateDetail>(`/candidates/${candidateId}`)
@@ -113,8 +120,40 @@ export default function CandidateDrawer({
   const score = () =>
     act(() => api.post(`/candidates/${candidateId}/score`, {}), 'AI đã chấm xong hồ sơ.');
 
-  const decide = (decision: 'PASS' | 'FAIL' | 'REVIEW') =>
-    act(() => api.patch(`/candidates/${candidateId}/decision`, { decision, reason: reason || undefined }), 'Đã lưu quyết định HR.');
+  const decide = (decision: 'PASS' | 'FAIL' | 'REVIEW', phongVanAt?: string, ggMeetLink?: string) =>
+    act(
+      () => api.patch(`/candidates/${candidateId}/decision`, { decision, reason: reason || undefined, phongVanAt, ggMeetLink }),
+      'Đã lưu quyết định HR.',
+    );
+
+  const openInterviewModal = () => {
+    setPhongVanAt(c?.phongVanAt ? c.phongVanAt.slice(0, 16) : '');
+    setGgMeetLink(c?.ggMeetLink ?? '');
+    setInterviewOpen(true);
+  };
+
+  const submitInterview = async () => {
+    if (!phongVanAt || !ggMeetLink) {
+      toast('error', 'Nhập đủ thời gian phỏng vấn và link GG Meet.');
+      return;
+    }
+    await act(
+      () =>
+        api.patch<{ zalo: { ok: boolean; provider: string } | null }>(`/candidates/${candidateId}/decision`, {
+          decision: 'PASS',
+          reason: reason || undefined,
+          phongVanAt,
+          ggMeetLink,
+        }).then((res) => {
+          if (!res.zalo?.ok) toast('error', 'Đã lưu quyết định nhưng không gửi được tin Zalo (kiểm tra cấu hình OA).');
+        }),
+      'Đã lưu quyết định HR & gửi lời mời phỏng vấn qua Zalo.',
+    );
+    setInterviewOpen(false);
+  };
+
+  const resendInterview = () =>
+    act(() => api.post(`/training/${candidateId}/interview-notify`, {}), 'Đã gửi lại lời mời phỏng vấn qua Zalo.');
 
   const notifyZalo = () =>
     act(() => api.post(`/zalo/send`, { candidateId }), 'Đã gửi thông báo Zalo.');
@@ -259,7 +298,7 @@ export default function CandidateDrawer({
             {tab === 'decision' && (
               <div className="space-y-4">
                 <div className="grid grid-cols-3 gap-2.5">
-                  <button className="btn-success !py-3" onClick={() => setConfirm('PASS')}>
+                  <button className="btn-success !py-3" onClick={openInterviewModal}>
                     <CheckCircle2 size={16} /> Đạt
                   </button>
                   <button className="btn-danger !py-3" onClick={() => setConfirm('FAIL')}>
@@ -272,6 +311,22 @@ export default function CandidateDrawer({
                 <Field label="Ghi chú / lý do (hiển thị cho HR khác)">
                   <textarea className="input min-h-[80px]" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="VD: Ứng viên có kinh nghiệm F&B 2 năm..." />
                 </Field>
+                {c.hrDecision === 'PASS' && c.phongVanAt && (
+                  <div className="rounded-xl bg-emerald-50 p-3.5 text-sm space-y-1.5">
+                    <div className="font-bold text-emerald-700">Lịch phỏng vấn đã hẹn</div>
+                    <div className="flex items-center gap-2">
+                      <CalendarDays size={14} className="text-emerald-600" />
+                      <b>{formatDateTime(c.phongVanAt)}</b>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Video size={14} className="text-emerald-600" />
+                      <a className="text-emerald-700 underline break-all" href={c.ggMeetLink ?? '#'} target="_blank" rel="noreferrer">{c.ggMeetLink}</a>
+                    </div>
+                    <button className="btn-secondary !px-2.5 !py-1.5 !text-xs mt-1" onClick={resendInterview}>
+                      <Send size={13} /> Gửi lại lời mời phỏng vấn (Zalo)
+                    </button>
+                  </div>
+                )}
                 {c.hrDecision && (
                   <div className="rounded-xl bg-slate-50 p-3.5 text-sm space-y-1">
                     <div>Quyết định hiện tại: <b>{decisionLabel[c.hrDecision]?.label ?? c.hrDecision}</b> bởi <b>{c.hrUser ?? ''}</b></div>
@@ -423,11 +478,28 @@ export default function CandidateDrawer({
         open={confirm !== null}
         onClose={() => setConfirm(null)}
         title={`Xác nhận ${confirm ?? ''}`}
-        message={c ? `Quyết định ${confirm === 'PASS' ? 'ĐẠT' : confirm === 'FAIL' ? 'LOẠI' : 'CẦN XEM LẠI'} cho ${c.tenUv} (${c.id})? Quyết định sẽ đồng bộ realtime xuống Google Sheet.` : ''}
+        message={c ? `Quyết định ${confirm === 'FAIL' ? 'LOẠI' : 'CẦN XEM LẠI'} cho ${c.tenUv} (${c.id})? Quyết định sẽ đồng bộ realtime xuống Google Sheet.` : ''}
         confirmLabel="Xác nhận"
         danger={confirm === 'FAIL'}
         onConfirm={() => confirm && decide(confirm)}
       />
+
+      <Modal open={interviewOpen} onClose={() => setInterviewOpen(false)} title={`Chấm ĐẠT & hẹn phỏng vấn – ${c?.tenUv ?? ''}`}>
+        <div className="space-y-4">
+          <Field label="Thời gian phỏng vấn">
+            <input type="datetime-local" className="input" value={phongVanAt} onChange={(e) => setPhongVanAt(e.target.value)} />
+          </Field>
+          <Field label="Link Google Meet">
+            <input type="url" className="input" value={ggMeetLink} onChange={(e) => setGgMeetLink(e.target.value)} placeholder="https://meet.google.com/xxx-xxxx-xxx" />
+          </Field>
+          <p className="text-[11px] text-slate-400">
+            Sau khi chấm ĐẠT, hệ thống tự gửi tin Zalo cho ứng viên kèm thời gian phỏng vấn + link GG Meet.
+          </p>
+          <button className="btn-success w-full" onClick={submitInterview}>
+            <Video size={15} /> Xác nhận ĐẠT & gửi lời mời phỏng vấn
+          </button>
+        </div>
+      </Modal>
     </Drawer>
   );
 }

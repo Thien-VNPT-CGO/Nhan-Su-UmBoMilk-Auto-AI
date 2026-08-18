@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BrainCircuit, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Star, TrendingUp } from 'lucide-react';
+import { BrainCircuit, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Star, TrendingUp, Video } from 'lucide-react';
 import { api, ApiError } from '../api/client';
-import { Badge, Skeleton, EmptyState } from '../components/ui';
+import { Badge, Skeleton, EmptyState, Modal, Field } from '../components/ui';
 import { useToast } from '../stores/Toast';
 import { getSocket } from '../api/socket';
 import { formatDateTime } from '../utils/date';
@@ -93,13 +93,43 @@ export default function Scoring() {
     }
   };
 
-  const decide = async (id: string, decision: 'PASS' | 'FAIL' | 'REVIEW') => {
+  const decide = async (id: string, decision: 'PASS' | 'FAIL' | 'REVIEW', phongVanAt?: string, ggMeetLink?: string) => {
     try {
-      await api.patch(`/candidates/${id}/decision`, { decision });
-      toast('success', `Đã ${decision}.`);
+      const res = await api.patch<{ zalo: { ok: boolean; provider: string } | null }>(`/candidates/${id}/decision`, {
+        decision,
+        phongVanAt,
+        ggMeetLink,
+      });
+      toast('success', `Đã ${decision}.${res.zalo?.ok ? '' : ' ⚠ Không gửi được tin Zalo (kiểm tra cấu hình OA).'}`);
       void load();
     } catch (e) {
       toast('error', e instanceof ApiError ? e.message : 'Thất bại.');
+    }
+  };
+
+  const [interviewId, setInterviewId] = useState<string | null>(null);
+  const [phongVanAt, setPhongVanAt] = useState('');
+  const [ggMeetLink, setGgMeetLink] = useState('');
+  const [sending, setSending] = useState(false);
+
+  const openInterview = (id: string) => {
+    setInterviewId(id);
+    setPhongVanAt('');
+    setGgMeetLink('');
+  };
+
+  const submitInterview = async () => {
+    if (!interviewId) return;
+    if (!phongVanAt || !ggMeetLink) {
+      toast('error', 'Nhập đủ thời gian phỏng vấn và link GG Meet.');
+      return;
+    }
+    setSending(true);
+    try {
+      await decide(interviewId, 'PASS', phongVanAt, ggMeetLink);
+      setInterviewId(null);
+    } finally {
+      setSending(false);
     }
   };
 
@@ -207,7 +237,7 @@ export default function Scoring() {
                         </button>
                         {r.aiScoredAt && (
                           <>
-                            <button className="btn-success !px-2.5 !py-1.5" onClick={() => decide(r.id, 'PASS')}><CheckCircle2 size={13} /></button>
+                            <button className="btn-success !px-2.5 !py-1.5" onClick={() => openInterview(r.id)} title="Chấm ĐẠT + hẹn phỏng vấn"><CheckCircle2 size={13} /></button>
                             <button className="btn-danger !px-2.5 !py-1.5" onClick={() => decide(r.id, 'FAIL')}><XCircle size={13} /></button>
                           </>
                         )}
@@ -221,6 +251,23 @@ export default function Scoring() {
           </div>
         </div>
       )}
+
+      <Modal open={!!interviewId} onClose={() => setInterviewId(null)} title={`Chấm ĐẠT & hẹn phỏng vấn – ${rows.find((r) => r.id === interviewId)?.tenUv ?? ''}`}>
+        <div className="space-y-4">
+          <Field label="Thời gian phỏng vấn">
+            <input type="datetime-local" className="input" value={phongVanAt} onChange={(e) => setPhongVanAt(e.target.value)} />
+          </Field>
+          <Field label="Link Google Meet">
+            <input type="url" className="input" value={ggMeetLink} onChange={(e) => setGgMeetLink(e.target.value)} placeholder="https://meet.google.com/xxx-xxxx-xxx" />
+          </Field>
+          <p className="text-[11px] text-slate-400">
+            Sau khi chấm ĐẠT, hệ thống tự gửi tin Zalo cho ứng viên kèm thời gian phỏng vấn + link GG Meet.
+          </p>
+          <button className="btn-success w-full" onClick={submitInterview} disabled={sending}>
+            <Video size={15} /> {sending ? 'Đang gửi...' : 'Xác nhận ĐẠT & gửi lời mời phỏng vấn'}
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

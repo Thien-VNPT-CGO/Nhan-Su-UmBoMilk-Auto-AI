@@ -81,6 +81,9 @@ model Candidate {
   hrReason     String?
   hrDecisionAt DateTime?
 
+  phongVanAt  DateTime? // Thời gian phỏng vấn (HR nhập khi chấm PASS, tự gửi Zalo cho ứng viên)
+  ggMeetLink  String?   // Link Google Meet phỏng vấn online
+
   ngayBatDauTraining DateTime?
   trangThaiTraining  String? // CHUA_THAM_GIA | SAP_BAT_DAU | BAT_DAU | HOAN_THANH | KHONG_DU_NGAY | LOAI
   soNgayDaTraining   Int       @default(0)

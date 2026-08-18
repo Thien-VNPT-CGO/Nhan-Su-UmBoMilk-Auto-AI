@@ -3,7 +3,7 @@ import { nextId } from '../lib/id';
 import { env } from '../config/env';
 import { getSettings } from './SettingsService';
 import { emit } from '../sockets';
-import { formatDate } from '../lib/date';
+import { formatDate, TZ } from '../lib/date';
 import { createHmac, randomBytes } from 'crypto';
 export class ZaloService {
   private pendingStates = new Map<string, number>();
@@ -248,6 +248,41 @@ export class ZaloService {
       c.caLam,
       '',
       'Vui lòng có mặt đúng giờ và thực hiện điểm danh theo hướng dẫn.',
+    ].join('\n');
+
+    const r = await this.sendRaw(c.sdtZalo, content, c.id);
+    return { ok: r.ok, provider: r.provider, messageId: r.messageId };
+  }
+
+  /** Gửi lời mời phỏng vấn (thời gian + link GG Meet) cho ứng viên vừa được HR chấm PASS. */
+  async sendInterviewInvite(candidateId: string): Promise<{ ok: boolean; provider: string; messageId?: string }> {
+    const c = await prisma.candidate.findUnique({ where: { id: candidateId } });
+    if (!c) throw new Error('Không tìm thấy ứng viên');
+    if (!c.phongVanAt) throw new Error('Chưa có thời gian phỏng vấn');
+    if (!c.ggMeetLink) throw new Error('Chưa có link GG Meet');
+
+    const d = c.phongVanAt;
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: TZ,
+      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+    }).formatToParts(d);
+    const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
+    const time = `${get('day')}/${get('month')}/${get('year')} lúc ${get('hour')}:${get('minute')}`;
+
+    const content = [
+      '🐮 UMBO MILK – LỜI MỜI PHỎNG VẤN',
+      '',
+      `Chào ${c.tenUv} ❤️`,
+      '',
+      'Chúc mừng bạn đã vượt qua vòng hồ sơ ứng tuyển!',
+      '',
+      `Thời gian phỏng vấn: ${time}`,
+      `Hình thức: Online qua Google Meet`,
+      `Link phỏng vấn: ${c.ggMeetLink}`,
+      '',
+      `Chi nhánh: ${c.chiNhanh}`,
+      '',
+      'Vui lòng nhắn lại tin này: "có" để xác nhận tham dự nhé.',
     ].join('\n');
 
     const r = await this.sendRaw(c.sdtZalo, content, c.id);

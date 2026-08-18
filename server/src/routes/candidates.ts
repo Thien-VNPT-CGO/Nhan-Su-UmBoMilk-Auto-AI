@@ -11,6 +11,7 @@ import { getSettings, saveSettings } from '../services/SettingsService';
 import { ApiError } from '../lib/errors';
 import { prisma } from '../lib/prisma';
 import { emit } from '../sockets';
+import { zaloService } from '../services/ZaloService';
 
 const router = Router();
 router.use(requireAuth);
@@ -203,19 +204,45 @@ router.post('/:id/score', requireWrite(), async (req: AuthedRequest, res, next) 
 const decisionSchema = z.object({
   decision: z.enum(['PASS', 'FAIL', 'REVIEW']),
   reason: z.string().optional(),
+  phongVanAt: z.string().optional(),
+  ggMeetLink: z.string().optional(),
 });
 
 router.patch('/:id/decision', requireWrite(), async (req: AuthedRequest, res, next) => {
   try {
     const parsed = decisionSchema.safeParse(req.body);
     if (!parsed.success) throw ApiError.badRequest('INVALID_INPUT', 'Dữ liệu không hợp lệ.');
+    const { decision, reason, phongVanAt, ggMeetLink } = parsed.data;
+
+    if (decision === 'PASS' && (!phongVanAt || !ggMeetLink)) {
+      throw ApiError.badRequest('INTERVIEW_REQUIRED', 'Chấm PASS cần nhập thời gian phỏng vấn và link GG Meet.');
+    }
+    let phongVanAtDate: Date | undefined;
+    if (phongVanAt) {
+      phongVanAtDate = new Date(phongVanAt);
+      if (Number.isNaN(phongVanAtDate.getTime())) {
+        throw ApiError.badRequest('INVALID_DATETIME', 'Thời gian phỏng vấn không hợp lệ.');
+      }
+    }
+
     const candidate = await candidateService.makeDecision(
       req.params.id,
       req.user!.username,
-      parsed.data.decision,
-      parsed.data.reason,
+      decision,
+      reason,
+      decision === 'PASS' ? { phongVanAt: phongVanAtDate, ggMeetLink } : undefined,
     );
-    res.json({ success: true, data: candidate });
+
+    let zalo: { ok: boolean; provider: string; messageId?: string } | null = null;
+    if (decision === 'PASS') {
+      try {
+        zalo = await zaloService.sendInterviewInvite(candidate.id);
+      } catch (e) {
+        zalo = { ok: false, provider: 'ERROR' };
+        console.error('Zalo interview invite failed:', e);
+      }
+    }
+    res.json({ success: true, data: candidate, zalo });
   } catch (e) {
     next(e);
   }

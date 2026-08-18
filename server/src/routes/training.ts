@@ -73,4 +73,13 @@ router.post('/:id/zalo-notify', requireWrite(), async (req, res, next) => {
   }
 });
 
+router.post('/:id/interview-notify', requireWrite(), async (req, res, next) => {
+  try {
+    const result = await zaloService.sendInterviewInvite(req.params.id);
+    res.json({ success: true, data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
 export default router;

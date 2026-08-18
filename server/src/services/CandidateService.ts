@@ -389,9 +389,19 @@ export class CandidateService {
     return final;
   }
 
-  async makeDecision(id: string, user: string, decision: 'PASS' | 'FAIL' | 'REVIEW', reason?: string): Promise<Candidate> {
+  async makeDecision(
+    id: string,
+    user: string,
+    decision: 'PASS' | 'FAIL' | 'REVIEW',
+    reason?: string,
+    interview?: { phongVanAt?: Date; ggMeetLink?: string },
+  ): Promise<Candidate> {
     const candidate = await prisma.candidate.findUnique({ where: { id } });
     if (!candidate) throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy ứng viên.');
+
+    if (decision === 'PASS' && (!interview?.phongVanAt || !interview.ggMeetLink)) {
+      throw ApiError.badRequest('INTERVIEW_REQUIRED', 'Chấm PASS cần nhập thời gian phỏng vấn và link GG Meet.');
+    }
 
     const newVersion = candidate.dataVersion + 1;
     const updated = await prisma.candidate.update({
@@ -401,6 +411,8 @@ export class CandidateService {
         hrUser: user,
         hrReason: reason ?? null,
         hrDecisionAt: new Date(),
+        phongVanAt: decision === 'PASS' ? interview!.phongVanAt : candidate.phongVanAt,
+        ggMeetLink: decision === 'PASS' ? interview!.ggMeetLink : candidate.ggMeetLink,
         dataVersion: newVersion,
         updatedBy: user,
       },

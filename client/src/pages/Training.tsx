@@ -1,13 +1,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GraduationCap, CalendarDays, Send, RefreshCw, Briefcase } from 'lucide-react';
+import { GraduationCap, CalendarDays, Send, RefreshCw, Briefcase, Video } from 'lucide-react';
 import { api, ApiError } from '../api/client';
 import { Badge, Skeleton, EmptyState, Modal, Field, ConfirmDialog } from '../components/ui';
 import { useToast } from '../stores/Toast';
 import { getSocket } from '../api/socket';
-import { trainingStatusLabel } from '../utils/format';
+import { cn, trainingStatusLabel } from '../utils/format';
 import { debounce } from '../utils/debounce';
-import { formatDate, dateKey, addDays } from '../utils/date';
+import { formatDate, formatDateTime, dateKey, addDays } from '../utils/date';
 
 interface TrainingRow {
   id: string;
@@ -18,6 +18,8 @@ interface TrainingRow {
   ngayBatDauTraining: string | null;
   trangThaiTraining: string | null;
   soNgayDaTraining: number;
+  phongVanAt: string | null;
+  ggMeetLink: string | null;
   dataVersion: number;
 }
 
@@ -25,11 +27,20 @@ const STATUS_OPTIONS = [
   'CHUA_THAM_GIA', 'SAP_BAT_DAU', 'BAT_DAU', 'HOAN_THANH', 'KHONG_DU_NGAY', 'LOAI', 'NHAN_VIEN_CHINH_THUC',
 ];
 
+const FILTERS = [
+  { key: 'all', label: 'Toàn bộ' },
+  { key: 'waiting', label: 'Chờ phỏng vấn' },
+  { key: 'training', label: 'Đang training' },
+  { key: 'done', label: 'Hoàn thành' },
+  { key: 'need', label: 'Cần xử lý' },
+];
+
 export default function Training() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [rows, setRows] = useState<TrainingRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('all');
   const [edit, setEdit] = useState<TrainingRow | null>(null);
   const [confirmStatus, setConfirmStatus] = useState<{ row: TrainingRow; status: string } | null>(null);
   const [confirmEmployee, setConfirmEmployee] = useState<TrainingRow | null>(null);
@@ -106,6 +117,15 @@ export default function Training() {
     }
   };
 
+  const notifyInterview = async (id: string) => {
+    try {
+      const d = await api.post<{ ok: boolean; provider: string }>(`/training/${id}/interview-notify`, {});
+      toast('success', `Đã gửi lại lời mời phỏng vấn (${d.provider}).`);
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Gửi lời mời phỏng vấn thất bại.');
+    }
+  };
+
   const confirmEmployeeFn = async () => {
     if (!confirmEmployee) return;
     try {
@@ -120,18 +140,27 @@ export default function Training() {
 
   const summary = {
     all: rows.length,
+    waiting: rows.filter((r) => !r.ngayBatDauTraining).length,
     started: rows.filter((r) => ['SAP_BAT_DAU', 'BAT_DAU'].includes(r.trangThaiTraining ?? '')).length,
     done: rows.filter((r) => r.trangThaiTraining === 'HOAN_THANH').length,
     need: rows.filter((r) => ['KHONG_DU_NGAY', 'LOAI'].includes(r.trangThaiTraining ?? '')).length,
   };
 
+  const visible = rows.filter((r) => {
+    if (filter === 'waiting') return !r.ngayBatDauTraining;
+    if (filter === 'training') return ['SAP_BAT_DAU', 'BAT_DAU'].includes(r.trangThaiTraining ?? '');
+    if (filter === 'done') return r.trangThaiTraining === 'HOAN_THANH';
+    if (filter === 'need') return ['KHONG_DU_NGAY', 'LOAI'].includes(r.trangThaiTraining ?? '');
+    return true;
+  });
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-extrabold text-slate-800">Đào tạo 7 ngày</h1>
+          <h1 className="text-xl font-extrabold text-slate-800">Nhân Viên Training</h1>
           <p className="text-sm text-slate-500">
-            {summary.all} nhân sự · {summary.started} đang đào tạo · {summary.done} hoàn thành · {summary.need} cần xử lý
+            {summary.waiting} chờ phỏng vấn · {summary.started} đang training · {summary.done} hoàn thành · {summary.need} cần xử lý
           </p>
         </div>
         <div className="flex gap-2">
@@ -142,10 +171,28 @@ export default function Training() {
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-1.5">
+        {FILTERS.map((f) => (
+          <button
+            key={f.key}
+            className={cn(
+              'px-3 py-1.5 rounded-lg text-xs font-bold transition',
+              filter === f.key ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
+            )}
+            onClick={() => setFilter(f.key)}
+          >
+            {f.label}
+            <span className={cn('ml-1.5 opacity-70', filter === f.key ? 'text-white' : 'text-slate-400')}>
+              {f.key === 'all' ? summary.all : f.key === 'waiting' ? summary.waiting : f.key === 'training' ? summary.started : f.key === 'done' ? summary.done : summary.need}
+            </span>
+          </button>
+        ))}
+      </div>
+
       {loading ? (
         <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-16" />)}</div>
-      ) : rows.length === 0 ? (
-        <div className="card"><EmptyState title="Chưa có nhân sự Training" hint="Duyệt PASS ứng viên để đưa vào Training." /></div>
+      ) : visible.length === 0 ? (
+        <div className="card"><EmptyState title="Chưa có nhân sự Training" hint="Duyệt PASS ứng viên (kèm hẹn phỏng vấn) để đưa vào đây." /></div>
       ) : (
         <div className="card overflow-hidden">
           <div className="overflow-x-auto">
@@ -157,6 +204,7 @@ export default function Training() {
                   <th className="table-th">SĐT</th>
                   <th className="table-th">Chi nhánh</th>
                   <th className="table-th">Ca</th>
+                  <th className="table-th">Lịch phỏng vấn</th>
                   <th className="table-th">Ngày bắt đầu</th>
                   <th className="table-th">Số ngày</th>
                   <th className="table-th">Trạng thái</th>
@@ -164,7 +212,7 @@ export default function Training() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {rows.map((r) => (
+                {visible.map((r) => (
                   <tr key={r.id} className="hover:bg-brand-50/40">
                     <td className="table-td font-mono text-xs font-bold text-brand-600">{r.id}</td>
                     <td className="table-td font-semibold">{r.tenUv}</td>
@@ -174,6 +222,20 @@ export default function Training() {
                       <button className="btn-secondary !px-2 !py-0.5 text-xs" onClick={() => { setEdit(r); setNewShift(r.caLam); }}>
                         {r.caLam}
                       </button>
+                    </td>
+                    <td className="table-td">
+                      {r.phongVanAt ? (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-semibold text-emerald-700">{formatDateTime(r.phongVanAt)}</span>
+                          {r.ggMeetLink && (
+                            <a className="text-[11px] text-sky-600 underline truncate max-w-[180px]" href={r.ggMeetLink} target="_blank" rel="noreferrer">
+                              {r.ggMeetLink}
+                            </a>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400">Chưa hẹn</span>
+                      )}
                     </td>
                     <td className="table-td">
                       <button
@@ -216,7 +278,12 @@ export default function Training() {
                             <Briefcase size={13} /> Nhận việc
                           </button>
                         )}
-                        <button className="btn-secondary !px-2.5 !py-1.5" onClick={() => notify(r.id)} title="Gửi thông báo Zalo">
+                        {r.phongVanAt && !r.ngayBatDauTraining && (
+                          <button className="btn-secondary !px-2.5 !py-1.5" onClick={() => notifyInterview(r.id)} title="Gửi lại lời mời phỏng vấn qua Zalo">
+                            <Video size={13} />
+                          </button>
+                        )}
+                        <button className="btn-secondary !px-2.5 !py-1.5" onClick={() => notify(r.id)} title="Gửi thông báo Training Zalo">
                           <Send size={13} />
                         </button>
                         <button className="btn-secondary !px-2.5 !py-1.5" onClick={() => navigate(`/shifts`)}>

@@ -72,6 +72,8 @@ export class TrainingService {
       ngayBatDauTraining: c.ngayBatDauTraining,
       trangThaiTraining: c.trangThaiTraining,
       soNgayDaTraining: new Set(c.attendanceEvents.map((a) => a.date)).size,
+      phongVanAt: c.phongVanAt,
+      ggMeetLink: c.ggMeetLink,
       dataVersion: c.dataVersion,
       ngayHomNay: dateKey(),
     }));
