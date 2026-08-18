@@ -123,7 +123,9 @@ export class ZaloService {
         if (data.error === 452 || data.error === -201 || data.error === -216) {
           if (attempt === 0) {
             const fresh = await this.refreshAccessToken();
-            if (!fresh) return { ok: false, reason: 'EXPIRED_REFRESH_FAILED' };
+            if (!fresh.ok || !fresh.accessToken) {
+              return { ok: false, reason: `EXPIRED_REFRESH_FAILED: ${fresh.error ?? 'không rõ lý do'}` };
+            }
             token = fresh.accessToken;
             continue;
           }
@@ -141,10 +143,28 @@ export class ZaloService {
     return { ok: false, reason: 'API_ERROR' };
   }
 
-  /** Tự động đổi refresh token lấy access token mới khi token hết hạn (lưu lại settings). */
-  private async refreshAccessToken(): Promise<{ accessToken: string; refreshToken: string } | null> {
+  /** Tự động đổi refresh token lấy access token mới khi token hết hạn (lưu lại settings).
+   *  Refresh token Zalo chỉ dùng được 1 lần → chống gọi song song (2 luồng cùng refresh sẽ hủy nhau). */
+  private refreshInFlight: Promise<{ ok: boolean; accessToken?: string; refreshToken?: string; error?: string }> | null = null;
+
+  private async refreshAccessToken(): Promise<{ ok: boolean; accessToken?: string; refreshToken?: string; error?: string }> {
+    if (this.refreshInFlight) return this.refreshInFlight;
+    this.refreshInFlight = this.doRefresh();
+    try {
+      return await this.refreshInFlight;
+    } finally {
+      this.refreshInFlight = null;
+    }
+  }
+
+  private async doRefresh(): Promise<{ ok: boolean; accessToken?: string; refreshToken?: string; error?: string }> {
     const cfg = await this.getConfig();
-    if (!cfg.refreshToken || !env.zaloAppId || !env.zaloAppSecret) return null;
+    if (!cfg.refreshToken) {
+      return { ok: false, error: 'NO_REFRESH_TOKEN: chưa có refresh token — phải bấm "Kết nối Zalo OA" để cấp mới' };
+    }
+    if (!env.zaloAppId || !env.zaloAppSecret) {
+      return { ok: false, error: 'MISSING_ENV: thiếu ZALO_APP_ID / ZALO_APP_SECRET trên Render (đổi xong phải bấm Deploy lại)' };
+    }
     try {
       const res = await fetch('https://oauth.zaloapp.com/v4/oa/access_token', {
         method: 'POST',
@@ -155,8 +175,11 @@ export class ZaloService {
           refresh_token: cfg.refreshToken,
         }),
       });
-      const data = (await res.json()) as { access_token?: string; refresh_token?: string; error?: number };
-      if (!data.access_token || !data.refresh_token) return null;
+      const data = (await res.json()) as { access_token?: string; refresh_token?: string; error?: number; message?: string };
+      if (!data.access_token || !data.refresh_token) {
+        console.warn('[Zalo] refresh thất bại:', data.error, data.message);
+        return { ok: false, error: `Zalo lỗi ${data.error ?? res.status}: ${data.message ?? 'không rõ'}` };
+      }
       const { saveSettings } = await import('./SettingsService');
       await saveSettings(
         {
@@ -168,9 +191,9 @@ export class ZaloService {
         },
         'zalo-auto-refresh',
       );
-      return { accessToken: data.access_token, refreshToken: data.refresh_token };
-    } catch {
-      return null;
+      return { ok: true, accessToken: data.access_token, refreshToken: data.refresh_token };
+    } catch (e) {
+      return { ok: false, error: `API_ERROR: ${e instanceof Error ? e.message : String(e)}` };
     }
   }
 
@@ -270,7 +293,9 @@ export class ZaloService {
               const tokenDead = data.error === 452 || data.error === -201 || data.error === -216;
               if (tokenDead && attempt === 0) {
                 const fresh = await this.refreshAccessToken();
-                if (!fresh) throw new Error(`Zalo API lỗi: ${data.error} ${data.message ?? ''} (refresh thất bại)`);
+                if (!fresh.ok || !fresh.accessToken) {
+                  throw new Error(`Zalo API lỗi: ${data.error} ${data.message ?? ''} (refresh thất bại: ${fresh.error ?? ''})`);
+                }
                 accessToken = fresh.accessToken;
                 continue;
               }

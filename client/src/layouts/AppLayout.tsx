@@ -108,8 +108,8 @@ function useHealth() {
 const zaloReasonLabel = (reason?: string) =>
   reason === 'NO_TOKEN'
     ? 'Zalo: chưa có token — vào Cài đặt → Zalo → Kết nối Zalo OA'
-    : reason === 'EXPIRED_REFRESH_FAILED'
-      ? 'Zalo: token hết hạn, refresh thất bại — cần ZALO_APP_ID/SECRET trên Render (deploy lại) và kết nối lại'
+    : reason?.startsWith('EXPIRED_REFRESH_FAILED')
+      ? 'Zalo: token hết hạn, refresh thất bại' + (reason.includes(':') ? ` — ${reason.split(':').slice(1).join(':').trim()}` : '')
       : reason === 'VALID_NO_PROOF' || reason === 'VALID'
         ? 'Zalo: token hợp lệ'
         : reason?.startsWith('INVALID')
