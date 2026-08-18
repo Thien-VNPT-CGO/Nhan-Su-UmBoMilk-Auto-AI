@@ -511,7 +511,7 @@ export default function Settings() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">Model</label>
-                  <input className="input" value={s.ai.model} onChange={(e) => patch(['ai', 'model'], e.target.value)} placeholder="gpt-4o-mini" />
+                  <input className="input" value={s.ai.model} onChange={(e) => patch(['ai', 'model'], e.target.value)} placeholder={s.ai.provider === 'gemini' ? 'gemini-2.5-flash' : 'gpt-4o-mini'} />
                 </div>
                 <div>
                   <label className="label">Temperature</label>

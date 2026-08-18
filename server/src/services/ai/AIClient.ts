@@ -138,9 +138,16 @@ class MockProvider implements AIProvider {
   }
 }
 
+// Model dự phòng khi model cấu hình đã bị nhà cung cấp ngừng (vd gemini-1.5-flash hết hạn 09/2025 -> 404):
+// thử lần lượt các model đang hoạt động thay vì báo lỗi treo hệ thống.
+const OPENAI_FALLBACK_MODELS = ['gpt-4o-mini', 'gpt-4.1-mini'];
+const GEMINI_FALLBACK_MODELS = ['gemini-2.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.6-flash'];
+
 class OpenAIProvider implements AIProvider {
   readonly name = 'OPENAI';
-  constructor(private baseUrl: string, private apiKey: string, private model: string) {}
+  constructor(private baseUrl: string, private apiKey: string, private model: string) {
+    this.baseUrl = normalizeOpenAIBaseUrl(baseUrl);
+  }
 
   async ping(): Promise<boolean> {
     try {
@@ -151,40 +158,67 @@ class OpenAIProvider implements AIProvider {
     }
   }
 
+  private async requestChat(
+    messages: { role: string; content: string }[],
+    temperature: number,
+    jsonMode: boolean,
+  ): Promise<string> {
+    const candidates = [...new Set(this.model ? [this.model, ...OPENAI_FALLBACK_MODELS] : OPENAI_FALLBACK_MODELS)];
+    let lastErr: Error | null = null;
+    for (const model of candidates) {
+      const res = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.apiKey}` },
+        body: JSON.stringify({
+          model,
+          temperature,
+          ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
+          messages,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const content = data.choices?.[0]?.message?.content;
+        if (!content) throw new Error('AI không trả kết quả');
+        return String(content).trim();
+      }
+      // 404 = model không tồn tại/đã ngừng -> thử model dự phòng; lỗi khác (401, 429...) báo ngay
+      lastErr = new Error(`AI API lỗi ${res.status} - model '${model}' không khả dụng (${this.baseUrl}/chat/completions). Kiểm tra key & model trong Cài đặt → AI.`);
+      if (res.status !== 404 && res.status !== 400) break;
+    }
+    throw lastErr ?? new Error('AI API lỗi');
+  }
+
   async chat(messages: ChatMessage[]): Promise<string> {
-    const res = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.apiKey}` },
-      body: JSON.stringify({ model: this.model, temperature: 0.5, messages }),
-    });
-    if (!res.ok) throw new Error(`AI API lỗi ${res.status}`);
-    const data = await res.json();
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) throw new Error('AI không trả kết quả');
-    return String(content).trim();
+    return this.requestChat(messages, 0.5, false);
   }
 
   async score(p: Parameters<AIProvider['score']>[0]): Promise<AIClassification> {
-    const res = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.apiKey}` },
-      body: JSON.stringify({
-        model: this.model,
-        temperature: 0.2,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: `Hồ sơ ứng viên:\n${JSON.stringify(p, null, 2)}` },
-        ],
-      }),
-    });
-    if (!res.ok) throw new Error(`AI API lỗi ${res.status}`);
-    const data = await res.json();
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) throw new Error('AI không trả kết quả');
+    const content = await this.requestChat(
+      [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: `Hồ sơ ứng viên:\n${JSON.stringify(p, null, 2)}` },
+      ],
+      0.2,
+      true,
+    );
     const parsed = JSON.parse(content);
     return { ...parsed, provider: 'OPENAI' };
   }
+}
+
+/** Chuẩn hóa baseUrl: bỏ / ở cuối; api.openai.com không có /v1 thì tự thêm (tránh lỗi 404). */
+function normalizeOpenAIBaseUrl(baseUrl: string): string {
+  let url = baseUrl.replace(/\/+$/, '');
+  if (url) {
+    try {
+      const u = new URL(url);
+      if (u.hostname === 'api.openai.com' && !u.pathname.includes('/v1')) url = `${url}/v1`;
+    } catch {
+      // URL lạ (self-host...) giữ nguyên
+    }
+  }
+  return url;
 }
 
 class GeminiProvider implements AIProvider {
@@ -200,39 +234,49 @@ class GeminiProvider implements AIProvider {
     }
   }
 
+  private async generateContents(
+    contents: { role?: string; parts: { text: string }[] }[],
+    temperature: number,
+  ): Promise<string> {
+    const candidates = [...new Set(this.model ? [this.model, ...GEMINI_FALLBACK_MODELS] : GEMINI_FALLBACK_MODELS)];
+    let lastErr: Error | null = null;
+    for (const model of candidates) {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${this.apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents, generationConfig: { temperature } }),
+        },
+      );
+      if (res.ok) {
+        const data = await res.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) throw new Error('Gemini không trả kết quả');
+        return String(text).trim();
+      }
+      // 404/400 = model không tồn tại/đã ngừng -> thử model dự phòng; lỗi khác (401, 429...) báo ngay
+      lastErr = new Error(
+        `Gemini API lỗi ${res.status} - model '${model}' không khả dụng (đã ngừng?). Kiểm tra key & model trong Cài đặt → AI (vd gemini-2.5-flash).`,
+      );
+      if (res.status !== 404 && res.status !== 400) break;
+    }
+    throw lastErr ?? new Error('Gemini API lỗi');
+  }
+
   async chat(messages: ChatMessage[]): Promise<string> {
-    const contents = messages.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents, generationConfig: { temperature: 0.5 } }),
-      },
-    );
-    if (!res.ok) throw new Error(`Gemini API lỗi ${res.status}`);
-    const data = await res.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) throw new Error('Gemini không trả kết quả');
-    return String(text).trim();
+    const contents = messages.map((m) => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    }));
+    return this.generateContents(contents, 0.5);
   }
 
   async score(p: Parameters<AIProvider['score']>[0]): Promise<AIClassification> {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: `${SYSTEM_PROMPT}\n\nHồ sơ ứng viên:\n${JSON.stringify(p, null, 2)}` }] }],
-          generationConfig: { temperature: 0.2 },
-        }),
-      },
+    const text = await this.generateContents(
+      [{ parts: [{ text: `${SYSTEM_PROMPT}\n\nHồ sơ ứng viên:\n${JSON.stringify(p, null, 2)}` }] }],
+      0.2,
     );
-    if (!res.ok) throw new Error(`Gemini API lỗi ${res.status}`);
-    const data = await res.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) throw new Error('Gemini không trả kết quả');
     const cleaned = text.replace(/```json|```/g, '').trim();
     return { ...JSON.parse(cleaned), provider: 'GEMINI' };
   }
@@ -260,7 +304,7 @@ export async function getAIProvider(): Promise<AIProvider> {
     return new OpenAIProvider(cfg.baseUrl || 'https://api.openai.com/v1', cfg.apiKey, cfg.model || 'gpt-4o-mini');
   }
   if (provider === 'gemini') {
-    return new GeminiProvider(cfg.apiKey, cfg.model || 'gemini-1.5-flash');
+    return new GeminiProvider(cfg.apiKey, cfg.model || 'gemini-2.5-flash');
   }
   if (provider === 'openai-compatible') {
     return new OpenAIProvider(cfg.baseUrl, cfg.apiKey, cfg.model || 'gpt-4o-mini');
