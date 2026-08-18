@@ -142,6 +142,8 @@ export default function Settings() {
   }, [load, loadBackups]);
 
   const [branchMeetRows, setBranchMeetRows] = useState<{ name: string; link: string }[]>([]);
+  const [zaloOk, setZaloOk] = useState<boolean | null>(null);
+  const [zaloChecking, setZaloChecking] = useState(false);
 
   useEffect(() => {
     if (data) {
@@ -270,9 +272,6 @@ export default function Settings() {
       toast('error', e instanceof ApiError ? e.message : 'Reset dữ liệu Zalo thất bại.');
     }
   };
-
-  const [zaloOk, setZaloOk] = useState<boolean | null>(null);
-  const [zaloChecking, setZaloChecking] = useState(false);
 
   const checkZalo = async () => {
     setZaloChecking(true);
