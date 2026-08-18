@@ -1,6 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { nextSyncJobId, buildIdempotencyKey } from '../lib/id';
-import { emitSync } from '../sockets';
+import { emitSync, emitSyncSuccess } from '../sockets';
 
 export interface EnqueueInput {
   entity: string;
@@ -17,6 +17,21 @@ export const RETRY_BACKOFF_SECONDS = [2, 5, 15, 30, 60, 120, 300, 600];
 export const MAX_RETRIES = 8;
 
 export class SyncQueueService {
+  // Wake worker ngay khi có job mới (thay vì chờ chu kỳ poll) - do app.ts gán để tránh import vòng.
+  private wakeCallback: (() => void) | null = null;
+
+  setWakeCallback(fn: (() => void) | null): void {
+    this.wakeCallback = fn;
+  }
+
+  private wake(): void {
+    try {
+      this.wakeCallback?.();
+    } catch {
+      // bỏ qua nếu worker chưa sẵn sàng
+    }
+  }
+
   async enqueue(input: EnqueueInput): Promise<{ jobId: string; deduped: boolean }> {
     const key =
       input.idempotencyKey ??
@@ -44,6 +59,7 @@ export class SyncQueueService {
     });
 
     emitSync({ type: 'enqueued', jobId: job.id, status: 'PENDING' });
+    this.wake();
     return { jobId: job.id, deduped: false };
   }
 
@@ -73,7 +89,7 @@ export class SyncQueueService {
     if (job.candidateId) {
       const { emit } = await import('../sockets');
       emit('candidate:sync', { candidateId: job.candidateId, jobId, syncJobRef });
-      emit('sync:success', { jobId, candidateId: job.candidateId });
+      emitSyncSuccess({ jobId, candidateId: job.candidateId });
     }
   }
 

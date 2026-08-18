@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { requireAuth, requireWrite, requireRole, AuthedRequest } from '../middleware/auth';
+import { requireAuth, requireWrite, requireRole, AuthedRequest, branchScope, canAccessBranch } from '../middleware/auth';
 import { candidateService, normalizePhone } from '../services/CandidateService';
 import { dedupService } from '../services/DedupService';
 import { candidateScoringService } from '../services/CandidateScoringService';
@@ -10,6 +10,7 @@ import { getGoogleSheetService } from '../services/GoogleSheetService';
 import { getSettings, saveSettings } from '../services/SettingsService';
 import { ApiError } from '../lib/errors';
 import { prisma } from '../lib/prisma';
+import { emit } from '../sockets';
 
 const router = Router();
 router.use(requireAuth);
@@ -27,7 +28,7 @@ const CANDIDATE_FIELDS: Record<string, { label: string; schema: z.ZodTypeAny }> 
   linkFb: { label: 'LINK_FB', schema: z.string() },
 };
 
-router.get('/', async (req, res, next) => {
+router.get('/', async (req: AuthedRequest, res, next) => {
   try {
     const result = await candidateService.list({
       search: String(req.query.search ?? ''),
@@ -39,6 +40,7 @@ router.get('/', async (req, res, next) => {
       sort: String(req.query.sort ?? 'newest'),
       page: Number(req.query.page) || 1,
       pageSize: Number(req.query.pageSize) || 20,
+      branches: branchScope(req.user),
     });
     res.json({ success: true, data: result });
   } catch (e) {
@@ -73,16 +75,29 @@ router.get('/duplicates', async (_req, res, next) => {
 
 router.post('/duplicates/cleanup', requireRole('ADMIN', 'HR'), async (req: AuthedRequest, res, next) => {
   try {
-    const result = await dedupService.removeDuplicates(req.user!.username);
-    res.json({ success: true, data: result });
+    // Chạy nền: mỗi bản trùng phải xóa dòng Google Sheet (nhiều API call),
+    // chạy đồng bộ trong request sẽ làm web treo hàng chục giây.
+    void dedupService
+      .removeDuplicates(req.user!.username)
+      .then((r) => {
+        if (r.removed > 0) emit('dedup:auto', r);
+      })
+      .catch((e) =>
+        console.warn('[candidates/duplicates/cleanup] background:', e instanceof Error ? e.message : String(e)),
+      );
+    res.json({ success: true, data: { started: true } });
   } catch (e) {
     next(e);
   }
 });
 
-router.get('/:id', async (req, res, next) => {
+router.get('/:id', async (req: AuthedRequest, res, next) => {
   try {
     const candidate = await candidateService.getById(req.params.id);
+    // Phân quyền chi nhánh: user bị giới hạn không xem được hồ sơ chi nhánh khác
+    if (!canAccessBranch(req.user, candidate.chiNhanh)) {
+      throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy ứng viên.');
+    }
     res.json({ success: true, data: candidate });
   } catch (e) {
     next(e);

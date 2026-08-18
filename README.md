@@ -32,10 +32,10 @@ Nhân sự ──► Web (React) ──► Node.js Backend (Express + Socket.IO)
 | Layer | Công nghệ |
 |---|---|
 | Backend | Node.js 20+, Express 4, TypeScript, Prisma ORM, Socket.IO |
-| Database | SQLite (dev) — chuyển PostgreSQL bằng cách đổi `DATABASE_URL` + `prisma db push` |
-| Frontend | React 18, Vite 6, TailwindCSS 3, Recharts |
+| Database | PostgreSQL (production) — `prisma db push` tự chạy khi deploy |
+| Frontend | React 18, Vite 6, TailwindCSS 3, Recharts, PWA (manifest + service worker) |
 | AI | Provider abstraction: `mock` / `openai` / `gemini` / `openai-compatible` |
-| Auth | Session cookie `httpOnly` (DB-backed), rate limit, RBAC (ADMIN / HR / VIEWER) |
+| Auth | Session cookie `httpOnly` (DB-backed), rate limit, RBAC (ADMIN / HR / VIEWER), 2FA TOTP, phân quyền theo chi nhánh (`branchScope`) |
 
 ## Cài đặt & chạy
 
@@ -89,7 +89,38 @@ AI_MODEL=
 
 # Zalo (bỏ trống = không gửi tin)
 ZALO_OA_ACCESS_TOKEN=
+
+# 2FA / Bảo mật (bắt buộc đổi trên production)
+SESSION_SECRET=change-me-in-production
+
+# Monitoring (optional): theo dõi lỗi 5xx trên Sentry
+SENTRY_DSN=
+
+# Sao lưu tự động: chu kỳ ngày (0 = tắt), folder Google Drive (optional)
+BACKUP_AUTO_DAYS=7
+BACKUP_DRIVE_FOLDER=
+
+# Thông báo ngoài (optional): cảnh báo queue nghẽn, lỗi backup...
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
+SLACK_WEBHOOK_URL=
 ```
+
+## Tính năng nâng cấp (v1.0.2)
+
+| Tính năng | Mô tả | Vị trí |
+|---|---|---|
+| **Zalo 2 chiều + AI auto-reply** | Nhận tin nhắn ứng viên (webhook), lưu IN/OUT, AI (OpenAI/Gemini) tự trả lời câu hỏi; nhắn "ĐIỂM DANH" kèm vị trí = điểm danh qua Zalo | Trang Zalo, tab Settings → Zalo |
+| **Báo cáo tháng** | Thống kê tuyển dụng / đào tạo / chấm công / Zalo theo tháng, lọc theo chi nhánh, export CSV (mở đúng tiếng Việt trên Excel) | Trang Báo cáo |
+| **Geofence chấm công** | Bật chấm công theo GPS: tin nhắn Zalo phải kèm tọa độ trong bán kính chi nhánh mới hợp lệ | Settings → Chi nhánh & Geofence |
+| **E-learning** | Khóa học → bài học → quiz kiểm tra cuối bài; chấm điểm tự động, lịch sử làm bài, thông báo khi ứng viên đạt | Trang E-learning |
+| **Thông báo nội bộ** | Bell thông báo realtime (hồ sơ mới, queue nghẽn, backup lỗi...) + đẩy ra Telegram/Slack | Header (chuông), Settings → Thông báo |
+| **PWA** | Cài đặt như app trên điện thoại/desktop, app shell cache, chạy offline cơ bản | `client/public/manifest.webmanifest`, `sw.js` |
+| **Dark mode + VI/EN** | Giao diện tối/sáng, đổi ngôn ngữ Việt/Anh (lưu theo trình duyệt) | Nút mặt trăng / ngôn ngữ trên header |
+| **2FA + đổi mật khẩu** | TOTP 6 số (Google Authenticator/Authy) khi đăng nhập, bật/tắt trong Settings, đổi mật khẩu phải kèm mã 2FA | Settings → Bảo mật |
+| **Backup tự động** | Sao lưu JSON toàn bộ dữ liệu lúc boot + mỗi `BACKUP_AUTO_DAYS`, upload Google Drive, download + restore (transaction, không đụng user/settings) | Settings → Sao lưu |
+| **Monitoring** | Healthcheck mở rộng (`queueAgeMs`, `lastSyncAt`), cảnh báo job đồng bộ mắc kẹt, lỗi 5xx → Sentry | `/api/settings/health`, SyncWorker |
+| **Phân quyền chi nhánh** | ADMIN gán `branchScope` cho từng tài khoản → HR/VIEWER chỉ thấy ứng viên + dashboard + báo cáo của chi nhánh mình | Settings → Tài khoản |
 
 ### Google Sheets (khi bật thật)
 
@@ -228,4 +259,4 @@ Code đã sẵn sàng deploy: PostgreSQL + tự tạo tài khoản khi DB trốn
 - Server tự phục vụ web UI (thư mục `client/dist`) — mọi thứ dùng chung 1 URL.
 - Webhook Google Form/Apps Script phải trỏ URL public của server (không phải localhost).
 - `DEMO_MODE` tắt khi đã liên kết Google Sheet thật qua Cài đặt → Google Sheet.
-- Chạy thử cục bộ với Postgres: `docker compose up -d` → sửa `server/.env` `DATABASE_URL` → `npm run db:push` → `npm run dev`.
+- Chạy thử cục bộ với Postgres: sửa `server/.env` `DATABASE_URL` → `npm run db:push` → `npm run dev`.

@@ -9,6 +9,8 @@ import Training from './pages/Training';
 import Shifts from './pages/Shifts';
 import Attendance from './pages/Attendance';
 import Zalo from './pages/Zalo';
+import Reports from './pages/Reports';
+import ELearning from './pages/ELearning';
 import SyncCenter from './pages/SyncCenter';
 import AuditLog from './pages/AuditLog';
 import Settings from './pages/Settings';
@@ -49,6 +51,8 @@ export default function App() {
           <Route path="shifts" element={<Shifts />} />
           <Route path="attendance" element={<Attendance />} />
           <Route path="zalo" element={<Zalo />} />
+          <Route path="reports" element={<Reports />} />
+          <Route path="elearning" element={<ELearning />} />
           <Route path="sync" element={<SyncCenter />} />
           <Route path="audit" element={<AuditLog />} />
           <Route path="settings" element={<Settings />} />

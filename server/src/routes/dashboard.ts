@@ -1,14 +1,14 @@
 import { Router } from 'express';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth, AuthedRequest, branchScope } from '../middleware/auth';
 import { dashboardService } from '../services/DashboardService';
 import { syncQueue } from '../services/SyncQueueService';
 
 const router = Router();
 router.use(requireAuth);
 
-router.get('/', async (_req, res, next) => {
+router.get('/', async (req: AuthedRequest, res, next) => {
   try {
-    const overview = await dashboardService.overview();
+    const overview = await dashboardService.overview(branchScope(req.user));
     const shifts = await dashboardService.shiftsSummary();
     const syncCounts = await syncQueue.counts();
     res.json({ success: true, data: { overview, shifts, syncCounts } });

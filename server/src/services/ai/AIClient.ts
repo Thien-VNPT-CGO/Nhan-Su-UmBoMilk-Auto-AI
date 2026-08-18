@@ -12,12 +12,19 @@ export interface AIClassification {
   provider: string;
 }
 
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
 export interface AIProvider {
   readonly name: string;
   score(candidateProfile: {
     tenUv: string; namSinh: string; queQuan: string; sdtZalo: string;
     trinhDo: string; kinhNghiem: string; xuLy: string; linkFb: string;
   }): Promise<AIClassification>;
+  /** Trò chuyện tự do — dùng cho Zalo auto-reply, chatbot hỗ trợ HR... */
+  chat(messages: ChatMessage[]): Promise<string>;
   ping(): Promise<boolean>;
 }
 
@@ -26,6 +33,34 @@ class MockProvider implements AIProvider {
 
   async ping(): Promise<boolean> {
     return true;
+  }
+
+  /** Trả lời theo quy tắc (không cần API key) cho câu hỏi thường gặp của ứng viên. */
+  async chat(messages: ChatMessage[]): Promise<string> {
+    const last = [...messages].reverse().find((m) => m.role === 'user');
+    const q = (last?.content ?? '').toLowerCase();
+    if (/(điểm danh|checkin|chấm công)/.test(q)) {
+      return 'Bạn chỉ cần nhắn: "điểm danh" đến OA UMBO MILK trong khung giờ cho phép (SÁNG 06:45–07:05, CHIỀU 11:45–12:05, TỐI 17:45–18:05). Nếu đang ở gần chi nhánh, hãy gửi kèm vị trí (GPS) để xác nhận địa điểm.';
+    }
+    if (/(giờ làm|giờ làm việc|khung giờ|ca làm|thời gian)/.test(q)) {
+      return 'UMBO MILK có 3 ca: SÁNG 06:45–07:05 bắt đầu, CHIỀU 11:45–12:05, TỐI 17:45–18:05. Lịch ca cụ thể của bạn do quản lý chi nhánh sắp xếp và thông báo qua Zalo.';
+    }
+    if (/(lương|thu nhập|bao nhiêu tiền|hoa hồng)/.test(q)) {
+      return 'Vui lòng liên hệ quản lý chi nhánh nơi bạn ứng tuyển để được tư vấn chính xác về lương, thưởng và hoa hồng theo chính sách từng thời kỳ của UMBO MILK.';
+    }
+    if (/(chi nhánh|địa chỉ|ở đâu|chỗ làm)/.test(q)) {
+      return 'Bạn có thể xem địa chỉ chi nhánh đã đăng ký trong thông báo Training gửi qua Zalo, hoặc liên hệ quản lý chi nhánh để được hướng dẫn đường đi.';
+    }
+    if (/(training|đào tạo|học việc|thử việc)/.test(q)) {
+      return 'Chương trình đào tạo của UMBO MILK kéo dài 7 ngày làm việc. Bạn sẽ nhận thông báo lịch qua Zalo và phải điểm danh đúng khung giờ mỗi ca. Hoàn thành đủ 7 ngày sẽ được công nhận.';
+    }
+    if (/(nghỉ|xin phép|vắng|off)/.test(q)) {
+      return 'Nếu bạn cần nghỉ, hãy báo trước cho quản lý chi nhánh và sắp xếp đổi ca. Nhớ thông báo sớm để không bị tính là vắng không phép.';
+    }
+    if (/(chào|hello|hi|alo)/.test(q)) {
+      return 'Chào bạn! 👋 Mình là trợ lý tuyển dụng của UMBO MILK. Bạn cần hỗ trợ gì: thông tin điểm danh, giờ làm, đào tạo hay lương thưởng?';
+    }
+    return 'Cảm ơn bạn đã liên hệ UMBO MILK! 🐮 Để được hỗ trợ nhanh nhất, bạn có thể nhắn rõ câu hỏi (ví dụ: "điểm danh", "giờ làm", "lương") hoặc liên hệ trực tiếp quản lý chi nhánh của bạn.';
   }
 
   async score(p: {
@@ -116,6 +151,19 @@ class OpenAIProvider implements AIProvider {
     }
   }
 
+  async chat(messages: ChatMessage[]): Promise<string> {
+    const res = await fetch(`${this.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.apiKey}` },
+      body: JSON.stringify({ model: this.model, temperature: 0.5, messages }),
+    });
+    if (!res.ok) throw new Error(`AI API lỗi ${res.status}`);
+    const data = await res.json();
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) throw new Error('AI không trả kết quả');
+    return String(content).trim();
+  }
+
   async score(p: Parameters<AIProvider['score']>[0]): Promise<AIClassification> {
     const res = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
@@ -150,6 +198,23 @@ class GeminiProvider implements AIProvider {
     } catch {
       return false;
     }
+  }
+
+  async chat(messages: ChatMessage[]): Promise<string> {
+    const contents = messages.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents, generationConfig: { temperature: 0.5 } }),
+      },
+    );
+    if (!res.ok) throw new Error(`Gemini API lỗi ${res.status}`);
+    const data = await res.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) throw new Error('Gemini không trả kết quả');
+    return String(text).trim();
   }
 
   async score(p: Parameters<AIProvider['score']>[0]): Promise<AIClassification> {
@@ -201,4 +266,13 @@ export async function getAIProvider(): Promise<AIProvider> {
     return new OpenAIProvider(cfg.baseUrl, cfg.apiKey, cfg.model || 'gpt-4o-mini');
   }
   return new MockProvider();
+}
+
+/** Tiện ích: chat 1 lượt với hệ thống (tự lấy provider theo settings). */
+export async function chatWithAI(system: string, userText: string): Promise<string> {
+  const provider = await getAIProvider();
+  return provider.chat([
+    { role: 'system', content: system },
+    { role: 'user', content: userText },
+  ]);
 }

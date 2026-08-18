@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { requireAuth, requireWrite } from '../middleware/auth';
+import { requireAuth, requireWrite, requireRole, AuthedRequest } from '../middleware/auth';
 import { zaloService } from '../services/ZaloService';
 import { saveSettings } from '../services/SettingsService';
 import { prisma } from '../lib/prisma';
@@ -65,6 +65,20 @@ router.post('/send', requireWrite(), async (req, res, next) => {
     if (!parsed.success) throw ApiError.badRequest('INVALID_INPUT', 'Dữ liệu không hợp lệ.');
     const result = await zaloService.sendTrainingNotice(parsed.data.candidateId);
     res.json({ success: true, data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/** Bật/tắt AI auto-reply cho tin nhắn ứng viên gửi vào OA. */
+const autoReplySchema = z.object({ enabled: z.boolean() });
+
+router.post('/auto-reply', requireRole('ADMIN'), async (req: AuthedRequest, res, next) => {
+  try {
+    const parsed = autoReplySchema.safeParse(req.body);
+    if (!parsed.success) throw ApiError.badRequest('INVALID_INPUT', 'Dữ liệu không hợp lệ.');
+    await saveSettings({ zalo: { autoReply: parsed.data.enabled } }, req.user!.username);
+    res.json({ success: true, data: { autoReply: parsed.data.enabled } });
   } catch (e) {
     next(e);
   }

@@ -6,7 +6,8 @@ import { dedupService } from '../services/DedupService';
 import { candidateScoringService } from '../services/CandidateScoringService';
 import { getSettings } from '../services/SettingsService';
 import { zaloService } from '../services/ZaloService';
-import { emit } from '../sockets';
+import { notificationService } from '../services/NotificationService';
+import { emit, emitSyncSuccess } from '../sockets';
 import { nextId } from '../lib/id';
 import { dateKey } from '../lib/date';
 import { TRAINING_STATUS } from '../lib/constants';
@@ -18,12 +19,19 @@ const ENDED_TRAINING_STATUSES = [
   TRAINING_STATUS.NHAN_VIEN_CHINH_THUC,
 ];
 
+/** Giữ bảng SyncJob gọn: job hoàn tất >7 ngày, job lỗi >30 ngày, job mắc kẹt >1 ngày bị xóa.
+ *  Trước đây bảng phình vô hạn -> counts()/list()/_count subquery ngày càng chậm -> web ì. */
+const SYNCED_KEEP_DAYS = 7;
+const FAILED_KEEP_DAYS = 30;
+const STALE_JOB_AGE_MS = 24 * 60 * 60 * 1000;
+
 export class SyncWorker {
   private running = false;
   private intervalMs: number;
   private timer: NodeJS.Timeout | null = null;
   private formTimer: NodeJS.Timeout | null = null;
   private dedupTimer: NodeJS.Timeout | null = null;
+  private pruneTimer: NodeJS.Timeout | null = null;
   private provisioned = false;
   private importingForm = false;
   private runningDedup = false;
@@ -31,9 +39,29 @@ export class SyncWorker {
   private scoreTimer: NodeJS.Timeout | null = null;
   private noticeTimer: NodeJS.Timeout | null = null;
   private runningNotices = false;
+  private idleTimer: NodeJS.Timeout | null = null;
+  private draining = false;
+  private alertTimer: NodeJS.Timeout | null = null;
+  private runningAlert = false;
+  private lastQueueAlertAt = 0;
 
   constructor(intervalMs = 3000) {
     this.intervalMs = intervalMs;
+  }
+
+  /** Đánh thức worker ngay khi có job mới (giảm poll DB khi rảnh, job vẫn xử lý tức thì). */
+  wake(): void {
+    if (!this.running) return;
+    if (this.idleTimer) {
+      clearTimeout(this.idleTimer);
+      this.idleTimer = null;
+    }
+    if (this.draining) return;
+    this.draining = true;
+    setTimeout(() => {
+      this.draining = false;
+      void this.tick();
+    }, 50);
   }
 
   start(): void {
@@ -54,11 +82,19 @@ export class SyncWorker {
     this.noticeTimer = setInterval(() => {
       void this.tickTrainingNotices();
     }, 60_000);
+    this.pruneTimer = setInterval(() => {
+      void this.tickPrune();
+    }, 60 * 60_000);
+    this.alertTimer = setInterval(() => {
+      void this.tickQueueAlert();
+    }, 5 * 60_000);
     void this.tick();
     void this.tickFormImport();
     void this.tickAutoDedup();
     void this.tickAutoScore();
     void this.tickTrainingNotices();
+    void this.tickPrune();
+    void this.tickQueueAlert();
     console.log('[SyncWorker] started');
   }
 
@@ -74,6 +110,71 @@ export class SyncWorker {
     this.scoreTimer = null;
     if (this.noticeTimer) clearInterval(this.noticeTimer);
     this.noticeTimer = null;
+    if (this.pruneTimer) clearInterval(this.pruneTimer);
+    this.pruneTimer = null;
+    if (this.alertTimer) clearInterval(this.alertTimer);
+    this.alertTimer = null;
+    if (this.idleTimer) clearTimeout(this.idleTimer);
+    this.idleTimer = null;
+  }
+
+  /**
+   * Monitoring: nếu job đồng bộ mắc kẹt quá X phút (settings.notifications.queueAlertMinutes)
+   * → thông báo nội bộ + Telegram/Slack. Cảnh báo lặp tối đa 1 lần/30 phút để không spam.
+   */
+  private async tickQueueAlert(): Promise<void> {
+    if (!this.running || this.runningAlert) return;
+    this.runningAlert = true;
+    try {
+      const settings = await getSettings();
+      const minutes = settings.notifications?.queueAlertMinutes ?? 15;
+      const oldest = await prisma.syncJob.findFirst({
+        where: { status: { in: ['PENDING', 'RETRY', 'PROCESSING'] } },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, createdAt: true },
+      });
+      if (!oldest) return;
+      const ageMs = Date.now() - oldest.createdAt.getTime();
+      if (ageMs < minutes * 60_000) return;
+      if (Date.now() - this.lastQueueAlertAt < 30 * 60_000) return;
+      this.lastQueueAlertAt = Date.now();
+      const stuckCount = await prisma.syncJob.count({
+        where: { status: { in: ['PENDING', 'RETRY', 'PROCESSING'] } },
+      });
+      await notificationService.notify({
+        role: 'ADMIN',
+        title: 'Cảnh báo: đồng bộ bị nghẽn',
+        body: `Job ${oldest.id} mắc kẹt ${Math.round(ageMs / 60000)} phút. Tổng ${stuckCount} job đang chờ. Kiểm tra Google Sheets quota/token.`,
+        type: 'WARNING',
+        link: '/sync',
+      });
+      console.warn(`[SyncWorker] queue alert: ${oldest.id} stuck ${Math.round(ageMs / 60000)} phút`);
+    } catch (e) {
+      console.warn('[SyncWorker] queue alert:', e instanceof Error ? e.message : String(e));
+    } finally {
+      this.runningAlert = false;
+    }
+  }
+
+  /** Dọn bảng SyncJob cũ định kỳ (1h/lần) - giữ truy vấn nhanh, DB gọn. */
+  private async tickPrune(): Promise<void> {
+    try {
+      const syncedCutoff = new Date(Date.now() - SYNCED_KEEP_DAYS * 24 * 60 * 60 * 1000);
+      const failedCutoff = new Date(Date.now() - FAILED_KEEP_DAYS * 24 * 60 * 60 * 1000);
+      const staleCutoff = new Date(Date.now() - STALE_JOB_AGE_MS);
+      const r = await prisma.syncJob.deleteMany({
+        where: {
+          OR: [
+            { status: 'SYNCED', createdAt: { lt: syncedCutoff } },
+            { status: { in: ['RETRY', 'FAILED', 'CONFLICT'] }, createdAt: { lt: failedCutoff } },
+            { status: { in: ['PENDING', 'PROCESSING'] }, createdAt: { lt: staleCutoff } },
+          ],
+        },
+      });
+      if (r.count > 0) console.log(`[SyncWorker] prune: đã xóa ${r.count} job cũ`);
+    } catch (e) {
+      console.warn('[SyncWorker] prune:', e instanceof Error ? e.message : String(e));
+    }
   }
 
   /** AI tự chấm điểm hồ sơ vừa đăng ký: chạy mỗi 60s, tối đa 10 hồ sơ/lượt. */
@@ -226,18 +327,25 @@ export class SyncWorker {
     try {
       const claimed = await syncQueue.claimNext();
       if (!claimed) {
-        // Không có việc → đợi 1s trước khi poll lại (giảm tải DB rất nhiều)
-        setTimeout(() => void this.tick(), 1000);
+        // Rảnh -> poll chậm 5s thay vì 1s (giảm ~5x query DB khi không có việc).
+        // Có job mới sẽ được wake() đánh thức ngay lập tức.
+        this.idleTimer = setTimeout(() => {
+          this.idleTimer = null;
+          void this.tick();
+        }, 5000);
         return;
       }
       void this.provisionIfNeeded();
       // Xử lý TUẦN TỰ (await) — 2 job cùng lúc sẽ gây append trùng dòng vào Google Sheet
       await this.process(claimed.jobId);
-      // process more jobs in the same tick (small batches)
-      setTimeout(() => void this.tick(), 50);
+      // Nghỉ nhịp 250ms giữa các job để DB/web không bị nghẽn khi xả hàng loạt job
+      setTimeout(() => void this.tick(), 250);
     } catch (e) {
       console.warn('[SyncWorker] tick lỗi:', e instanceof Error ? e.message : String(e));
-      setTimeout(() => void this.tick(), 5000);
+      this.idleTimer = setTimeout(() => {
+        this.idleTimer = null;
+        void this.tick();
+      }, 5000);
     }
   }
 
@@ -269,7 +377,7 @@ export class SyncWorker {
         where: { id: job.id },
         data: { status: 'SYNCED', lastError: null, nextAttemptAt: null },
       });
-      emit('sync:success', { jobId, demo: true });
+      emitSyncSuccess({ jobId, demo: true });
       return;
     }
 
@@ -283,7 +391,7 @@ export class SyncWorker {
           where: { id: job.id },
           data: { status: 'SYNCED', lastError: 'Bỏ qua: ứng viên đã bị xóa', nextAttemptAt: null },
         });
-        emit('sync:success', { jobId, skipped: true });
+        emitSyncSuccess({ jobId, skipped: true });
         return;
       }
 
@@ -295,7 +403,7 @@ export class SyncWorker {
               where: { id: job.id },
               data: { status: 'SYNCED', lastError: null, nextAttemptAt: null },
             });
-            emit('sync:success', { jobId });
+            emitSyncSuccess({ jobId });
             return;
           }
           if (!candidate) throw new Error(`Candidate ${job.entityId} không tồn tại`);

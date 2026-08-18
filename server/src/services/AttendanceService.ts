@@ -17,6 +17,7 @@ export class AttendanceService {
     method: string;
     user?: string;
     checkinAt?: Date;
+    location?: { lat: number; lng: number } | null;
   }): Promise<{ valid: boolean; reason: string; event: unknown }> {
     const at = input.checkinAt ?? new Date();
     const date = dateKey(at);
@@ -69,6 +70,30 @@ export class AttendanceService {
       }
     }
 
+    // 3b. Geofence: checkin qua Zalo kèm GPS phải nằm trong bán kính chi nhánh
+    const branchCfg = (settings.branches ?? []).find((b) => b.name === candidate.chiNhanh);
+    if (
+      settings.attendance.geofenceEnabled &&
+      input.location?.lat != null &&
+      input.location.lng != null
+    ) {
+      if (!branchCfg || branchCfg.radiusMeters <= 0) {
+        valid = false;
+        reasons.push('CHUA_CAP_NHAT_TOA_DO_CHI_NHANH');
+      } else {
+        const distance = haversineMeters(
+          input.location.lat,
+          input.location.lng,
+          branchCfg.lat,
+          branchCfg.lng,
+        );
+        if (distance > branchCfg.radiusMeters) {
+          valid = false;
+          reasons.push('SAI_VI_TRI');
+        }
+      }
+    }
+
     let trainingDay: number | null = null;
     if (valid && candidate.ngayBatDauTraining) {
       const start = dateKey(candidate.ngayBatDauTraining);
@@ -91,7 +116,14 @@ export class AttendanceService {
       // lần trước checkin sai giờ -> ghi đè để thử lại đúng giờ
       const updated = await prisma.attendanceEvent.update({
         where: { id: existing.id },
-        data: { checkinAt: at, valid, reason: reasons.join('|') || null, trainingDay },
+        data: {
+          checkinAt: at,
+          valid,
+          reason: reasons.join('|') || null,
+          trainingDay,
+          lat: input.location?.lat ?? null,
+          lng: input.location?.lng ?? null,
+        },
       });
       if (valid) {
         await syncQueue.enqueue({
@@ -120,6 +152,8 @@ export class AttendanceService {
         valid,
         reason: reasons.join('|') || null,
         trainingDay,
+        lat: input.location?.lat ?? null,
+        lng: input.location?.lng ?? null,
       },
     });
 
@@ -171,6 +205,37 @@ function inferShift(at: Date): string {
   if (h >= 11 && h < 16) return 'CHIEU';
   if (h >= 16 && h < 23) return 'TOI';
   return 'SANG';
+}
+
+/** Khoảng cách Haversine giữa 2 điểm GPS (mét). */
+export function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+/** Giải thích lý do không hợp lệ thành tin nhắn tiếng Việt cho ứng viên qua Zalo. */
+export function checkinReasonText(valid: boolean, reason: string, tenUv: string): string {
+  if (valid) {
+    return `✅ ${tenUv}, bạn đã điểm danh thành công! Chúc bạn làm việc vui vẻ. 🐮`;
+  }
+  const map: Record<string, string> = {
+    KHONG_TIM_THAY_UNG_VIEN: 'Hệ thống chưa tìm thấy số điện thoại của bạn. Vui lòng liên hệ quản lý.',
+    KHONG_TRONG_TRAINING: 'Bạn chưa được duyệt vào chương trình đào tạo.',
+    KHONG_CO_LICH_CA_NAY: 'Hôm nay bạn không có ca làm trong hệ thống. Vui lòng liên hệ quản lý.',
+    SAI_KHUNG_GIO: 'Điểm danh ngoài khung giờ cho phép (SÁNG 06:45–07:05, CHIỀU 11:45–12:05, TỐI 17:45–18:05).',
+    DIEM_DANH_TRUNG: 'Bạn đã điểm danh ca này rồi. Không cần điểm danh lại.',
+    SAI_VI_TRI: 'Vị trí hiện tại không nằm trong bán kính chi nhánh. Vui lòng đến đúng chi nhánh và gửi lại vị trí.',
+    CHUA_CAP_NHAT_TOA_DO_CHI_NHANH: 'Chi nhánh của bạn chưa được cài đặt tọa độ GPS. Vui lòng liên hệ quản lý.',
+    VANG: 'Ca này đã bị đánh dấu vắng mặt (quá giờ điểm danh).',
+  };
+  const first = reason.split('|')[0];
+  return `❌ ${map[first] ?? 'Điểm danh không thành công.'}`;
 }
 
 export const attendanceService = new AttendanceService();

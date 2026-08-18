@@ -26,6 +26,10 @@ import settingsRoutes from './routes/settings';
 import conflictRoutes from './routes/conflicts';
 import adminRoutes from './routes/admin';
 import webhookRoutes from './routes/webhooks';
+import reportRoutes from './routes/reports';
+import elearningRoutes from './routes/elearning';
+import notificationRoutes from './routes/notifications';
+import backupRoutes from './routes/backup';
 
 export function createApp() {
   const app = express();
@@ -72,6 +76,10 @@ export function createApp() {
   app.use('/api/settings', apiLimiter, settingsRoutes);
   app.use('/api/conflicts', apiLimiter, conflictRoutes);
   app.use('/api/admin', apiLimiter, adminRoutes);
+  app.use('/api/reports', apiLimiter, reportRoutes);
+  app.use('/api/elearning', apiLimiter, elearningRoutes);
+  app.use('/api/notifications', apiLimiter, notificationRoutes);
+  app.use('/api/backup', apiLimiter, backupRoutes);
   app.use('/api/webhooks', webhookRoutes);
 
   // ===== Serve frontend (client/dist) - 1 URL duy nhất cho production =====
@@ -117,7 +125,24 @@ export async function startSystem(server: http.Server) {
   initSocket(server);
   syncWorker.start();
   reconciliationService.start(15 * 60 * 1000);
-  trainingRefreshTimer = setInterval(() => void trainingService.refreshAll().catch(() => undefined), 60 * 1000);
+  // 5 phút thay vì 60s: refreshAll giờ là batch 2 query, nhưng vẫn không cần chạy dày
+  trainingRefreshTimer = setInterval(() => void trainingService.refreshAll().catch(() => undefined), 5 * 60 * 1000);
+  // Sao lưu tự động định kỳ (BACKUP_AUTO_DAYS, mặc định 7 ngày) — chạy ngay khi khởi động + mỗi chu kỳ
+  startBackupTimer();
+
+  // Có job mới -> đánh thức worker ngay (không cần poll DB liên tục khi rảnh)
+  const { syncQueue } = await import('./services/SyncQueueService');
+  syncQueue.setWakeCallback(() => syncWorker.wake());
+}
+
+let backupTimer: NodeJS.Timeout | null = null;
+
+function startBackupTimer(): void {
+  const { backupService } = require('./services/BackupService');
+  void backupService.createBackup('AUTO', 'boot').catch(() => undefined);
+  backupTimer = setInterval(() => {
+    void backupService.createBackup('AUTO', 'auto-timer').catch(() => undefined);
+  }, Math.max(env.backupAutoDays, 1) * 24 * 60 * 60 * 1000);
 }
 
 /** Gán xepLoai cho các hồ sơ đã chấm điểm từ trước (khi chưa có cột xepLoai) — idempotent, chạy 1 lần khi boot. */
@@ -160,6 +185,9 @@ export async function shutdownSystem() {
   syncWorker.stop();
   reconciliationService.stop();
   if (trainingRefreshTimer) clearInterval(trainingRefreshTimer);
+  trainingRefreshTimer = null;
+  if (backupTimer) clearInterval(backupTimer);
+  backupTimer = null;
   const { prisma } = await import('./lib/prisma');
   await prisma.$disconnect();
 }

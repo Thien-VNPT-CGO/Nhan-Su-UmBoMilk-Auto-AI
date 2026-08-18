@@ -37,6 +37,12 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
   }
   const message = err instanceof Error ? err.message : 'Lỗi hệ thống.';
   const status = /JSON/.test(message) ? 400 : 500;
+  // Monitoring: lỗi 5xx đẩy lên Sentry (nếu SENTRY_DSN được cấu hình)
+  if (status === 500) {
+    void import('../lib/sentry')
+      .then(({ captureError }) => captureError(err, { requestId, url: req.originalUrl }))
+      .catch(() => undefined);
+  }
   res.status(status).json({
     success: false,
     code: status === 400 ? 'INVALID_REQUEST' : 'INTERNAL_ERROR',

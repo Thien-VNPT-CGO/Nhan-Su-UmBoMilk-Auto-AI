@@ -97,6 +97,16 @@ export const DEFAULT_SETTINGS = {
     },
     trainingDaysRequired: 7,
     trainingDeadlineDays: 14,
+    // Chấm công theo địa điểm: bật thì checkin qua Zalo phải kèm GPS trong bán kính chi nhánh
+    geofenceEnabled: false,
+  },
+  branches: [] as { name: string; lat: number; lng: number; radiusMeters: number }[],
+  notifications: {
+    telegramBotToken: '',
+    telegramChatId: '',
+    slackWebhookUrl: '',
+    // Cảnh báo khi job đồng bộ mắc kẹt quá N phút
+    queueAlertMinutes: 15,
   },
   ai: {
     provider: 'mock',
@@ -120,6 +130,8 @@ export const DEFAULT_SETTINGS = {
     oaId: '',
     accessToken: '',
     refreshToken: '',
+    // AI tự trả lời tin nhắn của ứng viên gửi đến OA (trừ lệnh điểm danh)
+    autoReply: true,
   },
   autoDedup: {
     enabled: true,

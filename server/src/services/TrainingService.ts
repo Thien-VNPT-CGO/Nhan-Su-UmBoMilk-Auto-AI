@@ -118,15 +118,72 @@ export class TrainingService {
     await this.refreshTrainingStatus(candidateId);
   }
 
+  /** Tự cập nhật trạng thái training hàng loạt: 2 query tổng thay vì N+1 query/candidate.
+   *  Chạy mỗi 5 phút (trước là mỗi 60s, mỗi lần N query DB -> web ì khi có nhiều nhân sự). */
   async refreshAll(): Promise<number> {
     const candidates = await prisma.candidate.findMany({
-      where: { ngayBatDauTraining: { not: null } },
-      select: { id: true },
+      where: {
+        ngayBatDauTraining: { not: null },
+        trangThaiTraining: { notIn: [TRAINING_STATUS.LOAI, TRAINING_STATUS.NHAN_VIEN_CHINH_THUC] },
+      },
+      select: {
+        id: true,
+        ngayBatDauTraining: true,
+        trangThaiTraining: true,
+        soNgayDaTraining: true,
+        dataVersion: true,
+      },
     });
-    for (const c of candidates) {
-      await this.refreshTrainingStatus(c.id);
+    if (candidates.length === 0) return 0;
+
+    const attended = await prisma.attendanceEvent.findMany({
+      where: { candidateId: { in: candidates.map((c) => c.id) }, valid: true },
+      select: { candidateId: true, date: true },
+    });
+    const daysByCandidate = new Map<string, Set<string>>();
+    for (const a of attended) {
+      let set = daysByCandidate.get(a.candidateId);
+      if (!set) {
+        set = new Set();
+        daysByCandidate.set(a.candidateId, set);
+      }
+      set.add(a.date);
     }
-    return candidates.length;
+
+    const today = dateKey();
+    let changed = 0;
+    for (const c of candidates) {
+      if (!c.ngayBatDauTraining) continue;
+      const soNgay = daysByCandidate.get(c.id)?.size ?? 0;
+      const startKey = dateKey(c.ngayBatDauTraining);
+      const deadlineKey = dateKey(addDays(c.ngayBatDauTraining, TRAINING_DEADLINE_DAYS));
+      let status = c.trangThaiTraining;
+      if (soNgay >= TRAINING_DAYS_REQUIRED) {
+        status = TRAINING_STATUS.HOAN_THANH;
+      } else if (today >= startKey && today < deadlineKey) {
+        status = TRAINING_STATUS.BAT_DAU;
+      } else if (today < startKey) {
+        status = TRAINING_STATUS.SAP_BAT_DAU;
+      } else if (today >= deadlineKey) {
+        status = TRAINING_STATUS.KHONG_DU_NGAY;
+      }
+      if (status === c.trangThaiTraining && soNgay === c.soNgayDaTraining) continue;
+
+      await prisma.candidate.update({
+        where: { id: c.id },
+        data: { trangThaiTraining: status, soNgayDaTraining: soNgay },
+      });
+      await syncQueue.enqueue({
+        entity: 'training',
+        entityId: c.id,
+        operation: 'UPSERT',
+        version: c.dataVersion,
+        idempotencyKey: `candidate:${c.id}:training-status:v${c.dataVersion}:${status}`,
+      });
+      emit('training:updated', { candidateId: c.id });
+      changed++;
+    }
+    return changed;
   }
 }
 

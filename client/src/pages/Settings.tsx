@@ -2,12 +2,21 @@ import { useEffect, useState, useCallback } from 'react';
 import {
   FileSpreadsheet, BrainCircuit, MessageCircle, Scale, Clock, Users as UsersIcon,
   Save, AlertTriangle, ShieldCheck, RefreshCw, RotateCcw, Settings2, Trash2,
+  MapPin, Bell, DatabaseBackup, KeyRound, Plus,
 } from 'lucide-react';
 import { api, ApiError } from '../api/client';
-import { Badge, Spinner, Modal } from '../components/ui';
+import { Badge, Spinner, Modal, ConfirmDialog } from '../components/ui';
 import { useToast } from '../stores/Toast';
 import { useAuth } from '../stores/auth';
+import { useI18n } from '../utils/i18n';
 import { cn } from '../utils/format';
+
+interface BranchConfig {
+  name: string;
+  lat: number;
+  lng: number;
+  radiusMeters: number;
+}
 
 interface SettingsData {
   settings: {
@@ -32,6 +41,14 @@ interface SettingsData {
       };
       trainingDaysRequired: number;
       trainingDeadlineDays: number;
+      geofenceEnabled: boolean;
+    };
+    branches: BranchConfig[];
+    notifications: {
+      telegramBotToken: string;
+      telegramChatId: string;
+      slackWebhookUrl: string;
+      queueAlertMinutes: number;
     };
     ai: { provider: string; baseUrl: string; apiKey: string; model: string; temperature: number };
     googleSheet: {
@@ -41,26 +58,51 @@ interface SettingsData {
       formResponsesId: string;
       sheets: { locHoSo: string; diemUv: string; hoSoNv: string };
     };
-    zalo: { oaId: string; accessToken: string; refreshToken: string };
+    zalo: { oaId: string; accessToken: string; refreshToken: string; autoReply: boolean };
   };
   googleSheetConfigured: boolean;
   demoMode: boolean;
-  users: { id: string; username: string; fullName: string; role: string; active: boolean }[];
+  users: { id: string; username: string; fullName: string; role: string; active: boolean; twoFactorEnabled?: boolean; branchScope?: string[] | null }[];
   conflicts: {
     id: string; entityId: string; field: string; webValue: string; sheetValue: string;
     webVersion: number; sheetVersion: number | null; createdAt: string;
   }[];
 }
 
+interface BackupRow {
+  id: string;
+  kind: string;
+  status: string;
+  sizeBytes: number;
+  driveId?: string | null;
+  createdAt: string;
+  summary?: Record<string, number>;
+}
+
 export default function Settings() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const { t } = useI18n();
   const [data, setData] = useState<SettingsData | null>(null);
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState('sheet');
   const [resetOpen, setResetOpen] = useState(false);
   const [resetConfirm, setResetConfirm] = useState('');
   const [resetting, setResetting] = useState(false);
+
+  // Backup
+  const [backups, setBackups] = useState<BackupRow[]>([]);
+  const [restoreTarget, setRestoreTarget] = useState<BackupRow | null>(null);
+  const [restoring, setRestoring] = useState(false);
+
+  // 2FA
+  const [twoFactorSetup, setTwoFactorSetup] = useState<{ secret?: string; otpauthUrl?: string } | null>(null);
+  const [totpCode, setTotpCode] = useState('');
+  const [twoFactorBusy, setTwoFactorBusy] = useState(false);
+
+  // Đổi mật khẩu
+  const [pwdForm, setPwdForm] = useState({ oldPassword: '', newPassword: '', totpCode: '' });
+  const [pwdBusy, setPwdBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -71,23 +113,33 @@ export default function Settings() {
     }
   }, [toast]);
 
+  const loadBackups = useCallback(async () => {
+    try {
+      const d = await api.get<{ rows: BackupRow[] }>('/backup');
+      setBackups(d.rows);
+    } catch {
+      /* tab backup chỉ hiển thị khi có lỗi mạng */
+    }
+  }, []);
+
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadBackups();
+  }, [load, loadBackups]);
 
   if (!data) {
     return <div className="flex justify-center py-20"><Spinner className="text-brand-500" size={28} /></div>;
   }
 
-  const patch = (path: string[], value: unknown) => {
+  const patch = (path: (string | number)[], value: unknown) => {
     setData((d) => {
       if (!d) return d;
       const clone = structuredClone(d);
       let cur: unknown = clone.settings;
       for (let i = 0; i < path.length - 1; i++) {
-        cur = (cur as Record<string, unknown>)[path[i]];
+        cur = (cur as Record<string | number, unknown>)[path[i]];
       }
-      (cur as Record<string, unknown>)[path[path.length - 1]] = value;
+      (cur as Record<string | number, unknown>)[path[path.length - 1]] = value;
       return clone;
     });
   };
@@ -95,10 +147,12 @@ export default function Settings() {
   const save = async () => {
     setSaving(true);
     try {
-      const r = await api.put<{ settings: unknown; provision?: { demo: boolean; created?: string[]; candidates?: number; error?: string } }>('/settings', data!.settings);
+      const r = await api.put<{ settings: unknown; provision?: { demo?: boolean; started?: boolean; created?: string[]; candidates?: number; error?: string } }>('/settings', data!.settings);
       if (r.provision) {
         if (r.provision.demo) {
           toast('success', 'Đã lưu. Google Sheet chưa được cấu hình — vẫn chạy DEMO MODE.');
+        } else if (r.provision.started) {
+          toast('success', 'Đã lưu. Đang tạo cấu trúc + đồng bộ dữ liệu trong nền (web không bị treo).');
         } else if (r.provision.error) {
           toast('error', `Đã lưu, nhưng lỗi liên kết: ${r.provision.error}`);
         } else {
@@ -116,9 +170,11 @@ export default function Settings() {
 
   const provision = async () => {
     try {
-      const r = await api.post<{ demo: boolean; created?: string[]; columnsAdded?: Record<string, string[]>; candidates?: number; enqueued?: number }>('/sync/provision');
+      const r = await api.post<{ demo: boolean; started?: boolean; created?: string[]; columnsAdded?: Record<string, string[]>; candidates?: number; enqueued?: number }>('/sync/provision');
       if (r.demo) {
         toast('success', `DEMO MODE: đã xếp hàng đồng bộ ${r.enqueued} hồ sơ (chưa có Google Sheet thật).`);
+      } else if (r.started) {
+        toast('success', 'Đã bắt đầu tạo cấu trúc + đồng bộ toàn bộ dữ liệu trong nền.');
       } else {
         toast('success', `Đã tạo sheet: ${(r.created ?? []).join(', ') || '(đã có sẵn)'}, thêm cột: ${Object.values(r.columnsAdded ?? {}).flat().length} cột, đồng bộ ${r.candidates} hồ sơ.`);
       }
@@ -161,13 +217,146 @@ export default function Settings() {
     }
   };
 
+  const updateUserScope = async (userId: string, branchScope: string[] | null) => {
+    try {
+      await api.post(`/settings/users/${userId}`, { branchScope });
+      toast('success', 'Đã cập nhật phạm vi chi nhánh.');
+      void load();
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Cập nhật thất bại.');
+    }
+  };
+
+  const createBackup = async () => {
+    setSaving(true);
+    try {
+      await api.post('/backup', {});
+      toast('success', 'Đã tạo bản sao lưu.');
+      await loadBackups();
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Sao lưu thất bại.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const doRestore = async () => {
+    if (!restoreTarget) return;
+    setRestoring(true);
+    try {
+      const r = await api.post<{ restored: number }>(`/backup/${restoreTarget.id}/restore`, {});
+      toast('success', `Đã khôi phục ${r.restored} bản ghi.`);
+      void load();
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Khôi phục thất bại.');
+    } finally {
+      setRestoring(false);
+      setRestoreTarget(null);
+    }
+  };
+
+  const downloadBackup = (b: BackupRow) => {
+    const a = document.createElement('a');
+    a.href = `/api/backup/${b.id}/download`;
+    a.download = `umbo-milk-backup-${b.createdAt.slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+
+  const startTwoFactorSetup = async () => {
+    setTwoFactorBusy(true);
+    try {
+      const r = await api.post<{ enabled: boolean; secret?: string; otpauthUrl?: string }>('/auth/two-factor/setup', {});
+      if (r.enabled) {
+        toast('success', '2FA đã được bật.');
+        void load();
+      } else {
+        setTwoFactorSetup({ secret: r.secret, otpauthUrl: r.otpauthUrl });
+      }
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Không tạo được 2FA.');
+    } finally {
+      setTwoFactorBusy(false);
+    }
+  };
+
+  const confirmTwoFactor = async () => {
+    setTwoFactorBusy(true);
+    try {
+      const r = await api.post<{ enabled: boolean }>('/auth/two-factor/setup', { code: totpCode });
+      if (r.enabled) {
+        toast('success', '2FA đã được bật.');
+        setTwoFactorSetup(null);
+        setTotpCode('');
+        void load();
+        window.location.reload();
+      }
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Sai mã xác thực.');
+    } finally {
+      setTwoFactorBusy(false);
+    }
+  };
+
+  const disableTwoFactor = async () => {
+    setTwoFactorBusy(true);
+    try {
+      const r = await api.post<{ disabled: boolean }>('/auth/two-factor/disable', { code: totpCode });
+      if (r.disabled) {
+        toast('success', '2FA đã được tắt.');
+        setTotpCode('');
+        void load();
+        window.location.reload();
+      }
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Sai mã xác thực.');
+    } finally {
+      setTwoFactorBusy(false);
+    }
+  };
+
+  const changePassword = async () => {
+    if (pwdForm.newPassword.length < 6) {
+      toast('error', 'Mật khẩu mới phải có ít nhất 6 ký tự.');
+      return;
+    }
+    setPwdBusy(true);
+    try {
+      await api.post('/auth/change-password', pwdForm);
+      toast('success', 'Đã đổi mật khẩu.');
+      setPwdForm({ oldPassword: '', newPassword: '', totpCode: '' });
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Đổi mật khẩu thất bại.');
+    } finally {
+      setPwdBusy(false);
+    }
+  };
+
+  const sendTestNotification = async () => {
+    try {
+      const r = await api.post<{ telegram?: boolean; slack?: boolean }>('/settings/notify-test', {});
+      const parts: string[] = [];
+      if (r.telegram) parts.push('Telegram');
+      if (r.slack) parts.push('Slack');
+      toast('success', parts.length ? `Đã gửi thử: ${parts.join(' + ')}.` : 'Chưa cấu hình Telegram/Slack — chỉ hiện trong bell.');
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Gửi thử thất bại.');
+    }
+  };
+
   const s = data.settings;
+  const isAdmin = user?.role === 'ADMIN';
   const TABS = [
     { key: 'sheet', label: 'Google Sheet', icon: FileSpreadsheet },
     { key: 'ai', label: 'AI', icon: BrainCircuit },
     { key: 'zalo', label: 'Zalo', icon: MessageCircle },
     { key: 'scoring', label: 'Chấm điểm tuyển dụng', icon: Scale },
     { key: 'attendance', label: 'Chấm công', icon: Clock },
+    { key: 'branches', label: 'Chi nhánh & Geofence', icon: MapPin },
+    { key: 'notifications', label: 'Thông báo', icon: Bell },
+    { key: 'security', label: 'Bảo mật', icon: KeyRound },
+    { key: 'backup', label: 'Sao lưu', icon: DatabaseBackup },
     { key: 'conflicts', label: 'Xung đột', icon: AlertTriangle },
     { key: 'users', label: 'Tài khoản', icon: UsersIcon },
     ...(user?.role === 'ADMIN'
@@ -177,15 +366,20 @@ export default function Settings() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h1 className="text-xl font-extrabold text-slate-800">Cài đặt hệ thống</h1>
-          <p className="text-sm text-slate-500">Chỉ ADMIN mới có thể chỉnh sửa</p>
+          <h1 className="text-xl font-extrabold text-slate-800 dark:text-slate-100">Cài đặt hệ thống</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Chỉ ADMIN mới có thể chỉnh sửa</p>
         </div>
         <div className="flex items-center gap-2">
           {tab === 'sheet' && (
             <button className="btn-secondary" onClick={provision}>
               <FileSpreadsheet size={15} /> Tạo cấu trúc & đồng bộ
+            </button>
+          )}
+          {tab === 'backup' && (
+            <button className="btn-secondary" onClick={createBackup} disabled={saving}>
+              {saving && <Spinner size={14} />} <DatabaseBackup size={15} /> Sao lưu ngay
             </button>
           )}
           <button className="btn-primary" onClick={save} disabled={saving}>
@@ -202,13 +396,13 @@ export default function Settings() {
               onClick={() => setTab(t.key)}
               className={cn(
                 'w-full flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition-colors',
-                tab === t.key ? 'bg-brand-50 text-brand-700' : 'text-slate-500 hover:bg-slate-50',
+                tab === t.key ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300' : 'text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800',
               )}
             >
               <t.icon size={16} />
               {t.label}
               {t.key === 'conflicts' && data.conflicts.length > 0 && (
-                <Badge className="ml-auto bg-purple-100 text-purple-700">{data.conflicts.length}</Badge>
+                <Badge className="ml-auto bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300">{data.conflicts.length}</Badge>
               )}
             </button>
           ))}
@@ -222,10 +416,10 @@ export default function Settings() {
                   <FileSpreadsheet size={20} />
                 </div>
                 <div>
-                  <div className="font-bold text-slate-800">
+                  <div className="font-bold text-slate-800 dark:text-slate-100">
                     {data.googleSheetConfigured ? 'Đã cấu hình Google Sheet' : 'Chưa cấu hình (DEMO MODE)'}
                   </div>
-                  <div className="text-xs text-slate-500">
+                  <div className="text-xs text-slate-500 dark:text-slate-400">
                     {data.demoMode
                       ? 'Hệ thống đang chạy DEMO MODE: dữ liệu vẫn được lưu đầy đủ trong DB, Sync Job vẫn được tạo và xử lý. Cấu hình Service Account để đồng bộ thật.'
                       : 'Service Account hoạt động. Mọi thao tác Web được đồng bộ 1:1 xuống Google Sheet.'}
@@ -262,9 +456,11 @@ export default function Settings() {
                   disabled={saving}
                   onClick={async () => {
                     try {
-                      const r = await api.post<{ imported: number; duplicates: number; invalid: number; lastError: string | null; lastRunAt: string | null }>('/sync/form-import', {});
-                      if (r.lastError) toast('error', 'Lỗi: ' + r.lastError);
-                      else toast('success', `Nhập xong: +${r.imported} mới · ${r.duplicates} trùng · ${r.invalid} lỗi${r.lastRunAt ? ' · lần chạy: ' + new Date(r.lastRunAt).toLocaleTimeString('vi-VN') : ''}`);
+                      const r = await api.post<{ started: boolean; lastError: string | null; lastRunAt: string | null }>('/sync/form-import', {});
+                      if (r.started) {
+                        toast('success', 'Đã bắt đầu nhập dữ liệu form trong nền — hồ sơ mới sẽ hiện theo thời gian thực.');
+                      } else if (r.lastError) toast('error', 'Lỗi: ' + r.lastError);
+                      else toast('success', `Nhập xong: +${(r as unknown as { imported?: number }).imported ?? 0} mới${r.lastRunAt ? ' · lần chạy: ' + new Date(r.lastRunAt).toLocaleTimeString('vi-VN') : ''}`);
                     } catch (e) {
                       toast('error', e instanceof ApiError ? e.message : 'Nhập dữ liệu form thất bại.');
                     }
@@ -286,7 +482,7 @@ export default function Settings() {
                 (LOC_HO_SO_PV, DIEM_UV, HO_SO_NHAN_VIEN_UNG_TUYEN) + cột chuẩn</b> nếu chưa có,
                 rồi đồng bộ toàn bộ dữ liệu hiện có xuống. Dữ liệu mới từ Web luôn được đồng bộ 1:1 theo thời gian thực.
               </div>
-              <div className="rounded-xl bg-slate-50 p-3.5 text-xs text-slate-500">
+              <div className="rounded-xl bg-slate-50 p-3.5 text-xs text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
                 Cấu hình qua <b>server/.env</b>: GOOGLE_SHEET_ID, GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY. Cài đặt trên Web ghi đè khi chạy.
                 Apps Script webhook: POST <b>/api/webhooks/sheet</b> với header <b>x-webhook-secret</b>.
               </div>
@@ -323,7 +519,7 @@ export default function Settings() {
                     onChange={(e) => patch(['ai', 'temperature'], Number(e.target.value))} />
                 </div>
               </div>
-              <div className="rounded-xl bg-slate-50 p-3.5 text-xs text-slate-500">
+              <div className="rounded-xl bg-slate-50 p-3.5 text-xs text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
                 AI trả Structured JSON cho: trình độ học vấn, kinh nghiệm (NO_EXPERIENCE / OTHER_EXPERIENCE / FNB_EXPERIENCE), xử lý tình huống, quê quán, SĐT, Facebook.
               </div>
             </div>
@@ -331,17 +527,27 @@ export default function Settings() {
 
           {tab === 'zalo' && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between rounded-xl bg-slate-50 p-4">
+              <div className="flex items-center justify-between rounded-xl bg-slate-50 p-4 flex-wrap gap-3 dark:bg-slate-800/60">
                 <div>
-                  <div className="font-bold text-slate-800 text-sm">Kết nối Zalo OA</div>
-                  <div className="text-xs text-slate-500">Bấm nút để mở trang duyệt quyền của Zalo — token sẽ được tự động lưu về hệ thống.</div>
+                  <div className="font-bold text-slate-800 text-sm dark:text-slate-100">Kết nối Zalo OA</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">Bấm nút để mở trang duyệt quyền của Zalo — token sẽ được tự động lưu về hệ thống.</div>
                 </div>
-                <button className="btn-primary" onClick={connectZalo}>
-                  <MessageCircle size={15} /> Kết nối Zalo OA
-                </button>
-                <button className="btn-danger" onClick={resetZalo}>
-                  Reset dữ liệu Zalo
-                </button>
+                <div className="flex gap-2">
+                  <button className="btn-primary" onClick={connectZalo}>
+                    <MessageCircle size={15} /> Kết nối Zalo OA
+                  </button>
+                  <button className="btn-danger" onClick={resetZalo}>
+                    Reset dữ liệu Zalo
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-800/60">
+                <div>
+                  <div className="font-semibold text-slate-800 text-sm dark:text-slate-100">AI tự trả lời tin nhắn Zalo</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">Tự động trả lời ứng viên (trừ lệnh điểm danh GPS).</div>
+                </div>
+                <input type="checkbox" className="w-5 h-5 accent-brand-600" checked={s.zalo.autoReply}
+                  onChange={(e) => patch(['zalo', 'autoReply'], e.target.checked)} />
               </div>
               <div>
                 <label className="label">Zalo OA ID</label>
@@ -355,7 +561,7 @@ export default function Settings() {
                 <label className="label">Refresh Token</label>
                 <input type="password" className="input" value={s.zalo.refreshToken} onChange={(e) => patch(['zalo', 'refreshToken'], e.target.value)} />
               </div>
-              <div className="rounded-xl bg-slate-50 p-3.5 text-xs text-slate-500">
+              <div className="rounded-xl bg-slate-50 p-3.5 text-xs text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
                 Webhook Zalo: POST <b>/api/zalo/webhook</b> (header x-webhook-secret). Khi ứng viên nhắn "ĐIỂM DANH" trong khung giờ ca, hệ thống tự điểm danh.
               </div>
             </div>
@@ -363,9 +569,9 @@ export default function Settings() {
 
           {tab === 'scoring' && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
+              <div className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-800/60">
                 <div>
-                  <div className="font-bold text-slate-800 text-sm">Ngưỡng PASS (TONG_DIEM ≥)</div>
+                  <div className="font-bold text-slate-800 text-sm dark:text-slate-100">Ngưỡng PASS (TONG_DIEM ≥)</div>
                   <div className="text-xs text-slate-500">AI_RECOMMENDATION = PASS nếu tổng điểm đạt ngưỡng</div>
                 </div>
                 <input
@@ -385,11 +591,11 @@ export default function Settings() {
               ] as const).map(([key, label, field]) => {
                 const rule = s.scoring.rules[key];
                 return (
-                  <div key={key} className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
+                  <div key={key} className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-800/60">
                     <div className="flex items-center gap-3">
                       <input type="checkbox" checked={rule.enabled} onChange={(e) => patch(['scoring', 'rules', key, 'enabled'], e.target.checked)} className="w-4 h-4 accent-brand-600" />
                       <div>
-                        <div className="font-semibold text-slate-800 text-sm">{label}</div>
+                        <div className="font-semibold text-slate-800 text-sm dark:text-slate-100">{label}</div>
                         <div className="text-xs text-slate-400">ENABLE / DISABLE</div>
                       </div>
                     </div>
@@ -402,8 +608,8 @@ export default function Settings() {
                 );
               })}
 
-              <div className="rounded-xl bg-slate-50 px-4 py-3">
-                <div className="font-semibold text-slate-800 text-sm mb-2">Trình độ học vấn</div>
+              <div className="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-800/60">
+                <div className="font-semibold text-slate-800 text-sm mb-2 dark:text-slate-100">Trình độ học vấn</div>
                 <div className="grid sm:grid-cols-2 gap-3">
                   <div>
                     <label className="label">Sinh viên ĐH/CĐ</label>
@@ -418,8 +624,8 @@ export default function Settings() {
                 </div>
               </div>
 
-              <div className="rounded-xl bg-slate-50 px-4 py-3">
-                <div className="font-semibold text-slate-800 text-sm mb-2">Kinh nghiệm (AI phân loại)</div>
+              <div className="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-800/60">
+                <div className="font-semibold text-slate-800 text-sm mb-2 dark:text-slate-100">Kinh nghiệm (AI phân loại)</div>
                 <div className="grid sm:grid-cols-3 gap-3">
                   {(['NO_EXPERIENCE', 'OTHER_EXPERIENCE', 'FNB_EXPERIENCE'] as const).map((k) => (
                     <div key={k}>
@@ -431,7 +637,7 @@ export default function Settings() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 rounded-xl bg-brand-50 px-4 py-3 text-xs text-brand-700">
+              <div className="flex items-center gap-2 rounded-xl bg-brand-50 px-4 py-3 text-xs text-brand-700 dark:bg-brand-500/10 dark:text-brand-300">
                 <ShieldCheck size={15} /> AI chỉ ĐỀ XUẤT (AI_RECOMMENDATION). HR luôn là người quyết định (HR_DECISION).
               </div>
             </div>
@@ -440,8 +646,8 @@ export default function Settings() {
           {tab === 'attendance' && (
             <div className="space-y-4">
               {(['SANG', 'CHIEU', 'TOI'] as const).map((k) => (
-                <div key={k} className="rounded-xl bg-slate-50 p-4">
-                  <div className="font-bold text-slate-800 text-sm mb-3">
+                <div key={k} className="rounded-xl bg-slate-50 p-4 dark:bg-slate-800/60">
+                  <div className="font-bold text-slate-800 text-sm mb-3 dark:text-slate-100">
                     Ca {k === 'SANG' ? 'SÁNG' : k === 'CHIEU' ? 'CHIỀU' : 'TỐI'}
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -480,8 +686,243 @@ export default function Settings() {
                     onChange={(e) => patch(['attendance', 'trainingDeadlineDays'], Number(e.target.value))} />
                 </div>
               </div>
-              <div className="rounded-xl bg-slate-50 p-3.5 text-xs text-slate-500">
+              <div className="rounded-xl bg-slate-50 p-3.5 text-xs text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
                 Làm 1 hoặc 2 ca/ngày vẫn chỉ tính tối đa <b>1 ngày Training</b> mỗi ngày lịch.
+              </div>
+            </div>
+          )}
+
+          {tab === 'branches' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-800/60">
+                <div>
+                  <div className="font-semibold text-slate-800 text-sm dark:text-slate-100">{t('settings.geofence')}</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">{t('settings.branchesHint')}</div>
+                </div>
+                <input type="checkbox" className="w-5 h-5 accent-brand-600" checked={s.attendance.geofenceEnabled}
+                  onChange={(e) => patch(['attendance', 'geofenceEnabled'], e.target.checked)} />
+              </div>
+              {s.branches.length === 0 && (
+                <div className="rounded-xl bg-slate-50 p-4 text-xs text-slate-400 text-center dark:bg-slate-800/60">
+                  Chưa có chi nhánh nào — thêm ít nhất 1 chi nhánh để bật geofence chấm công.
+                </div>
+              )}
+              {s.branches.map((b, i) => (
+                <div key={i} className="rounded-xl bg-slate-50 p-4 space-y-3 dark:bg-slate-800/60">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <MapPin size={15} className="text-brand-500" />
+                      <input className="input !w-56" placeholder={t('settings.branchName')} value={b.name}
+                        onChange={(e) => patch(['branches', i, 'name'], e.target.value)} />
+                    </div>
+                    <button className="text-slate-400 hover:text-rose-500 p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-500/10"
+                      onClick={() => patch(['branches'], s.branches.filter((_, j) => j !== i))}>
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="label">{t('settings.lat')}</label>
+                      <input type="number" step="0.000001" className="input" value={b.lat}
+                        onChange={(e) => patch(['branches', i, 'lat'], Number(e.target.value))} placeholder="10.8231" />
+                    </div>
+                    <div>
+                      <label className="label">{t('settings.lng')}</label>
+                      <input type="number" step="0.000001" className="input" value={b.lng}
+                        onChange={(e) => patch(['branches', i, 'lng'], Number(e.target.value))} placeholder="106.6297" />
+                    </div>
+                    <div>
+                      <label className="label">{t('settings.radius')}</label>
+                      <input type="number" min="0" className="input" value={b.radiusMeters}
+                        onChange={(e) => patch(['branches', i, 'radiusMeters'], Number(e.target.value))} placeholder="300" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <button className="btn-secondary" onClick={() => patch(['branches'], [...s.branches, { name: '', lat: 10.8231, lng: 106.6297, radiusMeters: 300 }])}>
+                <Plus size={15} /> {t('settings.addBranch')}
+              </button>
+            </div>
+          )}
+
+          {tab === 'notifications' && (
+            <div className="space-y-4">
+              <div>
+                <label className="label">{t('settings.telegramBot')}</label>
+                <input className="input font-mono text-xs" value={s.notifications.telegramBotToken}
+                  onChange={(e) => patch(['notifications', 'telegramBotToken'], e.target.value)}
+                  placeholder="123456:ABC-DEF..." />
+              </div>
+              <div>
+                <label className="label">{t('settings.telegramChat')}</label>
+                <input className="input" value={s.notifications.telegramChatId}
+                  onChange={(e) => patch(['notifications', 'telegramChatId'], e.target.value)}
+                  placeholder="123456789" />
+              </div>
+              <div>
+                <label className="label">{t('settings.slackWebhook')}</label>
+                <input className="input font-mono text-xs" value={s.notifications.slackWebhookUrl}
+                  onChange={(e) => patch(['notifications', 'slackWebhookUrl'], e.target.value)}
+                  placeholder="https://hooks.slack.com/services/..." />
+              </div>
+              <div>
+                <label className="label">{t('settings.queueAlert')}</label>
+                <input type="number" min="1" className="input" value={s.notifications.queueAlertMinutes}
+                  onChange={(e) => patch(['notifications', 'queueAlertMinutes'], Number(e.target.value))} />
+              </div>
+              <div className="flex items-center gap-2">
+                <button className="btn-secondary" onClick={sendTestNotification}>
+                  <Bell size={15} /> {t('settings.testNotification')}
+                </button>
+                <span className="text-xs text-slate-400">Kiểm tra cả bell nội bộ + Telegram/Slack (nếu đã cấu hình).</span>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3.5 text-xs text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
+                Cũng có thể cấu hình qua <b>server/.env</b>: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SLACK_WEBHOOK_URL.
+              </div>
+            </div>
+          )}
+
+          {tab === 'security' && (
+            <div className="space-y-5">
+              <div className="rounded-xl bg-slate-50 p-4 space-y-3 dark:bg-slate-800/60">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className={cn('rounded-xl p-2.5', user?.twoFactorEnabled ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500')}>
+                      <ShieldCheck size={20} />
+                    </div>
+                    <div>
+                      <div className="font-bold text-slate-800 text-sm dark:text-slate-100">{t('settings.twoFactor')}</div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400">
+                        {user?.twoFactorEnabled ? t('settings.twoFactorEnabled') : t('settings.twoFactorDisabled')}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    {user?.twoFactorEnabled ? (
+                      <>
+                        <input className="input !w-32 text-center font-mono" placeholder="000000" inputMode="numeric"
+                          value={totpCode} onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))} />
+                        <button className="btn-danger" disabled={twoFactorBusy || totpCode.length !== 6} onClick={() => void disableTwoFactor()}>
+                          {twoFactorBusy ? <Spinner size={14} /> : <ShieldCheck size={14} />} {t('settings.disable2fa')}
+                        </button>
+                      </>
+                    ) : (
+                      <button className="btn-primary" disabled={twoFactorBusy} onClick={() => void startTwoFactorSetup()}>
+                        {twoFactorBusy ? <Spinner size={14} /> : <ShieldCheck size={14} />} {t('settings.enable2fa')}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {twoFactorSetup && (
+                  <div className="rounded-xl border border-brand-200 bg-brand-50/50 p-4 space-y-3 dark:border-brand-500/30 dark:bg-brand-500/10">
+                    <p className="text-xs text-brand-700 dark:text-brand-300">{t('settings.scanQr')}</p>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <code className="font-mono text-[11px] bg-white rounded-lg px-3 py-2 break-all dark:bg-slate-900">{twoFactorSetup.secret}</code>
+                    </div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Hoặc mở link: <a href={twoFactorSetup.otpauthUrl} className="text-brand-600 underline break-all">{twoFactorSetup.otpauthUrl}</a>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input className="input !w-40 text-center font-mono tracking-widest" placeholder="000000" inputMode="numeric"
+                        value={totpCode} onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))} />
+                      <button className="btn-primary" disabled={twoFactorBusy || totpCode.length !== 6} onClick={() => void confirmTwoFactor()}>
+                        {twoFactorBusy ? <Spinner size={14} /> : null} {t('common.confirm')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-xl bg-slate-50 p-4 space-y-3 dark:bg-slate-800/60">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-xl p-2.5 bg-slate-100 text-slate-500">
+                    <KeyRound size={20} />
+                  </div>
+                  <div>
+                    <div className="font-bold text-slate-800 text-sm dark:text-slate-100">{t('settings.changePassword')}</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">
+                      {user?.twoFactorEnabled ? 'Cần nhập mã 2FA khi đổi mật khẩu.' : 'Chỉ cần mật khẩu hiện tại.'}
+                    </div>
+                  </div>
+                </div>
+                <div className="grid sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="label">{t('settings.oldPassword')}</label>
+                    <input type="password" className="input" value={pwdForm.oldPassword}
+                      onChange={(e) => setPwdForm({ ...pwdForm, oldPassword: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="label">{t('settings.newPassword')}</label>
+                    <input type="password" className="input" value={pwdForm.newPassword}
+                      onChange={(e) => setPwdForm({ ...pwdForm, newPassword: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="label">{t('settings.2faCode')} {user?.twoFactorEnabled ? '*' : '(nếu bật)'}</label>
+                    <input className="input font-mono" value={pwdForm.totpCode}
+                      onChange={(e) => setPwdForm({ ...pwdForm, totpCode: e.target.value.replace(/\D/g, '').slice(0, 6) })} />
+                  </div>
+                </div>
+                <div className="flex justify-end">
+                  <button className="btn-primary" disabled={pwdBusy} onClick={() => void changePassword()}>
+                    {pwdBusy && <Spinner size={14} />} {t('common.save')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {tab === 'backup' && (
+            <div className="space-y-4">
+              <div className="rounded-xl bg-slate-50 p-4 text-xs text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
+                {t('settings.backupHint')}
+              </div>
+              <div className="rounded-xl overflow-hidden border border-slate-100 dark:border-slate-800">
+                <table className="w-full">
+                  <thead className="bg-slate-50 dark:bg-slate-800/60">
+                    <tr>
+                      <th className="table-th">{t('settings.createdAt')}</th>
+                      <th className="table-th">{t('settings.kind')}</th>
+                      <th className="table-th">{t('settings.status')}</th>
+                      <th className="table-th">{t('settings.size')}</th>
+                      <th className="table-th">Drive</th>
+                      <th className="table-th" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {backups.length === 0 && (
+                      <tr><td colSpan={6} className="table-td text-center text-slate-400">Chưa có bản sao lưu nào.</td></tr>
+                    )}
+                    {backups.map((b) => (
+                      <tr key={b.id}>
+                        <td className="table-td text-slate-600 dark:text-slate-300">{new Date(b.createdAt).toLocaleString('vi-VN')}</td>
+                        <td className="table-td">
+                          <Badge className={b.kind === 'AUTO' ? 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}>
+                            {b.kind === 'AUTO' ? t('settings.auto') : t('settings.manual')}
+                          </Badge>
+                        </td>
+                        <td className="table-td">
+                          <Badge className={b.status === 'OK' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300'}>
+                            {b.status}
+                          </Badge>
+                        </td>
+                        <td className="table-td text-slate-500 dark:text-slate-400">{b.sizeBytes > 0 ? `${(b.sizeBytes / 1024).toFixed(1)} KB` : '—'}</td>
+                        <td className="table-td text-slate-500 dark:text-slate-400">{b.driveId ? '✓' : '—'}</td>
+                        <td className="table-td">
+                          <div className="flex gap-1.5 justify-end">
+                            {b.status === 'OK' && (
+                              <>
+                                <button className="btn-secondary !py-1 text-xs" onClick={() => downloadBackup(b)}>{t('settings.download')}</button>
+                                {isAdmin && (
+                                  <button className="btn-danger !py-1 text-xs" onClick={() => setRestoreTarget(b)}>{t('settings.restore')}</button>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
@@ -492,20 +933,20 @@ export default function Settings() {
                 <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Không có xung đột nào đang mở.</div>
               )}
               {data.conflicts.map((c) => (
-                <div key={c.id} className="rounded-xl bg-slate-50 p-4">
+                <div key={c.id} className="rounded-xl bg-slate-50 p-4 dark:bg-slate-800/60">
                   <div className="flex items-center gap-2 mb-2">
-                    <Badge className="bg-purple-100 text-purple-700">XUNG ĐỘT</Badge>
+                    <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300">XUNG ĐỘT</Badge>
                     <span className="font-mono text-xs">{c.entityId}</span>
                     <span className="text-xs text-slate-400 ml-auto">field: {c.field} · web v{c.webVersion} / sheet v{c.sheetVersion}</span>
                   </div>
                   <div className="grid grid-cols-2 gap-3 mb-3">
-                    <div className="rounded-lg bg-white border border-slate-200 p-3">
+                    <div className="rounded-lg bg-white border border-slate-200 p-3 dark:bg-slate-900 dark:border-slate-700">
                       <div className="label">WEB</div>
-                      <div className="text-xs font-mono text-slate-700 break-words">{c.webValue || '—'}</div>
+                      <div className="text-xs font-mono text-slate-700 break-words dark:text-slate-300">{c.webValue || '—'}</div>
                     </div>
-                    <div className="rounded-lg bg-white border border-slate-200 p-3">
+                    <div className="rounded-lg bg-white border border-slate-200 p-3 dark:bg-slate-900 dark:border-slate-700">
                       <div className="label">GOOGLE SHEET</div>
-                      <div className="text-xs font-mono text-slate-700 break-words">{c.sheetValue || '—'}</div>
+                      <div className="text-xs font-mono text-slate-700 break-words dark:text-slate-300">{c.sheetValue || '—'}</div>
                     </div>
                   </div>
                   <div className="flex gap-2">
@@ -520,26 +961,45 @@ export default function Settings() {
           {tab === 'users' && (
             <div className="space-y-2">
               {data.users.map((u) => (
-                <div key={u.id} className="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3">
-                  <div className="bg-brand-100 text-brand-700 rounded-full w-9 h-9 flex items-center justify-center font-bold uppercase">
-                    {u.fullName.slice(0, 1)}
+                <div key={u.id} className="rounded-xl bg-slate-50 px-4 py-3 space-y-2 dark:bg-slate-800/60">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-brand-100 text-brand-700 rounded-full w-9 h-9 flex items-center justify-center font-bold uppercase dark:bg-brand-500/20 dark:text-brand-300">
+                      {u.fullName.slice(0, 1)}
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-semibold text-slate-800 text-sm dark:text-slate-100">{u.fullName}</div>
+                      <div className="text-xs text-slate-400">{u.username}</div>
+                    </div>
+                    <Badge className={
+                      u.role === 'ADMIN' ? 'bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300'
+                        : u.role === 'HR' ? 'bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300'
+                          : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+                    }>
+                      {u.role === 'ADMIN' ? 'QUẢN TRỊ' : u.role === 'HR' ? 'NHÂN SỰ' : 'XEM'}
+                    </Badge>
+                    {u.twoFactorEnabled && <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">2FA</Badge>}
+                    {!u.active && <Badge className="bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300">BỊ KHÓA</Badge>}
                   </div>
-                  <div className="flex-1">
-                    <div className="font-semibold text-slate-800 text-sm">{u.fullName}</div>
-                    <div className="text-xs text-slate-400">{u.username}</div>
-                  </div>
-                  <Badge className={
-                    u.role === 'ADMIN' ? 'bg-purple-100 text-purple-700'
-                      : u.role === 'HR' ? 'bg-brand-100 text-brand-700'
-                        : 'bg-slate-100 text-slate-600'
-                  }>
-                    {u.role === 'ADMIN' ? 'QUẢN TRỊ' : u.role === 'HR' ? 'NHÂN SỰ' : 'XEM'}
-                  </Badge>
-                  {!u.active && <Badge className="bg-rose-100 text-rose-700">BỊ KHÓA</Badge>}
+                  {isAdmin && u.id !== user?.id && (
+                    <div className="flex items-center gap-2">
+                      <input
+                        className="input !py-1.5 text-xs"
+                        placeholder={t('settings.branchScope')}
+                        value={(u.branchScope ?? []).join(', ')}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const list = raw.split(',').map((x) => x.trim()).filter(Boolean);
+                          void updateUserScope(u.id, list.length ? list : null);
+                        }}
+                        onBlur={() => void load()}
+                      />
+                      <span className="text-[11px] text-slate-400 shrink-0">{t('settings.branchScope')}</span>
+                    </div>
+                  )}
                 </div>
               ))}
-              <div className="rounded-xl bg-slate-50 p-3.5 text-xs text-slate-500">
-                Thêm/sửa tài khoản: chạy script seed hoặc thao tác trực tiếp DB. Password được mã hóa bcrypt.
+              <div className="rounded-xl bg-slate-50 p-3.5 text-xs text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
+                Thêm/sửa tài khoản: chạy script seed hoặc thao tác trực tiếp DB. Password được mã hóa bcrypt. 2FA kích hoạt từ tab Bảo mật.
               </div>
             </div>
           )}
@@ -547,12 +1007,12 @@ export default function Settings() {
           {tab === 'system' && user?.role === 'ADMIN' && (
             <div className="space-y-4">
               <div className="flex items-center gap-3">
-                <div className="rounded-xl p-2.5 bg-slate-100 text-slate-600">
+                <div className="rounded-xl p-2.5 bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                   <Settings2 size={20} />
                 </div>
                 <div>
-                  <div className="font-bold text-slate-800">Hệ thống</div>
-                  <div className="text-xs text-slate-500">
+                  <div className="font-bold text-slate-800 dark:text-slate-100">Hệ thống</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">
                     Reset hệ thống về trạng thái ban đầu khi cần bắt đầu lại từ đầu.
                   </div>
                 </div>
@@ -574,7 +1034,7 @@ export default function Settings() {
                   </button>
                 </div>
               </div>
-              <div className="rounded-xl bg-slate-50 p-3.5 text-xs text-slate-500">
+              <div className="rounded-xl bg-slate-50 p-3.5 text-xs text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
                 Sau khi reset, hệ thống sẽ tự nhập lại dữ liệu từ Google Form (nếu đã cấu hình Form Responses Sheet ID) mỗi 30 giây.
               </div>
             </div>
@@ -632,6 +1092,16 @@ export default function Settings() {
           </div>
         </div>
       </Modal>
+
+      <ConfirmDialog
+        open={!!restoreTarget}
+        onClose={() => setRestoreTarget(null)}
+        onConfirm={() => void doRestore()}
+        title={t('settings.restore')}
+        message={t('settings.restoreConfirm')}
+        confirmLabel={t('settings.restore')}
+        danger
+      />
     </div>
   );
 }

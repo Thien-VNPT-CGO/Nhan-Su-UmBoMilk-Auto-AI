@@ -24,18 +24,20 @@ export function Modal({
   title,
   children,
   footer,
+  width = 'max-w-lg',
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   children: ReactNode;
   footer?: ReactNode;
+  width?: string;
 }) {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-lg rounded-2xl bg-white shadow-2xl animate-[fadeInUp_.2s_ease]">
+      <div className={cn('relative w-full rounded-2xl bg-white shadow-2xl animate-[fadeInUp_.2s_ease]', width)}>
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <h3 className="text-base font-bold text-slate-800">{title}</h3>
           <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100">

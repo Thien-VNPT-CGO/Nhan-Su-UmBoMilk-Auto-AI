@@ -29,7 +29,13 @@ export function mergeSettings(raw: unknown): Settings {
   return base;
 }
 
-export async function getSettings(): Promise<Settings> {
+// getSettings() được gọi rất thường xuyên (mỗi worker tick, mỗi lần chấm điểm, mỗi route).
+// Trước đây mỗi lần gọi là 1 query DB -> tải DB tăng vọt khi hệ thống xử lý hàng loạt.
+// Cache 3s + invalidate khi lưu settings mới giúp giảm ~99% số query này.
+const SETTINGS_TTL_MS = 3000;
+let settingsCache: { at: number; value: Settings } | null = null;
+
+async function loadSettings(): Promise<Settings> {
   const row = await prisma.systemSetting.findUnique({ where: { key: 'app_settings' } });
   const base = row
     ? mergeSettings(row.value)
@@ -41,6 +47,19 @@ export async function getSettings(): Promise<Settings> {
   return base;
 }
 
+export function invalidateSettingsCache(): void {
+  settingsCache = null;
+}
+
+export async function getSettings(): Promise<Settings> {
+  if (settingsCache && Date.now() - settingsCache.at < SETTINGS_TTL_MS) {
+    return settingsCache.value;
+  }
+  const value = await loadSettings();
+  settingsCache = { at: Date.now(), value };
+  return value;
+}
+
 export async function saveSettings(patch: Record<string, unknown>, updatedBy: string): Promise<Settings> {
   const current = await getSettings();
   const merged = mergeSettings({ ...current, ...patch });
@@ -49,6 +68,7 @@ export async function saveSettings(patch: Record<string, unknown>, updatedBy: st
     create: { key: 'app_settings', value: merged as object, updatedBy },
     update: { value: merged as object, updatedBy },
   });
+  invalidateSettingsCache();
   return merged;
 }
 

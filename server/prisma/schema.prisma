@@ -11,15 +11,18 @@ datasource db {
 }
 
 model User {
-  id        String    @id @default(cuid())
-  username  String    @unique
-  password  String
-  fullName  String
-  role      String    @default("HR") // ADMIN | HR | VIEWER
-  active    Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  sessions  Session[]
+  id               String    @id @default(cuid())
+  username         String    @unique
+  password         String
+  fullName         String
+  role             String    @default("HR") // ADMIN | HR | VIEWER
+  active           Boolean   @default(true)
+  twoFactorSecret  String?   // TOTP secret (2FA)
+  twoFactorEnabled Boolean   @default(false)
+  branchScope      Json?     // string[] — chi nhánh được phép xem (null/[] = tất cả)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  sessions         Session[]
 }
 
 model Session {
@@ -92,6 +95,7 @@ model Candidate {
   attendanceEvents AttendanceEvent[]
   conflicts        Conflict[]
   zaloMessages     ZaloMessage[]
+  quizAttempts     QuizAttempt[]
 
   @@index([chiNhanh])
   @@index([sdtZalo])
@@ -130,9 +134,11 @@ model AttendanceEvent {
   date        String // yyyy-MM-dd
   shift       String // SANG | CHIEU | TOI
   checkinAt   DateTime
-  method      String // ZALO | MANUAL
+  method      String // ZALO | MANUAL | SYSTEM
   valid       Boolean
   reason      String?
+  lat         Float?
+  lng         Float?
   trainingDay Int?
   createdAt   DateTime  @default(now())
 
@@ -163,8 +169,15 @@ model ZaloMessage {
   status      String     @default("PENDING") // PENDING | SENT | FAILED
   error       String?
   provider    String     @default("MOCK")
+  direction   String     @default("OUT") // OUT (gửi đi) | IN (nhận từ Zalo)
+  messageType String     @default("text") // text | location
+  lat         Float?
+  lng         Float?
   createdAt   DateTime   @default(now())
   candidate   Candidate? @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+
+  @@index([phone])
+  @@index([candidateId])
 }
 
 model WebhookEvent {
@@ -230,4 +243,83 @@ model ReconciliationRun {
   conflicts  Int       @default(0)
   status     String    @default("RUNNING")
   details    String?
+}
+
+model Notification {
+  id        String   @id
+  userId    String? // null = gửi cho tất cả (hoặc theo role)
+  role      String? // ADMIN | HR | VIEWER — lọc thêm khi userId null
+  title     String
+  body      String
+  type      String   @default("INFO") // INFO | SUCCESS | WARNING | ERROR
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+  @@index([createdAt])
+}
+
+model Course {
+  id          String   @id
+  title       String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  lessons     Lesson[]
+}
+
+model Lesson {
+  id        String        @id
+  courseId  String
+  course    Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title     String
+  content   String
+  order     Int           @default(0)
+  questions QuizQuestion[]
+  attempts  QuizAttempt[]
+
+  @@index([courseId])
+}
+
+model QuizQuestion {
+  id           String @id
+  lessonId     String
+  lesson       Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  question     String
+  options      Json // string[]
+  correctIndex Int
+  explanation  String?
+
+  @@index([lessonId])
+}
+
+model QuizAttempt {
+  id          String    @id
+  lessonId    String
+  lesson      Lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  candidateId String?
+  candidate   Candidate? @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+  score       Int
+  total       Int
+  passed      Boolean
+  answers     Json
+  createdAt   DateTime  @default(now())
+
+  @@index([lessonId])
+  @@index([candidateId])
+}
+
+model BackupRecord {
+  id        String   @id
+  kind      String   @default("MANUAL") // MANUAL | AUTO
+  status    String   @default("OK") // OK | FAILED | RESTORED
+  sizeBytes Int
+  summary   Json // số dòng mỗi bảng
+  note      String? // JSON dump toàn bộ dữ liệu
+  error     String?
+  driveId   String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
 }

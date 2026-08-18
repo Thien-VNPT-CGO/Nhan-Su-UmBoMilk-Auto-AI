@@ -144,6 +144,20 @@ export class CandidateService {
 
     emit('candidate:new', { candidateId: withHash.id });
 
+    // Thông báo nội bộ cho HR khi có hồ sơ mới
+    try {
+      const { notificationService } = await import('./NotificationService');
+      await notificationService.notify({
+        role: 'HR',
+        title: 'Hồ sơ mới',
+        body: `${withHash.tenUv} (${withHash.chiNhanh}) vừa đăng ký — ${withHash.id}`,
+        type: 'INFO',
+        link: '/candidates',
+      });
+    } catch {
+      // thông báo không được phép phá luồng tạo hồ sơ
+    }
+
     return withHash;
   }
 
@@ -228,8 +242,10 @@ export class CandidateService {
     sort?: string;
     page?: number;
     pageSize?: number;
+    branches?: string[] | null;
   }): Promise<{ rows: Candidate[]; total: number }> {
     const where: Prisma.CandidateWhereInput = {};
+    if (query.branches?.length) where.chiNhanh = { in: query.branches };
     if (query.search) {
       const s = query.search.trim();
       where.OR = [
@@ -278,7 +294,9 @@ export class CandidateService {
         orderBy,
         skip: (page - 1) * pageSize,
         take: pageSize,
-        include: { _count: { select: { syncJobs: true, conflicts: true } } },
+        // Chỉ đếm conflicts (UI dùng); bỏ _count.syncJobs - subquery trên bảng SyncJob phình to
+        // làm query danh sách chậm dần theo thời gian.
+        include: { _count: { select: { conflicts: true } } },
       }),
       prisma.candidate.count({ where }),
     ]);

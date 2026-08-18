@@ -6,12 +6,21 @@ export interface User {
   username: string;
   fullName: string;
   role: 'ADMIN' | 'HR' | 'VIEWER';
+  twoFactorEnabled?: boolean;
+  branchScope?: string[] | null;
+}
+
+export interface LoginResult {
+  needsTwoFactor?: boolean;
+  twoFactorToken?: string;
+  user?: User;
 }
 
 interface AuthState {
   user: User | null;
   loading: boolean;
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<LoginResult>;
+  verifyTwoFactor: (token: string, code: string) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -38,7 +47,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   const login = useCallback(async (username: string, password: string) => {
-    const data = await api.post<{ user: User }>('/auth/login', { username, password });
+    const data = await api.post<LoginResult>('/auth/login', { username, password });
+    if (data.needsTwoFactor || !data.user) return data;
+    setUser(data.user);
+    return data;
+  }, []);
+
+  const verifyTwoFactor = useCallback(async (token: string, code: string) => {
+    const data = await api.post<{ user: User }>('/auth/two-factor/verify', { token, code });
     setUser(data.user);
   }, []);
 
@@ -48,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, refresh }}>
+    <AuthContext.Provider value={{ user, loading, login, verifyTwoFactor, logout, refresh }}>
       {children}
     </AuthContext.Provider>
   );

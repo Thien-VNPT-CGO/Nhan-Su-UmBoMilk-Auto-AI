@@ -7,6 +7,7 @@ import { importFormResponses, getFormImportStatus } from '../services/FormImport
 import { audit } from '../services/AuditService';
 import { ApiError } from '../lib/errors';
 import { prisma } from '../lib/prisma';
+import { emitSyncNotice } from '../sockets';
 
 const router = Router();
 router.use(requireAuth);
@@ -46,10 +47,13 @@ router.post('/retry-all', requireWrite(), async (req, res, next) => {
   }
 });
 
-router.post('/reconcile', requireWrite(), async (req: AuthedRequest, _res, next) => {
+router.post('/reconcile', requireWrite(), async (req: AuthedRequest, res, next) => {
   try {
-    await reconciliationService.run();
-    next();
+    // Chạy nền: reconciliation quét cả sheet + nhiều ứng viên, không được chặn request web
+    void reconciliationService.run().catch((e) =>
+      console.warn('[sync/reconcile] background:', e instanceof Error ? e.message : String(e)),
+    );
+    res.json({ success: true, data: { started: true } });
   } catch (e) {
     next(e);
   }
@@ -61,16 +65,25 @@ router.post('/reconcile', requireWrite(), async (req: AuthedRequest, _res, next)
  */
 router.post('/form-import', requireRole('ADMIN'), async (req: AuthedRequest, res, next) => {
   try {
-    const result = await importFormResponses();
+    // Chạy nền (import có thể xử lý hàng chục dòng, mỗi dòng nhiều write DB):
+    // trả về ngay, client theo dõi qua socket 'candidate:new' / trang Sync Center.
+    void importFormResponses()
+      .then((result) => {
+        if (result.imported > 0 || result.lastError) {
+          void audit({
+            user: req.user!.username,
+            action: 'FORM_IMPORT',
+            entity: 'system',
+            entityId: 'google_form',
+            newValue: { ...result, ...getFormImportStatus() } as unknown as Record<string, unknown>,
+          }).catch(() => undefined);
+        }
+      })
+      .catch((e) =>
+        console.warn('[sync/form-import] background:', e instanceof Error ? e.message : String(e)),
+      );
     const status = getFormImportStatus();
-    await audit({
-      user: req.user!.username,
-      action: 'FORM_IMPORT',
-      entity: 'system',
-      entityId: 'google_form',
-      newValue: result as unknown as Record<string, unknown>,
-    });
-    res.json({ success: true, data: { ...result, ...status } });
+    res.json({ success: true, data: { started: true, ...status } });
   } catch (e) {
     next(e);
   }
@@ -108,16 +121,26 @@ router.post('/provision', requireRole('ADMIN'), async (req: AuthedRequest, res, 
       return;
     }
 
-    const { created, columnsAdded } = await sheet.ensureSheets();
-    const { candidates } = await sheet.fullResync();
-    await audit({
-      user: req.user!.username,
-      action: 'PROVISION_SHEET',
-      entity: 'system',
-      entityId: sheet.sheetNames.locHoSo,
-      newValue: { created, columnsAdded, candidates },
-    });
-    res.json({ success: true, data: { demo: false, created, columnsAdded, candidates } });
+    // Google Sheet thật: tạo cấu trúc + fullResync có thể mất nhiều phút
+    // (N candidate x 3 sheet x nhiều API call) → chạy nền, web không bị treo.
+    void (async () => {
+      try {
+        const { created, columnsAdded } = await sheet.ensureSheets();
+        const { candidates } = await sheet.fullResync();
+        await audit({
+          user: req.user!.username,
+          action: 'PROVISION_SHEET',
+          entity: 'system',
+          entityId: sheet.sheetNames.locHoSo,
+          newValue: { created, columnsAdded, candidates },
+        });
+        emitSyncNotice('provision', { done: true, created, columnsAdded, candidates });
+      } catch (e) {
+        console.warn('[sync/provision] background:', e instanceof Error ? e.message : String(e));
+        emitSyncNotice('provision', { done: false, error: e instanceof Error ? e.message : String(e) });
+      }
+    })();
+    res.json({ success: true, data: { started: true, demo: false } });
   } catch (e) {
     next(e);
   }

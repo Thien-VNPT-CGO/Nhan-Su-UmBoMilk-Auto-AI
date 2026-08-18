@@ -165,7 +165,9 @@ export default function Candidates() {
         toast('success', `AI đã tự loại ${r.removed} hồ sơ trùng SĐT và đồng bộ xóa về Google Sheet.`);
       }
     }, 600);
-    const events = ['candidate:new', 'candidate:updated', 'candidate:deleted', 'candidate:scored', 'candidate:decision', 'candidate:sync', 'training:updated', 'sync:success'];
+    const events = ['candidate:new', 'candidate:updated', 'candidate:deleted', 'candidate:scored', 'candidate:decision', 'training:updated'];
+    // KHÔNG lắng nghe 'sync:success'/'candidate:sync': mỗi job đồng bộ phát 1 event,
+    // xử lý hàng loạt (import 50 hồ sơ) = 50+ event -> refetch toàn bộ danh sách liên tục -> web ì.
     events.forEach((ev) => socket.on(ev, refresh));
     socket.on('dedup:auto', onAutoDedup);
     return () => {
@@ -458,8 +460,8 @@ export default function Candidates() {
               onClick={async () => {
                 setCleaning(true);
                 try {
-                  const r = await api.post<{ removed: number }>('/candidates/duplicates/cleanup');
-                  toast('success', `Đã loại bỏ ${r.removed} hồ sơ trùng. Đang đồng bộ xóa về Google Sheet...`);
+                  await api.post('/candidates/duplicates/cleanup');
+                  toast('success', 'Đang dọn dẹp hồ sơ trùng trong nền — danh sách sẽ tự cập nhật.');
                   setDupOpen(false);
                   setDups([]);
                   void load();

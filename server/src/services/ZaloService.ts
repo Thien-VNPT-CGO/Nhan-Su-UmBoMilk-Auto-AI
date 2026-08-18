@@ -5,7 +5,6 @@ import { getSettings } from './SettingsService';
 import { emit } from '../sockets';
 import { formatDate } from '../lib/date';
 import { createHmac, randomBytes } from 'crypto';
-
 export class ZaloService {
   private pendingStates = new Map<string, number>();
 
@@ -153,6 +152,7 @@ export class ZaloService {
     phone: string,
     content: string,
     candidateId: string | null,
+    options: { direction?: string; messageType?: string } = {},
   ): Promise<{ ok: boolean; provider: string; messageId?: string; status: string; error?: string | null }> {
     const cfg = await this.getConfig();
     let accessToken = cfg.accessToken;
@@ -214,10 +214,18 @@ export class ZaloService {
         status,
         error,
         provider,
+        direction: options.direction ?? 'OUT',
+        messageType: options.messageType ?? 'text',
       },
     });
-    emit('zalo:status', { candidateId, status, messageId: msg.id });
+    emit('zalo:status', { candidateId, status, messageId: msg.id, direction: options.direction ?? 'OUT' });
     return { ok: status === 'SENT', provider, messageId: msg.id, status };
+  }
+
+  /** Gửi tin text tùy ý (dùng cho auto-reply, thông báo thủ công...). */
+  async sendText(phone: string, content: string, candidateId: string | null): Promise<{ ok: boolean; status: string }> {
+    const r = await this.sendRaw(phone, content, candidateId);
+    return { ok: r.ok, status: r.status };
   }
 
   async sendTrainingNotice(candidateId: string): Promise<{ ok: boolean; provider: string; messageId?: string }> {
@@ -275,13 +283,96 @@ export class ZaloService {
     return { ok: r.ok, status: r.status };
   }
 
+  /**
+   * Webhook Zalo OA: xử lý tin nhắn 2 chiều.
+   * - Text "điểm danh" → checkin (kèm GPS nếu có).
+   * - Message location (GPS) → checkin theo vị trí (geofence).
+   * - Tin nhắn khác → AI auto-reply (nếu bật), có bối cảnh hồ sơ ứng viên.
+   */
   async webhook(payload: unknown): Promise<void> {
-    const p = payload as { sender?: { phone?: string; user_id?: string }; message?: { text?: string } };
-    const text = (p.message?.text ?? '').trim().toUpperCase();
-    const phone = p.sender?.phone ?? String(p.sender?.user_id ?? '');
-    if (text.includes('ĐIỂM DANH') || text.includes('DIEM DANH')) {
-      const { attendanceService } = await import('./AttendanceService');
-      await attendanceService.checkin({ phone, method: 'ZALO' });
+    const p = payload as {
+      sender?: { phone?: string; user_id?: string; id?: string };
+      message?: {
+        text?: string;
+        type?: string;
+        location?: { lat?: number | string; long?: number | string };
+      };
+    };
+    const phone = p.sender?.phone ?? String(p.sender?.user_id ?? p.sender?.id ?? '');
+    if (!phone) return;
+    const message = p.message ?? {};
+    const text = String(message.text ?? '').trim();
+    const upper = text.toUpperCase();
+    const isLocation = message.type === 'location';
+    let location: { lat: number; lng: number } | null = null;
+    if (isLocation) {
+      const lat = Number(message.location?.lat);
+      const lng = Number(message.location?.long ?? message.location?.lat);
+      if (Number.isNaN(lat) || Number.isNaN(lng)) {
+        return; // location thiếu tọa độ hợp lệ
+      }
+      location = { lat, lng };
+    }
+
+    // Tìm ứng viên theo SĐT để gắn tin nhắn + gửi auto-reply có ngữ cảnh
+    const candidate = await prisma.candidate.findFirst({ where: { sdtZalo: phone } });
+    const candidateId = candidate?.id ?? null;
+
+    // Lưu tin nhắn NHẬN vào lịch sử (direction = IN)
+    const incoming = await prisma.zaloMessage.create({
+      data: {
+        id: nextId('ZAL'),
+        candidateId,
+        phone,
+        content: isLocation && location
+          ? `[VỊ TRÍ] ${location.lat}, ${location.lng}`
+          : (text || '(tin nhắn rỗng)'),
+        status: 'SENT',
+        provider: 'ZALO_OA',
+        direction: 'IN',
+        messageType: isLocation ? 'location' : 'text',
+        lat: location?.lat ?? null,
+        lng: location?.lng ?? null,
+      },
+    });
+    emit('zalo:incoming', {
+      id: incoming.id,
+      candidateId,
+      phone,
+      content: incoming.content,
+      messageType: incoming.messageType,
+    });
+
+    // Lệnh điểm danh (text hoặc GPS) → checkin + phản hồi kết quả
+    if (upper.includes('ĐIỂM DANH') || upper.includes('DIEM DANH') || isLocation) {
+      const { attendanceService, checkinReasonText } = await import('./AttendanceService');
+      const result = await attendanceService.checkin({
+        phone,
+        method: 'ZALO',
+        location,
+      });
+      const reply = checkinReasonText(result.valid, result.reason, candidate?.tenUv ?? 'Bạn');
+      await this.sendRaw(phone, reply, candidateId).catch(() => undefined);
+      return;
+    }
+
+    // Tin nhắn thường → AI auto-reply
+    if (!text) return;
+    const settings = await getSettings();
+    if (settings.zalo?.autoReply === false) return;
+    try {
+      const { chatWithAI } = await import('./ai/AIClient');
+      const context = candidate
+        ? `Ứng viên ${candidate.tenUv}, chi nhánh ${candidate.chiNhanh}, ca ${candidate.caLam}.`
+        : 'Người lạ chưa có hồ sơ trong hệ thống.';
+      const answer = await chatWithAI(
+        `Bạn là trợ lý tuyển dụng của UMBO MILK (chuỗi trà sữa). Ngữ cảnh: ${context}.
+Quy tắc: trả lời ngắn gọn, thân thiện bằng tiếng Việt, tối đa 3 câu. Không bịa thông tin về lương cụ thể — hướng dẫn liên hệ quản lý chi nhánh. Nếu câu hỏi ngoài phạm vi, từ chối khéo.`,
+        text,
+      );
+      await this.sendRaw(phone, answer, candidateId).catch(() => undefined);
+    } catch (e) {
+      console.warn('[Zalo] AI auto-reply:', e instanceof Error ? e.message : String(e));
     }
   }
 }

@@ -4,13 +4,13 @@
 
 @layer base {
   body {
-    @apply bg-slate-50 text-slate-800 antialiased;
+    @apply bg-slate-50 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-200;
   }
 }
 
 @layer components {
   .card {
-    @apply bg-white rounded-2xl shadow-card border border-slate-100;
+    @apply bg-white rounded-2xl shadow-card border border-slate-100 dark:bg-slate-900 dark:border-slate-800;
   }
   .btn {
     @apply inline-flex items-center justify-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed;
@@ -19,7 +19,7 @@
     @apply btn bg-brand-600 text-white hover:bg-brand-700 focus:ring-brand-400;
   }
   .btn-secondary {
-    @apply btn bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 focus:ring-slate-300;
+    @apply btn bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 focus:ring-slate-300 dark:bg-slate-900 dark:text-slate-200 dark:border-slate-700 dark:hover:bg-slate-800;
   }
   .btn-danger {
     @apply btn bg-rose-600 text-white hover:bg-rose-700 focus:ring-rose-400;
@@ -28,13 +28,13 @@
     @apply btn bg-emerald-600 text-white hover:bg-emerald-700 focus:ring-emerald-400;
   }
   .input {
-    @apply w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-400;
+    @apply w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-400 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200 dark:placeholder:text-slate-500;
   }
   .label {
-    @apply block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1;
+    @apply block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1 dark:text-slate-400;
   }
   .table-th {
-    @apply px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap;
+    @apply px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap dark:text-slate-400;
   }
   .table-td {
     @apply px-3 py-2.5 text-sm whitespace-nowrap;
@@ -49,8 +49,8 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  @apply bg-slate-300 rounded-full;
+  @apply bg-slate-300 rounded-full dark:bg-slate-700;
 }
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-slate-400;
+  @apply bg-slate-400 dark:bg-slate-600;
 }

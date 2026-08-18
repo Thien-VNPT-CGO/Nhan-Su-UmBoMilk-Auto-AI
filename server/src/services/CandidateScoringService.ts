@@ -5,6 +5,7 @@ import { syncQueue } from './SyncQueueService';
 import { audit } from './AuditService';
 import { emit } from '../sockets';
 import { ApiError } from '../lib/errors';
+import { createSemaphore } from '../lib/concurrency';
 import type { Candidate } from '@prisma/client';
 
 export interface ScoringResult {
@@ -24,7 +25,15 @@ export function classifyXepLoai(tongDiem: number): 'DAT' | 'GIOI' | 'XUAT_SAC' |
 }
 
 export class CandidateScoringService {
+  // Chống chồng lấn khi nhiều yêu cầu chấm điểm cùng lúc (click nhanh + auto-score):
+  // tối đa 2 lời gọi AI song song, còn lại xếp hàng chờ - web không bị nghẽn vì hàng loạt request AI.
+  private scoreGate = createSemaphore(2);
+
   async scoreCandidate(candidate: Candidate, user: string): Promise<ScoringResult> {
+    return this.scoreGate.run(() => this.scoreCandidateInner(candidate, user));
+  }
+
+  private async scoreCandidateInner(candidate: Candidate, user: string): Promise<ScoringResult> {
     const settings = await getSettings();
     const rules = settings.scoring.rules;
 

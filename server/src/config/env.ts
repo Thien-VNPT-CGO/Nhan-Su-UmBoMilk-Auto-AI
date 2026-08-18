@@ -41,6 +41,11 @@ export const env = {
   zaloAppId: process.env.ZALO_APP_ID ?? '',
   zaloAppSecret: process.env.ZALO_APP_SECRET ?? '',
   zaloRedirectUri: process.env.ZALO_REDIRECT_URI ?? 'http://localhost:3000/api/zalo/oauth-callback',
+
+  // ===== Nâng cấp v1.1: Monitoring + Backup =====
+  sentryDsn: process.env.SENTRY_DSN ?? '',
+  backupAutoDays: int(process.env.BACKUP_AUTO_DAYS, 7),
+  backupDriveFolder: process.env.BACKUP_DRIVE_FOLDER ?? '',
 };
 
 export const isProd = env.nodeEnv === 'production';
