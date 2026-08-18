@@ -15,7 +15,7 @@ import type { Candidate } from '@prisma/client';
 function computeHash(c: {
   id: string; tenUv: string; namSinh: string; trinhDo: string; queQuan: string;
   sdtZalo: string; caLam: string; chiNhanh: string; kinhNghiem: string; xuLy: string;
-  linkFb: string; hrDecision: string | null; tongDiem: number | null;
+  linkFb: string; kenhBietTin: string | null; hrDecision: string | null; tongDiem: number | null;
   aiRecommendation: string | null; dataVersion: number;
   ngayBatDauTraining: Date | null; trangThaiTraining: string | null;
 }): string {
@@ -31,6 +31,7 @@ function computeHash(c: {
     kinhNghiem: c.kinhNghiem,
     xuLy: c.xuLy,
     linkFb: c.linkFb,
+    kenhBietTin: c.kenhBietTin ?? '',
     hrDecision: c.hrDecision,
     tongDiem: c.tongDiem,
     aiRecommendation: c.aiRecommendation,
@@ -61,6 +62,7 @@ export class CandidateService {
     kinhNghiem: string;
     xuLy: string;
     linkFb: string;
+    kenhBietTin?: string;
     source?: string;
   }): Promise<Candidate> {
     const sdt = normalizePhone(input.sdtZalo);
@@ -83,7 +85,8 @@ export class CandidateService {
           existing.chiNhanh === input.chiNhanh &&
           existing.kinhNghiem === input.kinhNghiem &&
           existing.xuLy === input.xuLy &&
-          existing.linkFb === input.linkFb;
+          existing.linkFb === input.linkFb &&
+          (existing.kenhBietTin ?? '') === (input.kenhBietTin ?? '');
         if (dataSame) return existing;
         // Cùng thời gian nhưng dữ liệu đã sửa trên web → chỉ cập nhật nếu chưa bị HR can thiệp
         return this.updateFromForm(existing, input, existing.thoiGian);
@@ -115,6 +118,7 @@ export class CandidateService {
         kinhNghiem: input.kinhNghiem,
         xuLy: input.xuLy,
         linkFb: input.linkFb,
+        kenhBietTin: input.kenhBietTin ?? '',
         source: input.source ?? 'GOOGLE_FORM',
         dataVersion: 1,
       },
@@ -174,6 +178,7 @@ export class CandidateService {
     kinhNghiem: string;
     xuLy: string;
     linkFb: string;
+    kenhBietTin?: string;
   }, thoiGian: Date): Promise<Candidate> {
     const humanEdited = existing.hrDecision !== null ||
       (existing.updatedBy !== null && !existing.updatedBy.startsWith('SYSTEM'));
@@ -195,6 +200,7 @@ export class CandidateService {
         kinhNghiem: input.kinhNghiem,
         xuLy: input.xuLy,
         linkFb: input.linkFb,
+        kenhBietTin: input.kenhBietTin ?? '',
         aiScore: Prisma.JsonNull,
         tongDiem: null,
         xepLoai: null,

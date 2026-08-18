@@ -66,6 +66,7 @@ model Candidate {
   kinhNghiem String
   xuLy       String
   linkFb     String
+  kenhBietTin String? // Kênh biết tin ứng tuyển: "Bạn Bè, Người quen giới thiệu" / quảng cáo...
 
   aiScore          Json? // breakdown D_* / P_*
   tongDiem         Int?

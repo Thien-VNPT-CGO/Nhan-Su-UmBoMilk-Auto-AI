@@ -9,21 +9,21 @@ import type { Candidate } from '@prisma/client';
 
 export const LOC_HO_SO_COLS = [
   'CANDIDATE_ID', 'THOI_GIAN', 'TEN_UV', 'GIOI_TINH', 'NAM_SINH', 'TRINH_DO', 'QUE_QUAN',
-  'SDT_ZALO', 'CA_LAM', 'CHI_NHANH', 'KINH_NGHIEM', 'XU_LY', 'LINK_FB',
+  'SDT_ZALO', 'CA_LAM', 'CHI_NHANH', 'KINH_NGHIEM', 'XU_LY', 'LINK_FB', 'KENH_BIET_TIN',
   'KET_QUA_PV', 'DATA_VERSION', 'UPDATED_AT', 'UPDATED_BY', 'SYNC_STATUS', 'DATA_HASH',
 ];
 
 export const DIEM_UV_COLS = [
   'CANDIDATE_ID', 'D_HO_TEN', 'D_NAM_SINH', 'D_QUE_QUAN', 'D_SDT', 'D_TRINH_DO',
-  'D_KINH_NGHIEM', 'D_XU_LY', 'D_LINK_FB',
+  'D_KINH_NGHIEM', 'D_XU_LY', 'D_LINK_FB', 'D_KENH_BIET_TIN',
   'P_HO_TEN', 'P_NAM_SINH', 'P_QUE_QUAN', 'P_SDT', 'P_TRINH_DO', 'P_KINH_NGHIEM',
-  'P_XU_LY', 'P_LINK_FB',
+  'P_XU_LY', 'P_LINK_FB', 'P_KENH_BIET_TIN',
   'TONG_DIEM', 'XEP_LOAI', 'AI_RECOMMENDATION', 'AI_NOTE', 'AI_CONFIDENCE', 'DATA_VERSION', 'UPDATED_AT',
 ];
 
 export const HO_SO_NV_COLS = [
   'CANDIDATE_ID', 'THOI_GIAN', 'TEN_UV', 'NAM_SINH', 'TRINH_DO', 'QUE_QUAN', 'SDT_ZALO',
-  'CA_LAM', 'CHI_NHANH', 'NGAY_BAT_DAU_TRAINING',
+  'CA_LAM', 'CHI_NHANH', 'KENH_BIET_TIN', 'NGAY_BAT_DAU_TRAINING',
   'TRAINING_DAY_1', 'TRAINING_DAY_2', 'TRAINING_DAY_3', 'TRAINING_DAY_4',
   'TRAINING_DAY_5', 'TRAINING_DAY_6', 'TRAINING_DAY_7',
   'SO_NGAY_DA_TRAINING', 'TRANG_THAI_TRAINING', 'UPDATED_AT', 'UPDATED_BY', 'DATA_VERSION', 'SYNC_STATUS',
@@ -325,6 +325,31 @@ export class GoogleSheetService {
     return map;
   }
 
+  /** Tự thêm cột còn thiếu vào cuối sheet (nâng cấp phiên bản: cột mới KENH_BIET_TIN... không cần chạy provision thủ công). */
+  private async ensureHeaders(sheetName: string, cols: string[]): Promise<void> {
+    if (!this.configured) return;
+    const colMap = await this.ensureColMap(sheetName);
+    const missing = cols.filter((c) => colMap[c] === undefined);
+    if (missing.length === 0) return;
+    const sheetId = await this.sheetIdByTitle(sheetName);
+    await this.sheets!.spreadsheets.batchUpdate({
+      spreadsheetId: this.id,
+      requestBody: {
+        requests: [
+          {
+            appendCells: {
+              sheetId,
+              rows: [{ values: missing.map((c) => ({ userEnteredValue: { stringValue: c } })) }],
+              fields: 'userEnteredValue',
+            },
+          },
+        ],
+      },
+    });
+    this.colCache.delete(sheetName);
+    console.log(`[Sheets] đã thêm cột mới vào ${sheetName}: ${missing.join(', ')}`);
+  }
+
   async findByCandidateId(sheetName: string, candidateId: string): Promise<{ rowIndex: number; row: string[] } | null> {
     const colMap = await this.ensureColMap(sheetName);
     const idCol = colMap['CANDIDATE_ID'];
@@ -430,6 +455,7 @@ export class GoogleSheetService {
 
   // ================= SYNC CANDIDATE -> LOC_HO_SO_PV =================
   async syncCandidate(c: Candidate): Promise<void> {
+    await this.ensureHeaders(this.sheetNames.locHoSo, LOC_HO_SO_COLS);
     const score = (c.aiScore as Record<string, unknown> | null) ?? {};
     const row: (string | number)[] = LOC_HO_SO_COLS.map((col) => {
       switch (col) {
@@ -446,6 +472,7 @@ export class GoogleSheetService {
         case 'KINH_NGHIEM': return c.kinhNghiem;
         case 'XU_LY': return c.xuLy;
         case 'LINK_FB': return c.linkFb;
+        case 'KENH_BIET_TIN': return c.kenhBietTin ?? '';
         case 'KET_QUA_PV': return c.hrDecision ?? (c.aiRecommendation ?? '');
         case 'DATA_VERSION': return c.dataVersion;
         case 'UPDATED_AT': return formatDateTime(c.updatedAt);
@@ -460,6 +487,7 @@ export class GoogleSheetService {
 
   // ================= SYNC SCORE -> DIEM_UV =================
   async syncScore(c: Candidate): Promise<void> {
+    await this.ensureHeaders(this.sheetNames.diemUv, DIEM_UV_COLS);
     const s = (c.aiScore as Record<string, unknown> | null) ?? {};
     const g = (k: string) => String(s[k] ?? '');
     const row: (string | number)[] = DIEM_UV_COLS.map((col) => {
@@ -473,6 +501,7 @@ export class GoogleSheetService {
         case 'D_KINH_NGHIEM': return c.kinhNghiem;
         case 'D_XU_LY': return c.xuLy;
         case 'D_LINK_FB': return c.linkFb;
+        case 'D_KENH_BIET_TIN': return c.kenhBietTin ?? '';
         case 'P_HO_TEN': return g('p_hoTen');
         case 'P_NAM_SINH': return g('p_namSinh');
         case 'P_QUE_QUAN': return g('p_queQuan');
@@ -481,6 +510,7 @@ export class GoogleSheetService {
         case 'P_KINH_NGHIEM': return g('p_kinhNghiem');
         case 'P_XU_LY': return g('p_xuLy');
         case 'P_LINK_FB': return g('p_linkFb');
+        case 'P_KENH_BIET_TIN': return g('p_kenhBietTin');
         case 'TONG_DIEM': return c.tongDiem ?? '';
         case 'XEP_LOAI': return c.xepLoai ?? '';
         case 'AI_RECOMMENDATION': return c.aiRecommendation ?? '';
@@ -498,6 +528,7 @@ export class GoogleSheetService {
   // QUY TẮC: chỉ ứng viên ĐÃ CÓ LỊCH TRAINING (HR đặt ngày bắt đầu) mới nằm trong sheet này.
   // Chưa có lịch → xóa dòng cũ nếu còn (không bao giờ tạo dòng).
   async syncTraining(c: Candidate): Promise<void> {
+    await this.ensureHeaders(this.sheetNames.hoSoNv, HO_SO_NV_COLS);
     if (!c.ngayBatDauTraining) {
       try {
         const found = await this.findByCandidateId(this.sheetNames.hoSoNv, c.id);
@@ -525,6 +556,7 @@ export class GoogleSheetService {
         case 'SDT_ZALO': return c.sdtZalo;
         case 'CA_LAM': return c.caLam;
         case 'CHI_NHANH': return c.chiNhanh;
+        case 'KENH_BIET_TIN': return c.kenhBietTin ?? '';
         case 'NGAY_BAT_DAU_TRAINING': return c.ngayBatDauTraining ? formatDate(c.ngayBatDauTraining) : '';
         case 'TRAINING_DAY_1':
         case 'TRAINING_DAY_2':
@@ -629,6 +661,7 @@ export function candidateDataHash(c: Candidate): string {
     kinhNghiem: c.kinhNghiem,
     xuLy: c.xuLy,
     linkFb: c.linkFb,
+    kenhBietTin: c.kenhBietTin ?? '',
     hrDecision: c.hrDecision,
     tongDiem: c.tongDiem,
     aiRecommendation: c.aiRecommendation,
@@ -652,6 +685,7 @@ export interface FormResponseRow {
   kinhNghiem: string;
   xuLy: string;
   linkFb: string;
+  kenhBietTin: string;
 }
 
 const FORM_HEADER_ALIASES: Record<string, string[]> = {
@@ -666,6 +700,7 @@ const FORM_HEADER_ALIASES: Record<string, string[]> = {
   kinhNghiem: ['kinh nghiem', 'kinh nghiem lam viec'],
   xuLy: ['xu ly', 'huong xu ly', 'cong viec dot xuat'],
   linkFb: ['link facebook', 'facebook', 'fb'],
+  kenhBietTin: ['biet tin ung tuyen qua hinh thuc', 'biet tin ung tuyen', 'kenh biet tin', 'hinh thuc ung tuyen'],
 };
 
 function normalizeHeader(h: string): string {
@@ -724,6 +759,7 @@ export function mapFormResponseRow(headers: string[], row: unknown[]): FormRespo
     kinhNghiem: mapped.kinhNghiem ?? '',
     xuLy: mapped.xuLy ?? '',
     linkFb: mapped.linkFb ?? '',
+    kenhBietTin: mapped.kenhBietTin ?? '',
   };
 }
 

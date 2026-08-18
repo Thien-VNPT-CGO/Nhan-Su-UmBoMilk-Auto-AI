@@ -31,6 +31,7 @@ interface SettingsData {
         kinhNghiem: { enabled: boolean; scores: { NO_EXPERIENCE: number; OTHER_EXPERIENCE: number; FNB_EXPERIENCE: number } };
         xuLy: { enabled: boolean; score: number };
         linkFb: { enabled: boolean; score: number };
+        kenhBietTin: { enabled: boolean; score: number };
       };
     };
     attendance: {
@@ -587,6 +588,7 @@ export default function Settings() {
                 ['sdt', 'SĐT hợp lệ', 'score'],
                 ['xuLy', 'Xử lý tình huống (có trả lời)', 'score'],
                 ['linkFb', 'Facebook (CO_VE_CHINH_CHU)', 'score'],
+                ['kenhBietTin', 'Bạn bè / người quen giới thiệu', 'score'],
               ] as const).map(([key, label, field]) => {
                 const rule = s.scoring.rules[key];
                 return (

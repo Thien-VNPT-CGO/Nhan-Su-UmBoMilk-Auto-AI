@@ -26,6 +26,7 @@ const CANDIDATE_FIELDS: Record<string, { label: string; schema: z.ZodTypeAny }> 
   kinhNghiem: { label: 'KINH_NGHIEM', schema: z.string() },
   xuLy: { label: 'XU_LY', schema: z.string() },
   linkFb: { label: 'LINK_FB', schema: z.string() },
+  kenhBietTin: { label: 'KENH_BIET_TIN', schema: z.string() },
 };
 
 router.get('/', async (req: AuthedRequest, res, next) => {

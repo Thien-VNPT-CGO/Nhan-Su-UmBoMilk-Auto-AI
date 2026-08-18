@@ -95,6 +95,12 @@ export const DEFAULT_SETTINGS = {
       },
       xuLy: { enabled: true, score: 1 },
       linkFb: { enabled: true, score: 0 },
+      // Kênh biết tin: chọn "Bạn Bè, Người quen giới thiệu" → AI tự chấm cộng điểm (keywords không dấu)
+      kenhBietTin: {
+        enabled: true,
+        score: 1,
+        keywords: ['gioi thieu', 'ban be', 'nguoi quen'],
+      },
     },
     passThreshold: 7,
   },

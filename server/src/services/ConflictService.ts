@@ -71,7 +71,7 @@ export class ConflictService {
 
 const CANDIDATE_FIELDS = new Set([
   'tenUv', 'namSinh', 'trinhDo', 'queQuan', 'sdtZalo', 'caLam', 'chiNhanh',
-  'kinhNghiem', 'xuLy', 'linkFb', 'htChuHo', 'sdtChuHo', 'moTaNha', 'ghiChu',
+  'kinhNghiem', 'xuLy', 'linkFb', 'kenhBietTin', 'htChuHo', 'sdtChuHo', 'moTaNha', 'ghiChu',
   'trangThaiTraining', 'ngayBatDauTraining', 'soNgayDaTraining', 'hoTroKhoKhan', 'ngayNhanViec',
 ]);
 

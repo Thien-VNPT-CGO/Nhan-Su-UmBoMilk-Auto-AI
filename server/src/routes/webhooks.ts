@@ -24,6 +24,7 @@ const formSchema = z.object({
   kinhNghiem: z.string().optional().default(''),
   xuLy: z.string().optional().default(''),
   linkFb: z.string().optional().default(''),
+  kenhBietTin: z.string().optional().default(''),
 });
 
 router.post('/form', async (req, res, next) => {

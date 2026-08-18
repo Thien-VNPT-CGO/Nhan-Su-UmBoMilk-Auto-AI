@@ -4,7 +4,7 @@ import { nextId } from '../lib/id';
 import { env } from '../config/env';
 
 const COMPARE_FIELDS: (keyof CandidateBusiness)[] = [
-  'tenUv', 'namSinh', 'trinhDo', 'queQuan', 'sdtZalo', 'caLam', 'chiNhanh', 'kinhNghiem', 'xuLy', 'linkFb',
+  'tenUv', 'namSinh', 'trinhDo', 'queQuan', 'sdtZalo', 'caLam', 'chiNhanh', 'kinhNghiem', 'xuLy', 'linkFb', 'kenhBietTin',
 ];
 
 interface CandidateBusiness {
@@ -18,6 +18,7 @@ interface CandidateBusiness {
   kinhNghiem: string;
   xuLy: string;
   linkFb: string;
+  kenhBietTin: string;
 }
 
 export class ReconciliationService {

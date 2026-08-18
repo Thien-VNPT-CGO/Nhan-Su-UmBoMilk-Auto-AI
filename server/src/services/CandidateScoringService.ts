@@ -104,7 +104,28 @@ export class CandidateScoringService {
     const p_xuLy = rules.xuLy.enabled && ai.xuLy.score > 0 ? rules.xuLy.score : 0;
     const p_linkFb = rules.linkFb.enabled ? ai.linkFb.score : 0;
 
-    const tongDiem = p_hoTen + p_namSinh + p_queQuan + p_sdt + p_trinhDo + p_kinhNghiem + p_xuLy + p_linkFb;
+    // Kênh biết tin: chọn "Bạn Bè, Người quen giới thiệu" → AI tự chấm loại ứng viên (cộng điểm)
+    let p_kenhBietTin = 0;
+    let kenhBietTinNote = 'Không có dữ liệu';
+    if (rules.kenhBietTin.enabled) {
+      const raw = (candidate.kenhBietTin ?? '').trim();
+      if (raw) {
+        const norm = normalizeNoAccent(raw);
+        const isReferral = (rules.kenhBietTin.keywords ?? ['gioi thieu', 'ban be', 'nguoi quen']).some((k) =>
+          norm.includes(normalizeNoAccent(String(k))),
+        );
+        if (isReferral) {
+          p_kenhBietTin = rules.kenhBietTin.score ?? 0;
+          kenhBietTinNote = `Bạn bè/người quen giới thiệu (+${p_kenhBietTin}đ)`;
+        } else {
+          kenhBietTinNote = `Quảng cáo/kênh khác (+0đ)`;
+        }
+      } else {
+        kenhBietTinNote = 'Không có dữ liệu (+0đ)';
+      }
+    }
+
+    const tongDiem = p_hoTen + p_namSinh + p_queQuan + p_sdt + p_trinhDo + p_kinhNghiem + p_xuLy + p_linkFb + p_kenhBietTin;
     const threshold = settings.scoring.passThreshold ?? 7;
     const aiRecommendation = tongDiem >= threshold ? 'PASS' : 'FAIL';
     const xepLoai = classifyXepLoai(tongDiem);
@@ -127,6 +148,7 @@ export class CandidateScoringService {
       d_kinhNghiem: candidate.kinhNghiem,
       d_xuLy: candidate.xuLy,
       d_linkFb: candidate.linkFb,
+      d_kenhBietTin: candidate.kenhBietTin ?? '',
       p_hoTen,
       p_namSinh,
       p_queQuan,
@@ -135,6 +157,7 @@ export class CandidateScoringService {
       p_kinhNghiem,
       p_xuLy,
       p_linkFb,
+      p_kenhBietTin,
       ai_xu_ly_note: ai.xuLy.note,
       ai_kinh_nghiem_classification: ai.kinhNghiem.classification,
       ai_kinh_nghiem_reason: ai.kinhNghiem.reason,
@@ -151,6 +174,7 @@ export class CandidateScoringService {
         kinhNghiem: { diem: p_kinhNghiem, nhanXet: ai.kinhNghiem.reason },
         xuLy: { diem: p_xuLy, nhanXet: ai.xuLy.note },
         linkFb: { diem: p_linkFb, nhanXet: ai.linkFb.reason },
+        kenhBietTin: { diem: p_kenhBietTin, nhanXet: kenhBietTinNote },
       },
     };
 
@@ -195,3 +219,14 @@ export class CandidateScoringService {
 }
 
 export const candidateScoringService = new CandidateScoringService();
+
+/** Bỏ dấu tiếng Việt + lowercase để so khớp chuỗi không phân biệt dấu (vd "giới thiệu" == "gioi thieu"). */
+export function normalizeNoAccent(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/\s+/g, ' ')
+    .trim();
+}

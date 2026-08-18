@@ -104,6 +104,7 @@ export async function importFormResponses(): Promise<FormImportResult> {
           kinhNghiem: mapped.kinhNghiem,
           xuLy: mapped.xuLy,
           linkFb: mapped.linkFb,
+          kenhBietTin: mapped.kenhBietTin,
           source: 'GOOGLE_FORM',
         });
         result.imported++;

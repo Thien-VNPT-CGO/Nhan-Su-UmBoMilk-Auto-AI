@@ -22,6 +22,7 @@ interface CandidateDetail {
   kinhNghiem: string;
   xuLy: string;
   linkFb: string;
+  kenhBietTin: string | null;
   aiScore: Record<string, unknown> | null;
   tongDiem: number | null;
   aiRecommendation: string | null;
@@ -145,6 +146,7 @@ export default function CandidateDrawer({
     { label: 'Kinh nghiệm', key: 'p_kinhNghiem' },
     { label: 'Xử lý tình huống', key: 'p_xuLy' },
     { label: 'Facebook', key: 'p_linkFb' },
+    { label: 'Kênh biết tin', key: 'p_kenhBietTin' },
   ];
 
   return (
@@ -181,6 +183,7 @@ export default function CandidateDrawer({
                   ['Quê quán', c.queQuan], ['SĐT / Zalo', c.sdtZalo], ['Ca mong muốn', c.caLam],
                   ['Chi nhánh', c.chiNhanh], ['Kinh nghiệm', c.kinhNghiem],
                   ['Xử lý tình huống', c.xuLy], ['Link Facebook', c.linkFb],
+                  ['Kênh biết tin', c.kenhBietTin],
                 ].map(([label, value]) => (
                   <div key={label} className="rounded-xl bg-slate-50 p-3.5">
                     <div className="label">{label}</div>
