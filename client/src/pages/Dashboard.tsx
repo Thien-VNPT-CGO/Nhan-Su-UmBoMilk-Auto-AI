@@ -17,6 +17,7 @@ interface Overview {
   pendingDecision: number;
   passToday: number;
   failToday: number;
+  interviewToday: number;
   training: number;
   doneTraining: number;
   needReview: number;
@@ -72,6 +73,7 @@ export default function Dashboard() {
         <StatCard label="AI đang chấm" value={data.aiScoring} icon={<BrainCircuit size={20} />} accent="sky" onClick={() => navigate('/scoring')} />
         <StatCard label="Chờ duyệt" value={data.pendingDecision} icon={<Hourglass size={20} />} accent="amber" onClick={() => navigate('/scoring')} />
         <StatCard label="Đạt hôm nay" value={data.passToday} icon={<CheckCircle2 size={20} />} accent="emerald" onClick={() => navigate('/candidates?status=PASS')} />
+        <StatCard label="PV hôm nay" value={data.interviewToday} icon={<CalendarClock size={20} />} accent="indigo" onClick={() => navigate('/training')} />
         <StatCard label="Loại hôm nay" value={data.failToday} icon={<XCircle size={20} />} accent="rose" onClick={() => navigate('/candidates?status=FAIL')} />
         <StatCard label="Đang đào tạo" value={data.training} icon={<GraduationCap size={20} />} accent="indigo" onClick={() => navigate('/training')} />
         <StatCard label="Hoàn thành đào tạo" value={data.doneTraining} icon={<Trophy size={20} />} accent="emerald" onClick={() => navigate('/training')} />

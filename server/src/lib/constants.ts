@@ -148,6 +148,21 @@ export const DEFAULT_SETTINGS = {
     // AI tự trả lời tin nhắn của ứng viên gửi đến OA (trừ lệnh điểm danh)
     autoReply: true,
   },
+  // Phỏng vấn: nhắc Zalo trước giờ PV + link GG Meet mặc định theo chi nhánh
+  interview: {
+    durationMinutes: 30,
+    remindHoursBefore: 2,
+    autoRemind: true,
+    branchMeetLinks: {} as Record<string, string>, // { "Chi nhánh A": "https://meet.google.com/..." }
+  },
+  // Google Calendar: tự tạo sự kiện + link Meet mới mỗi lần chấm PASS
+  googleCalendar: {
+    enabled: false,
+    clientId: '',
+    clientSecret: '',
+    refreshToken: '',
+    calendarId: '',
+  },
   autoDedup: {
     enabled: true,
   },

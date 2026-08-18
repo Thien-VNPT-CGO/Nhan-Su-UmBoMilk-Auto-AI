@@ -35,6 +35,7 @@ interface CandidateDetail {
   hrDecisionAt: string | null;
   phongVanAt: string | null;
   ggMeetLink: string | null;
+  interviewStatus: string | null;
   ngayBatDauTraining: string | null;
   trangThaiTraining: string | null;
   soNgayDaTraining: number;
@@ -76,8 +77,12 @@ export default function CandidateDrawer({
   const [confirm, setConfirm] = useState<null | 'PASS' | 'FAIL' | 'REVIEW'>(null);
   const [reason, setReason] = useState('');
   const [interviewOpen, setInterviewOpen] = useState(false);
+  const [interviewEditMode, setInterviewEditMode] = useState(false);
+  const [interviewResend, setInterviewResend] = useState(true);
   const [phongVanAt, setPhongVanAt] = useState('');
   const [ggMeetLink, setGgMeetLink] = useState('');
+  const [branchMeetLinks, setBranchMeetLinks] = useState<Record<string, string>>({});
+  const [calendarEnabled, setCalendarEnabled] = useState(false);
   const [auditRows, setAuditRows] = useState<unknown[]>([]);
   const [syncRows, setSyncRows] = useState<unknown[]>([]);
 
@@ -105,6 +110,16 @@ export default function CandidateDrawer({
     }
   }, [tab, candidateId, open, c]);
 
+  useEffect(() => {
+    api
+      .get<{ settings: { interview?: { branchMeetLinks?: Record<string, string> }; googleCalendar?: { enabled?: boolean; refreshToken?: string } } }>('/settings')
+      .then((d) => {
+        setBranchMeetLinks(d.settings.interview?.branchMeetLinks ?? {});
+        setCalendarEnabled(!!d.settings.googleCalendar?.enabled && !!d.settings.googleCalendar?.refreshToken);
+      })
+      .catch(() => undefined);
+  }, []);
+
   const act = async (fn: () => Promise<unknown>, msg: string) => {
     try {
       await fn();
@@ -127,30 +142,61 @@ export default function CandidateDrawer({
     );
 
   const openInterviewModal = () => {
+    setInterviewEditMode(false);
+    setInterviewResend(true);
+    setPhongVanAt('');
+    // Calendar bật → để trống để server tự tạo link Meet; chưa có Calendar → prefill link mặc định chi nhánh
+    setGgMeetLink(calendarEnabled ? '' : (c ? branchMeetLinks[c.chiNhanh] ?? '' : ''));
+    setInterviewOpen(true);
+  };
+
+  const openEditInterviewModal = () => {
+    setInterviewEditMode(true);
+    setInterviewResend(false);
     setPhongVanAt(c?.phongVanAt ? c.phongVanAt.slice(0, 16) : '');
     setGgMeetLink(c?.ggMeetLink ?? '');
     setInterviewOpen(true);
   };
 
   const submitInterview = async () => {
-    if (!phongVanAt || !ggMeetLink) {
-      toast('error', 'Nhập đủ thời gian phỏng vấn và link GG Meet.');
+    if (!phongVanAt) {
+      toast('error', 'Chọn thời gian phỏng vấn.');
       return;
     }
-    await act(
-      () =>
-        api.patch<{ zalo: { ok: boolean; provider: string } | null }>(`/candidates/${candidateId}/decision`, {
-          decision: 'PASS',
-          reason: reason || undefined,
-          phongVanAt,
-          ggMeetLink,
-        }).then((res) => {
-          if (!res.zalo?.ok) toast('error', 'Đã lưu quyết định nhưng không gửi được tin Zalo (kiểm tra cấu hình OA).');
-        }),
-      'Đã lưu quyết định HR & gửi lời mời phỏng vấn qua Zalo.',
-    );
+    if (interviewEditMode) {
+      await act(
+        () =>
+          api.patch<{ zalo: { ok: boolean; provider: string } | null }>(`/candidates/${candidateId}/interview`, {
+            phongVanAt,
+            ggMeetLink: ggMeetLink.trim() || undefined,
+            resend: interviewResend,
+          }).then((res) => {
+            if (interviewResend && !res.zalo?.ok) toast('error', 'Đã lưu lịch nhưng không gửi được tin Zalo (kiểm tra cấu hình OA).');
+          }),
+        interviewResend ? 'Đã sửa lịch phỏng vấn & gửi lại lời mời qua Zalo.' : 'Đã sửa lịch phỏng vấn.',
+      );
+    } else {
+      await act(
+        () =>
+          api.patch<{ zalo: { ok: boolean; provider: string } | null }>(`/candidates/${candidateId}/decision`, {
+            decision: 'PASS',
+            reason: reason || undefined,
+            phongVanAt,
+            ggMeetLink: ggMeetLink.trim() || undefined,
+          }).then((res) => {
+            if (!res.zalo?.ok) toast('error', 'Đã lưu quyết định nhưng không gửi được tin Zalo (kiểm tra cấu hình OA).');
+          }),
+        'Đã lưu quyết định HR & gửi lời mời phỏng vấn qua Zalo.',
+      );
+    }
     setInterviewOpen(false);
   };
+
+  const setInterviewStatus = (status: string) =>
+    act(
+      () => api.patch(`/candidates/${candidateId}/interview`, { interviewStatus: status }),
+      'Đã cập nhật trạng thái phỏng vấn.',
+    );
 
   const resendInterview = () =>
     act(() => api.post(`/training/${candidateId}/interview-notify`, {}), 'Đã gửi lại lời mời phỏng vấn qua Zalo.');
@@ -322,9 +368,45 @@ export default function CandidateDrawer({
                       <Video size={14} className="text-emerald-600" />
                       <a className="text-emerald-700 underline break-all" href={c.ggMeetLink ?? '#'} target="_blank" rel="noreferrer">{c.ggMeetLink}</a>
                     </div>
-                    <button className="btn-secondary !px-2.5 !py-1.5 !text-xs mt-1" onClick={resendInterview}>
-                      <Send size={13} /> Gửi lại lời mời phỏng vấn (Zalo)
-                    </button>
+                    <div className="flex gap-1.5 pt-1">
+                      <button className="btn-secondary !px-2.5 !py-1.5 !text-xs" onClick={openEditInterviewModal}>
+                        <CalendarDays size={13} /> Sửa lịch
+                      </button>
+                      <button className="btn-secondary !px-2.5 !py-1.5 !text-xs" onClick={resendInterview}>
+                        <Send size={13} /> Gửi lại lời mời (Zalo)
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {c.hrDecision === 'PASS' && c.phongVanAt && (
+                  <div className="rounded-xl bg-slate-50 p-3.5 text-sm space-y-2">
+                    <div className="font-bold text-slate-700">Kết quả phỏng vấn</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        className={cn('btn !px-2.5 !py-1.5 !text-xs', c.interviewStatus === 'DA_PV' ? 'btn-primary' : 'btn-secondary')}
+                        onClick={() => setInterviewStatus('DA_PV')}
+                      >
+                        Đã phỏng vấn
+                      </button>
+                      <button
+                        className={cn('btn !px-2.5 !py-1.5 !text-xs', c.interviewStatus === 'QUA_PV' ? 'btn-success' : 'btn-secondary')}
+                        onClick={() => setInterviewStatus('QUA_PV')}
+                      >
+                        Qua PV
+                      </button>
+                      <button
+                        className={cn('btn !px-2.5 !py-1.5 !text-xs', c.interviewStatus === 'TRUOT_PV' ? 'btn-danger' : 'btn-secondary')}
+                        onClick={() => setInterviewStatus('TRUOT_PV')}
+                      >
+                        Trượt PV
+                      </button>
+                      <button
+                        className={cn('btn !px-2.5 !py-1.5 !text-xs', c.interviewStatus === 'VANG' ? 'btn-danger' : 'btn-secondary')}
+                        onClick={() => setInterviewStatus('VANG')}
+                      >
+                        Vắng
+                      </button>
+                    </div>
                   </div>
                 )}
                 {c.hrDecision && (
@@ -484,19 +566,45 @@ export default function CandidateDrawer({
         onConfirm={() => confirm && decide(confirm)}
       />
 
-      <Modal open={interviewOpen} onClose={() => setInterviewOpen(false)} title={`Chấm ĐẠT & hẹn phỏng vấn – ${c?.tenUv ?? ''}`}>
+      <Modal open={interviewOpen} onClose={() => setInterviewOpen(false)} title={`${interviewEditMode ? 'Sửa lịch phỏng vấn' : 'Chấm ĐẠT & hẹn phỏng vấn'} – ${c?.tenUv ?? ''}`}>
         <div className="space-y-4">
           <Field label="Thời gian phỏng vấn">
             <input type="datetime-local" className="input" value={phongVanAt} onChange={(e) => setPhongVanAt(e.target.value)} />
           </Field>
-          <Field label="Link Google Meet">
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              { label: '+1 giờ', get: () => new Date(Date.now() + 60 * 60_000) },
+              { label: '+3 giờ', get: () => new Date(Date.now() + 3 * 60 * 60_000) },
+              { label: 'Hôm nay 14:00', get: () => { const d = new Date(); d.setHours(14, 0, 0, 0); return d; } },
+              { label: 'Hôm nay 15:30', get: () => { const d = new Date(); d.setHours(15, 30, 0, 0); return d; } },
+              { label: 'Mai 9:00', get: () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); return d; } },
+              { label: 'Mai 14:00', get: () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(14, 0, 0, 0); return d; } },
+            ].map((q) => {
+              const d = q.get();
+              const pad = (n: number) => String(n).padStart(2, '0');
+              return (
+                <button key={q.label} className="btn-secondary !px-2.5 !py-1 !text-[11px]" onClick={() => setPhongVanAt(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`)}>
+                  {q.label}
+                </button>
+              );
+            })}
+          </div>
+          <Field label="Link Google Meet (để trống = hệ thống tự quyết định)">
             <input type="url" className="input" value={ggMeetLink} onChange={(e) => setGgMeetLink(e.target.value)} placeholder="https://meet.google.com/xxx-xxxx-xxx" />
           </Field>
           <p className="text-[11px] text-slate-400">
-            Sau khi chấm ĐẠT, hệ thống tự gửi tin Zalo cho ứng viên kèm thời gian phỏng vấn + link GG Meet.
+            {calendarEnabled
+              ? 'Để trống → hệ thống tự tạo sự kiện + link Google Meet mới. Nhập link tay sẽ ưu tiên dùng link đó.'
+              : 'Để trống → hệ thống dùng link GG Meet mặc định của chi nhánh (Cài đặt → Phỏng vấn & Meet).'}
           </p>
+          {interviewEditMode && (
+            <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+              <input type="checkbox" className="w-4 h-4 accent-brand-600" checked={interviewResend} onChange={(e) => setInterviewResend(e.target.checked)} />
+              Gửi lại lời mời phỏng vấn qua Zalo sau khi lưu
+            </label>
+          )}
           <button className="btn-success w-full" onClick={submitInterview}>
-            <Video size={15} /> Xác nhận ĐẠT & gửi lời mời phỏng vấn
+            <Video size={15} /> {interviewEditMode ? 'Lưu lịch phỏng vấn' : 'Xác nhận ĐẠT & gửi lời mời phỏng vấn'}
           </button>
         </div>
       </Modal>

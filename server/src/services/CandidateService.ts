@@ -8,6 +8,7 @@ import { emit } from '../sockets';
 import { getGoogleSheetService } from './GoogleSheetService';
 import { getSettings, saveSettings } from './SettingsService';
 import { zaloService } from './ZaloService';
+import { calendarService } from './GoogleCalendarService';
 import { TRAINING_STATUS } from '../lib/constants';
 import { Prisma } from '@prisma/client';
 import type { Candidate } from '@prisma/client';
@@ -399,8 +400,46 @@ export class CandidateService {
     const candidate = await prisma.candidate.findUnique({ where: { id } });
     if (!candidate) throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy ứng viên.');
 
-    if (decision === 'PASS' && (!interview?.phongVanAt || !interview.ggMeetLink)) {
-      throw ApiError.badRequest('INTERVIEW_REQUIRED', 'Chấm PASS cần nhập thời gian phỏng vấn và link GG Meet.');
+    let phongVanAt = candidate.phongVanAt;
+    let ggMeetLink = candidate.ggMeetLink;
+    let calendarEventId = candidate.calendarEventId;
+    if (decision === 'PASS') {
+      if (!interview?.phongVanAt) {
+        throw ApiError.badRequest('INTERVIEW_REQUIRED', 'Chấm PASS cần nhập thời gian phỏng vấn.');
+      }
+      phongVanAt = interview.phongVanAt;
+      let link = (interview.ggMeetLink ?? '').trim();
+      if (!link) {
+        // 1) Ưu tiên tự tạo link Meet qua Google Calendar (nếu đã kết nối)
+        try {
+          const settings0 = await getSettings();
+          if (settings0.googleCalendar?.enabled && settings0.googleCalendar?.refreshToken) {
+            const ev = await calendarService.createEvent({
+              summary: `Phỏng vấn – ${candidate.tenUv}`,
+              description: `Ứng viên: ${candidate.tenUv} (${candidate.id})\nSĐT/Zalo: ${candidate.sdtZalo}\nChi nhánh: ${candidate.chiNhanh}\nCa: ${candidate.caLam}`,
+              start: phongVanAt,
+              durationMinutes: settings0.interview?.durationMinutes ?? 30,
+            });
+            link = ev.hangoutLink;
+            calendarEventId = ev.id;
+          }
+        } catch (e) {
+          console.warn('[makeDecision] tạo Meet qua Calendar lỗi:', e instanceof Error ? e.message : String(e));
+        }
+        // 2) Link GG Meet mặc định theo chi nhánh (nếu có cấu hình)
+        if (!link) {
+          const settings0 = await getSettings();
+          link = (settings0.interview?.branchMeetLinks ?? {})[candidate.chiNhanh] ?? '';
+        }
+        // 3) Không có nguồn link nào → báo lỗi rõ ràng
+        if (!link) {
+          throw ApiError.badRequest(
+            'MEET_LINK_REQUIRED',
+            'Không có link GG Meet: hãy kết nối Google Calendar (Cài đặt), cấu hình link chi nhánh hoặc nhập link thủ công.',
+          );
+        }
+      }
+      ggMeetLink = link;
     }
 
     const newVersion = candidate.dataVersion + 1;
@@ -411,8 +450,9 @@ export class CandidateService {
         hrUser: user,
         hrReason: reason ?? null,
         hrDecisionAt: new Date(),
-        phongVanAt: decision === 'PASS' ? interview!.phongVanAt : candidate.phongVanAt,
-        ggMeetLink: decision === 'PASS' ? interview!.ggMeetLink : candidate.ggMeetLink,
+        phongVanAt,
+        ggMeetLink,
+        calendarEventId,
         dataVersion: newVersion,
         updatedBy: user,
       },
@@ -442,6 +482,53 @@ export class CandidateService {
     });
 
     emit('candidate:decision', { candidateId: id, decision, user });
+    return final;
+  }
+
+  /** Sửa lịch phỏng vấn / link Meet / trạng thái sau PV — độc lập với quyết định PASS. */
+  async updateInterview(
+    id: string,
+    user: string,
+    patch: { phongVanAt?: Date; ggMeetLink?: string; interviewStatus?: string },
+  ): Promise<Candidate> {
+    const candidate = await prisma.candidate.findUnique({ where: { id } });
+    if (!candidate) throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy ứng viên.');
+
+    const data: Prisma.CandidateUpdateInput = {
+      dataVersion: candidate.dataVersion + 1,
+      updatedBy: user,
+    };
+    if (patch.phongVanAt) data.phongVanAt = patch.phongVanAt;
+    if (patch.ggMeetLink !== undefined) {
+      data.ggMeetLink = patch.ggMeetLink.trim() || null;
+      // Link thay đổi → sự kiện Calendar cũ (nếu có) không còn khớp, xóa liên kết
+      data.calendarEventId = null;
+    }
+    if (patch.interviewStatus) data.interviewStatus = patch.interviewStatus;
+
+    const updated = await prisma.candidate.update({ where: { id }, data });
+    await prisma.candidate.update({ where: { id }, data: { dataHash: computeHash(updated) } });
+    const final = await prisma.candidate.findUniqueOrThrow({ where: { id } });
+
+    await audit({
+      user,
+      action: 'INTERVIEW_UPDATE',
+      entity: 'candidate',
+      entityId: id,
+      oldValue: JSON.stringify({
+        phongVanAt: candidate.phongVanAt ? formatDateTime(candidate.phongVanAt) : null,
+        ggMeetLink: candidate.ggMeetLink,
+        interviewStatus: candidate.interviewStatus,
+      }),
+      newValue: JSON.stringify({
+        phongVanAt: final.phongVanAt ? formatDateTime(final.phongVanAt) : null,
+        ggMeetLink: final.ggMeetLink,
+        interviewStatus: final.interviewStatus,
+      }),
+      version: candidate.dataVersion + 1,
+    });
+
+    emit('candidate:updated', { candidateId: id, user });
     return final;
   }
 

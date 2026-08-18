@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import {
   FileSpreadsheet, BrainCircuit, MessageCircle, Scale, Clock, Users as UsersIcon,
   Save, AlertTriangle, ShieldCheck, RefreshCw, RotateCcw, Settings2, Trash2,
-  MapPin, Bell, DatabaseBackup, KeyRound, Plus,
+  MapPin, Bell, DatabaseBackup, KeyRound, Plus, Video, CalendarDays, Link2, Trash2 as TrashIcon,
 } from 'lucide-react';
 import { api, ApiError } from '../api/client';
 import { Badge, Spinner, Modal, ConfirmDialog } from '../components/ui';
@@ -60,6 +60,19 @@ interface SettingsData {
       sheets: { locHoSo: string; diemUv: string; hoSoNv: string };
     };
     zalo: { oaId: string; accessToken: string; refreshToken: string; autoReply: boolean };
+    interview: {
+      durationMinutes: number;
+      remindHoursBefore: number;
+      autoRemind: boolean;
+      branchMeetLinks: Record<string, string>;
+    };
+    googleCalendar: {
+      enabled: boolean;
+      clientId: string;
+      clientSecret: string;
+      refreshToken: string;
+      calendarId: string;
+    };
   };
   googleSheetConfigured: boolean;
   demoMode: boolean;
@@ -218,6 +231,52 @@ export default function Settings() {
     }
   };
 
+  const connectCalendar = async () => {
+    try {
+      const r = await api.get<{ url: string; state: string }>('/calendar/oauth-url');
+      window.location.href = r.url;
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Không tạo được link kết nối Google Calendar.');
+    }
+  };
+
+  const testCalendar = async () => {
+    try {
+      const r = await api.post<{ id: string; hangoutLink: string }>('/calendar/test', {});
+      toast('success', `Kết nối OK! Sự kiện thử đã tạo: ${r.hangoutLink}`);
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Kết nối thất bại.');
+    }
+  };
+
+  const disconnectCalendar = async () => {
+    if (!window.confirm('Ngắt kết nối Google Calendar? Sẽ không tự tạo link Meet mới cho tới khi kết nối lại.')) return;
+    try {
+      await api.post('/calendar/disconnect', {});
+      toast('success', 'Đã ngắt kết nối Google Calendar.');
+      void load();
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Ngắt kết nối thất bại.');
+    }
+  };
+
+  const [branchMeetRows, setBranchMeetRows] = useState<{ name: string; link: string }[]>([]);
+
+  useEffect(() => {
+    if (data) {
+      setBranchMeetRows(Object.entries(data.settings.interview?.branchMeetLinks ?? {}).map(([name, link]) => ({ name, link })));
+    }
+  }, [data]);
+
+  const applyBranchMeetRows = (rows: { name: string; link: string }[]) => {
+    setBranchMeetRows(rows);
+    const links: Record<string, string> = {};
+    rows.forEach((r) => {
+      if (r.name.trim()) links[r.name.trim()] = r.link.trim();
+    });
+    patch(['interview', 'branchMeetLinks'], links);
+  };
+
   const updateUserScope = async (userId: string, branchScope: string[] | null) => {
     try {
       await api.post(`/settings/users/${userId}`, { branchScope });
@@ -352,6 +411,7 @@ export default function Settings() {
     { key: 'sheet', label: 'Google Sheet', icon: FileSpreadsheet },
     { key: 'ai', label: 'AI', icon: BrainCircuit },
     { key: 'zalo', label: 'Zalo', icon: MessageCircle },
+    { key: 'interview', label: 'Phỏng vấn & Meet', icon: Video },
     { key: 'scoring', label: 'Chấm điểm tuyển dụng', icon: Scale },
     { key: 'attendance', label: 'Chấm công', icon: Clock },
     { key: 'branches', label: 'Chi nhánh & Geofence', icon: MapPin },
@@ -564,6 +624,130 @@ export default function Settings() {
               </div>
               <div className="rounded-xl bg-slate-50 p-3.5 text-xs text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
                 Webhook Zalo: POST <b>/api/zalo/webhook</b> (header x-webhook-secret). Khi ứng viên nhắn "ĐIỂM DANH" trong khung giờ ca, hệ thống tự điểm danh.
+              </div>
+            </div>
+          )}
+
+          {tab === 'interview' && (
+            <div className="space-y-5">
+              <div className="flex items-center justify-between rounded-xl bg-slate-50 p-4 flex-wrap gap-3 dark:bg-slate-800/60">
+                <div className="flex items-center gap-3">
+                  <div className={cn('rounded-xl p-2.5', s.googleCalendar.enabled && s.googleCalendar.refreshToken ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400')}>
+                    <CalendarDays size={20} />
+                  </div>
+                  <div>
+                    <div className="font-bold text-slate-800 text-sm dark:text-slate-100">
+                      {s.googleCalendar.enabled && s.googleCalendar.refreshToken ? 'Đã kết nối Google Calendar' : 'Chưa kết nối Google Calendar'}
+                    </div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">
+                      Khi chấm PASS: hệ thống tự tạo sự kiện + link Google Meet mới và gửi cho ứng viên (thay thế link chi nhánh).
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  <button className="btn-primary" onClick={connectCalendar}>
+                    <Link2 size={15} /> Kết nối Google Calendar
+                  </button>
+                  {s.googleCalendar.refreshToken && (
+                    <>
+                      <button className="btn-secondary" onClick={testCalendar}>
+                        <RefreshCw size={15} /> Kiểm tra (tạo sự kiện thử)
+                      </button>
+                      <button className="btn-danger" onClick={disconnectCalendar}>
+                        Ngắt kết nối
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-slate-50 p-3.5 text-xs text-slate-500 dark:bg-slate-800/60 dark:text-slate-400 space-y-1">
+                <div><b>Hướng dẫn kết nối (5 phút):</b></div>
+                <div>1. Google Cloud Console → tạo project → bật API <b>Google Calendar API</b>.</div>
+                <div>2. OAuth consent screen → thêm scope <b>calendar.events</b>, thêm email của bạn vào Test users.</div>
+                <div>3. Credentials → OAuth Client ID (Web) → redirect URI: <b>{window.location.origin}/api/calendar/oauth-callback</b>.</div>
+                <div>4. Điền Client ID / Client Secret bên dưới → bấm "Kết nối Google Calendar" → duyệt quyền 1 lần.</div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Google OAuth Client ID</label>
+                  <input className="input" value={s.googleCalendar.clientId} onChange={(e) => patch(['googleCalendar', 'clientId'], e.target.value)} placeholder="xxx.apps.googleusercontent.com" />
+                </div>
+                <div>
+                  <label className="label">Google OAuth Client Secret</label>
+                  <input type="password" className="input" value={s.googleCalendar.clientSecret} onChange={(e) => patch(['googleCalendar', 'clientSecret'], e.target.value)} />
+                </div>
+              </div>
+              <div>
+                <label className="label">Calendar ID (mặc định "primary" = lịch chính của tài khoản)</label>
+                <input className="input" value={s.googleCalendar.calendarId} onChange={(e) => patch(['googleCalendar', 'calendarId'], e.target.value)} placeholder="primary" />
+              </div>
+
+              <div className="border-t border-slate-100 dark:border-slate-700 pt-4">
+                <div className="font-bold text-slate-800 text-sm mb-3 dark:text-slate-100">Link GG Meet mặc định theo chi nhánh</div>
+                <div className="text-xs text-slate-500 mb-3 dark:text-slate-400">
+                  Dùng khi chưa kết nối Calendar hoặc khi tạo link tự động thất bại. HR bấm Đạt chỉ cần chọn giờ — link chi nhánh tự kèm theo.
+                </div>
+                <div className="space-y-2">
+                  {branchMeetRows.map((row, i) => (
+                    <div key={i} className="flex gap-2 items-center">
+                      <input
+                        className="input !w-48"
+                        value={row.name}
+                        placeholder="Tên chi nhánh"
+                        onChange={(e) => {
+                          const rows = [...branchMeetRows];
+                          rows[i] = { ...row, name: e.target.value };
+                          applyBranchMeetRows(rows);
+                        }}
+                      />
+                      <input
+                        className="input flex-1"
+                        value={row.link}
+                        placeholder="https://meet.google.com/xxx-xxxx-xxx"
+                        onChange={(e) => {
+                          const rows = [...branchMeetRows];
+                          rows[i] = { ...row, link: e.target.value };
+                          applyBranchMeetRows(rows);
+                        }}
+                      />
+                      <button className="btn-secondary !px-2.5 !py-1.5" onClick={() => applyBranchMeetRows(branchMeetRows.filter((_, j) => j !== i))}>
+                        <TrashIcon size={14} />
+                      </button>
+                    </div>
+                  ))}
+                  {branchMeetRows.length === 0 && (
+                    <p className="text-xs text-slate-400">Chưa có link nào. Thêm link mặc định cho từng chi nhánh.</p>
+                  )}
+                  <button className="btn-secondary !px-3 !py-1.5 text-xs" onClick={() => applyBranchMeetRows([...branchMeetRows, { name: '', link: '' }])}>
+                    <Plus size={13} /> Thêm chi nhánh
+                  </button>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-100 dark:border-slate-700 pt-4 space-y-4">
+                <div className="font-bold text-slate-800 text-sm dark:text-slate-100">Nhắc phỏng vấn tự động</div>
+                <div className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-800/60">
+                  <div>
+                    <div className="font-semibold text-slate-800 text-sm dark:text-slate-100">Tự nhắc ứng viên qua Zalo</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">Gửi tin nhắc trước giờ phỏng vấn (1 lần/lịch hẹn).</div>
+                  </div>
+                  <input type="checkbox" className="w-5 h-5 accent-brand-600" checked={s.interview.autoRemind}
+                    onChange={(e) => patch(['interview', 'autoRemind'], e.target.checked)} />
+                </div>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="label">Nhắc trước (giờ)</label>
+                    <input type="number" min={1} max={72} className="input" value={s.interview.remindHoursBefore}
+                      onChange={(e) => patch(['interview', 'remindHoursBefore'], Number(e.target.value) || 2)} />
+                  </div>
+                  <div>
+                    <label className="label">Thời lượng buổi phỏng vấn (phút)</label>
+                    <input type="number" min={5} max={180} className="input" value={s.interview.durationMinutes}
+                      onChange={(e) => patch(['interview', 'durationMinutes'], Number(e.target.value) || 30)} />
+                  </div>
+                </div>
               </div>
             </div>
           )}

@@ -20,6 +20,7 @@ import trainingRoutes from './routes/training';
 import shiftRoutes from './routes/shifts';
 import attendanceRoutes from './routes/attendance';
 import zaloRoutes from './routes/zalo';
+import calendarRoutes from './routes/calendar';
 import syncRoutes from './routes/sync';
 import auditRoutes from './routes/audit';
 import settingsRoutes from './routes/settings';
@@ -71,6 +72,7 @@ export function createApp() {
   app.use('/api/shifts', apiLimiter, shiftRoutes);
   app.use('/api/attendance', apiLimiter, attendanceRoutes);
   app.use('/api/zalo', apiLimiter, zaloRoutes);
+  app.use('/api/calendar', apiLimiter, calendarRoutes);
   app.use('/api/sync', apiLimiter, syncRoutes);
   app.use('/api/audit', apiLimiter, auditRoutes);
   app.use('/api/settings', apiLimiter, settingsRoutes);

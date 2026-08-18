@@ -20,8 +20,17 @@ interface TrainingRow {
   soNgayDaTraining: number;
   phongVanAt: string | null;
   ggMeetLink: string | null;
+  interviewStatus: string | null;
   dataVersion: number;
 }
+
+const INTERVIEW_STATUS_LABEL: Record<string, { label: string; cls: string }> = {
+  DA_PV: { label: 'Đã PV', cls: 'bg-sky-100 text-sky-700' },
+  QUA_PV: { label: 'Qua PV', cls: 'bg-emerald-100 text-emerald-700' },
+  TRUOT_PV: { label: 'Trượt PV', cls: 'bg-rose-100 text-rose-700' },
+  VANG: { label: 'Vắng', cls: 'bg-rose-100 text-rose-700' },
+  CHUA_PV: { label: 'Chưa PV', cls: 'bg-amber-100 text-amber-700' },
+};
 
 const STATUS_OPTIONS = [
   'CHUA_THAM_GIA', 'SAP_BAT_DAU', 'BAT_DAU', 'HOAN_THANH', 'KHONG_DU_NGAY', 'LOAI', 'NHAN_VIEN_CHINH_THUC',
@@ -29,6 +38,7 @@ const STATUS_OPTIONS = [
 
 const FILTERS = [
   { key: 'all', label: 'Toàn bộ' },
+  { key: 'today', label: 'PV hôm nay' },
   { key: 'waiting', label: 'Chờ phỏng vấn' },
   { key: 'training', label: 'Đang training' },
   { key: 'done', label: 'Hoàn thành' },
@@ -46,6 +56,10 @@ export default function Training() {
   const [confirmEmployee, setConfirmEmployee] = useState<TrainingRow | null>(null);
   const [startDate, setStartDate] = useState(dateKey());
   const [newShift, setNewShift] = useState('');
+  const [interviewEdit, setInterviewEdit] = useState<TrainingRow | null>(null);
+  const [ivPhongVanAt, setIvPhongVanAt] = useState('');
+  const [ivGgMeetLink, setIvGgMeetLink] = useState('');
+  const [ivResend, setIvResend] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -126,6 +140,33 @@ export default function Training() {
     }
   };
 
+  const openInterviewEdit = (r: TrainingRow) => {
+    setInterviewEdit(r);
+    setIvPhongVanAt(r.phongVanAt ? r.phongVanAt.slice(0, 16) : '');
+    setIvGgMeetLink(r.ggMeetLink ?? '');
+    setIvResend(true);
+  };
+
+  const saveInterviewEdit = async () => {
+    if (!interviewEdit) return;
+    if (!ivPhongVanAt) {
+      toast('error', 'Chọn thời gian phỏng vấn.');
+      return;
+    }
+    try {
+      const res = await api.patch<{ zalo: { ok: boolean } | null }>(`/candidates/${interviewEdit.id}/interview`, {
+        phongVanAt: ivPhongVanAt,
+        ggMeetLink: ivGgMeetLink.trim() || undefined,
+        resend: ivResend,
+      });
+      toast('success', `Đã sửa lịch phỏng vấn.${ivResend && !res.zalo?.ok ? ' ⚠ Không gửi được tin Zalo.' : ''}`);
+      setInterviewEdit(null);
+      void load();
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Sửa lịch thất bại.');
+    }
+  };
+
   const confirmEmployeeFn = async () => {
     if (!confirmEmployee) return;
     try {
@@ -140,6 +181,7 @@ export default function Training() {
 
   const summary = {
     all: rows.length,
+    today: rows.filter((r) => r.phongVanAt && formatDate(r.phongVanAt) === formatDate(new Date())).length,
     waiting: rows.filter((r) => !r.ngayBatDauTraining).length,
     started: rows.filter((r) => ['SAP_BAT_DAU', 'BAT_DAU'].includes(r.trangThaiTraining ?? '')).length,
     done: rows.filter((r) => r.trangThaiTraining === 'HOAN_THANH').length,
@@ -147,6 +189,7 @@ export default function Training() {
   };
 
   const visible = rows.filter((r) => {
+    if (filter === 'today') return r.phongVanAt && formatDate(r.phongVanAt) === formatDate(new Date());
     if (filter === 'waiting') return !r.ngayBatDauTraining;
     if (filter === 'training') return ['SAP_BAT_DAU', 'BAT_DAU'].includes(r.trangThaiTraining ?? '');
     if (filter === 'done') return r.trangThaiTraining === 'HOAN_THANH';
@@ -160,7 +203,7 @@ export default function Training() {
         <div>
           <h1 className="text-xl font-extrabold text-slate-800">Nhân Viên Training</h1>
           <p className="text-sm text-slate-500">
-            {summary.waiting} chờ phỏng vấn · {summary.started} đang training · {summary.done} hoàn thành · {summary.need} cần xử lý
+            {summary.today} PV hôm nay · {summary.waiting} chờ phỏng vấn · {summary.started} đang training · {summary.done} hoàn thành · {summary.need} cần xử lý
           </p>
         </div>
         <div className="flex gap-2">
@@ -183,7 +226,7 @@ export default function Training() {
           >
             {f.label}
             <span className={cn('ml-1.5 opacity-70', filter === f.key ? 'text-white' : 'text-slate-400')}>
-              {f.key === 'all' ? summary.all : f.key === 'waiting' ? summary.waiting : f.key === 'training' ? summary.started : f.key === 'done' ? summary.done : summary.need}
+              {f.key === 'all' ? summary.all : f.key === 'today' ? summary.today : f.key === 'waiting' ? summary.waiting : f.key === 'training' ? summary.started : f.key === 'done' ? summary.done : summary.need}
             </span>
           </button>
         ))}
@@ -226,12 +269,20 @@ export default function Training() {
                     <td className="table-td">
                       {r.phongVanAt ? (
                         <div className="flex flex-col gap-0.5">
-                          <span className="text-xs font-semibold text-emerald-700">{formatDateTime(r.phongVanAt)}</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-semibold text-emerald-700">{formatDateTime(r.phongVanAt)}</span>
+                            {r.interviewStatus && INTERVIEW_STATUS_LABEL[r.interviewStatus] && (
+                              <Badge className={INTERVIEW_STATUS_LABEL[r.interviewStatus].cls}>{INTERVIEW_STATUS_LABEL[r.interviewStatus].label}</Badge>
+                            )}
+                          </div>
                           {r.ggMeetLink && (
                             <a className="text-[11px] text-sky-600 underline truncate max-w-[180px]" href={r.ggMeetLink} target="_blank" rel="noreferrer">
                               {r.ggMeetLink}
                             </a>
                           )}
+                          <button className="btn-secondary !px-2 !py-0.5 !text-[11px] w-fit mt-0.5" onClick={() => openInterviewEdit(r)}>
+                            Sửa lịch
+                          </button>
                         </div>
                       ) : (
                         <span className="text-xs text-slate-400">Chưa hẹn</span>
@@ -338,6 +389,42 @@ export default function Training() {
         confirmLabel="Xác nhận nhận việc"
         onConfirm={confirmEmployeeFn}
       />
+
+      <Modal open={!!interviewEdit} onClose={() => setInterviewEdit(null)} title={`Sửa lịch phỏng vấn – ${interviewEdit?.tenUv ?? ''}`}>
+        <div className="space-y-4">
+          <Field label="Thời gian phỏng vấn">
+            <input type="datetime-local" className="input" value={ivPhongVanAt} onChange={(e) => setIvPhongVanAt(e.target.value)} />
+          </Field>
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              { label: '+1 giờ', get: () => new Date(Date.now() + 60 * 60_000) },
+              { label: '+3 giờ', get: () => new Date(Date.now() + 3 * 60 * 60_000) },
+              { label: 'Hôm nay 14:00', get: () => { const d = new Date(); d.setHours(14, 0, 0, 0); return d; } },
+              { label: 'Hôm nay 15:30', get: () => { const d = new Date(); d.setHours(15, 30, 0, 0); return d; } },
+              { label: 'Mai 9:00', get: () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); return d; } },
+              { label: 'Mai 14:00', get: () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(14, 0, 0, 0); return d; } },
+            ].map((q) => {
+              const d = q.get();
+              const pad = (n: number) => String(n).padStart(2, '0');
+              return (
+                <button key={q.label} className="btn-secondary !px-2.5 !py-1 !text-[11px]" onClick={() => setIvPhongVanAt(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`)}>
+                  {q.label}
+                </button>
+              );
+            })}
+          </div>
+          <Field label="Link Google Meet">
+            <input type="url" className="input" value={ivGgMeetLink} onChange={(e) => setIvGgMeetLink(e.target.value)} placeholder="https://meet.google.com/xxx-xxxx-xxx" />
+          </Field>
+          <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+            <input type="checkbox" className="w-4 h-4 accent-brand-600" checked={ivResend} onChange={(e) => setIvResend(e.target.checked)} />
+            Gửi lại lời mời phỏng vấn qua Zalo sau khi lưu
+          </label>
+          <button className="btn-primary w-full" onClick={saveInterviewEdit}>
+            <Video size={15} /> Lưu lịch phỏng vấn
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

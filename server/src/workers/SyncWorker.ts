@@ -39,6 +39,8 @@ export class SyncWorker {
   private scoreTimer: NodeJS.Timeout | null = null;
   private noticeTimer: NodeJS.Timeout | null = null;
   private runningNotices = false;
+  private interviewTimer: NodeJS.Timeout | null = null;
+  private runningInterviews = false;
   private idleTimer: NodeJS.Timeout | null = null;
   private draining = false;
   private alertTimer: NodeJS.Timeout | null = null;
@@ -82,6 +84,9 @@ export class SyncWorker {
     this.noticeTimer = setInterval(() => {
       void this.tickTrainingNotices();
     }, 60_000);
+    this.interviewTimer = setInterval(() => {
+      void this.tickInterviewReminders();
+    }, 60_000);
     this.pruneTimer = setInterval(() => {
       void this.tickPrune();
     }, 60 * 60_000);
@@ -93,6 +98,7 @@ export class SyncWorker {
     void this.tickAutoDedup();
     void this.tickAutoScore();
     void this.tickTrainingNotices();
+    void this.tickInterviewReminders();
     void this.tickPrune();
     void this.tickQueueAlert();
     console.log('[SyncWorker] started');
@@ -110,6 +116,8 @@ export class SyncWorker {
     this.scoreTimer = null;
     if (this.noticeTimer) clearInterval(this.noticeTimer);
     this.noticeTimer = null;
+    if (this.interviewTimer) clearInterval(this.interviewTimer);
+    this.interviewTimer = null;
     if (this.pruneTimer) clearInterval(this.pruneTimer);
     this.pruneTimer = null;
     if (this.alertTimer) clearInterval(this.alertTimer);
@@ -319,6 +327,45 @@ export class SyncWorker {
       console.warn('[SyncWorker] training notices:', e instanceof Error ? e.message : String(e));
     } finally {
       this.runningNotices = false;
+    }
+  }
+
+  /** Nhắc phỏng vấn qua Zalo: X tiếng trước giờ PV (settings.interview.remindHoursBefore, mặc định 2). */
+  private async tickInterviewReminders(): Promise<void> {
+    if (!this.running || this.runningInterviews) return;
+    this.runningInterviews = true;
+    try {
+      const settings = await getSettings();
+      if (!settings.zalo?.accessToken) return; // chưa kết nối Zalo thì không gửi
+      const interview = settings.interview ?? {};
+      if (interview.autoRemind === false) return;
+      const hours = interview.remindHoursBefore ?? 2;
+      const now = Date.now();
+      const windowStart = now - 3 * 60_000;
+      const windowEnd = now + 3 * 60_000;
+
+      const candidates = await prisma.candidate.findMany({
+        where: {
+          hrDecision: 'PASS',
+          phongVanAt: { not: null },
+          interviewStatus: null, // đã xử lý sau PV thì không nhắc nữa
+          sdtZalo: { not: '' },
+        },
+      });
+
+      for (const c of candidates) {
+        if (!c.phongVanAt) continue;
+        const remindAt = c.phongVanAt.getTime() - hours * 60 * 60 * 1000;
+        if (remindAt < windowStart || remindAt > windowEnd) continue;
+        const r = await zaloService.sendInterviewReminder(c.id, hours);
+        if (r.ok && r.status !== 'SKIP_DUP') {
+          console.log(`[SyncWorker] nhắc phỏng vấn: ${c.tenUv} lúc ${c.phongVanAt.toISOString()}`);
+        }
+      }
+    } catch (e) {
+      console.warn('[SyncWorker] interview reminders:', e instanceof Error ? e.message : String(e));
+    } finally {
+      this.runningInterviews = false;
     }
   }
 

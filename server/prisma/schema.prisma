@@ -83,6 +83,8 @@ model Candidate {
 
   phongVanAt  DateTime? // Thời gian phỏng vấn (HR nhập khi chấm PASS, tự gửi Zalo cho ứng viên)
   ggMeetLink  String?   // Link Google Meet phỏng vấn online
+  calendarEventId String? // Id sự kiện đã tạo trên Google Calendar (nếu dùng auto-create Meet)
+  interviewStatus String? // CHUA_PV | DA_PV | QUA_PV | TRUOT_PV | VANG
 
   ngayBatDauTraining DateTime?
   trangThaiTraining  String? // CHUA_THAM_GIA | SAP_BAT_DAU | BAT_DAU | HOAN_THANH | KHONG_DU_NGAY | LOAI

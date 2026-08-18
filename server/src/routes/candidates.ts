@@ -214,8 +214,8 @@ router.patch('/:id/decision', requireWrite(), async (req: AuthedRequest, res, ne
     if (!parsed.success) throw ApiError.badRequest('INVALID_INPUT', 'Dữ liệu không hợp lệ.');
     const { decision, reason, phongVanAt, ggMeetLink } = parsed.data;
 
-    if (decision === 'PASS' && (!phongVanAt || !ggMeetLink)) {
-      throw ApiError.badRequest('INTERVIEW_REQUIRED', 'Chấm PASS cần nhập thời gian phỏng vấn và link GG Meet.');
+    if (decision === 'PASS' && !phongVanAt) {
+      throw ApiError.badRequest('INTERVIEW_REQUIRED', 'Chấm PASS cần nhập thời gian phỏng vấn.');
     }
     let phongVanAtDate: Date | undefined;
     if (phongVanAt) {
@@ -225,6 +225,7 @@ router.patch('/:id/decision', requireWrite(), async (req: AuthedRequest, res, ne
       }
     }
 
+    // Link Meet: ưu tiên nhập tay > tự tạo qua Google Calendar > link mặc định chi nhánh (resolve trong service)
     const candidate = await candidateService.makeDecision(
       req.params.id,
       req.user!.username,
@@ -240,6 +241,49 @@ router.patch('/:id/decision', requireWrite(), async (req: AuthedRequest, res, ne
       } catch (e) {
         zalo = { ok: false, provider: 'ERROR' };
         console.error('Zalo interview invite failed:', e);
+      }
+    }
+    res.json({ success: true, data: candidate, zalo });
+  } catch (e) {
+    next(e);
+  }
+});
+
+const interviewPatchSchema = z.object({
+  phongVanAt: z.string().optional(),
+  ggMeetLink: z.string().optional(),
+  interviewStatus: z.enum(['CHUA_PV', 'DA_PV', 'QUA_PV', 'TRUOT_PV', 'VANG']).optional(),
+  resend: z.boolean().optional(),
+});
+
+/** Sửa lịch phỏng vấn / link Meet / trạng thái sau PV + gửi lại lời mời (không cần chấm lại PASS). */
+router.patch('/:id/interview', requireWrite(), async (req: AuthedRequest, res, next) => {
+  try {
+    const parsed = interviewPatchSchema.safeParse(req.body);
+    if (!parsed.success) throw ApiError.badRequest('INVALID_INPUT', 'Dữ liệu không hợp lệ.');
+    const { phongVanAt, ggMeetLink, interviewStatus, resend } = parsed.data;
+
+    let phongVanAtDate: Date | undefined;
+    if (phongVanAt) {
+      phongVanAtDate = new Date(phongVanAt);
+      if (Number.isNaN(phongVanAtDate.getTime())) {
+        throw ApiError.badRequest('INVALID_DATETIME', 'Thời gian phỏng vấn không hợp lệ.');
+      }
+    }
+
+    const candidate = await candidateService.updateInterview(req.params.id, req.user!.username, {
+      phongVanAt: phongVanAtDate,
+      ggMeetLink,
+      interviewStatus,
+    });
+
+    let zalo: { ok: boolean; provider: string; messageId?: string } | null = null;
+    if (resend) {
+      try {
+        zalo = await zaloService.sendInterviewInvite(candidate.id);
+      } catch (e) {
+        zalo = { ok: false, provider: 'ERROR' };
+        console.error('Zalo interview resend failed:', e);
       }
     }
     res.json({ success: true, data: candidate, zalo });

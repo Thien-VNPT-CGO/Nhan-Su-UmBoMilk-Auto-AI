@@ -42,6 +42,12 @@ export const env = {
   zaloAppSecret: process.env.ZALO_APP_SECRET ?? '',
   zaloRedirectUri: process.env.ZALO_REDIRECT_URI ?? 'http://localhost:3000/api/zalo/oauth-callback',
 
+  // ===== Google Calendar (tự tạo link Meet khi chấm PASS) =====
+  googleClientId: process.env.GOOGLE_CLIENT_ID ?? '',
+  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
+  googleRedirectUri: process.env.GOOGLE_REDIRECT_URI ?? 'http://localhost:3000/api/calendar/oauth-callback',
+  googleCalendarId: process.env.GOOGLE_CALENDAR_ID ?? '',
+
   // ===== Nâng cấp v1.1: Monitoring + Backup =====
   sentryDsn: process.env.SENTRY_DSN ?? '',
   backupAutoDays: int(process.env.BACKUP_AUTO_DAYS, 7),

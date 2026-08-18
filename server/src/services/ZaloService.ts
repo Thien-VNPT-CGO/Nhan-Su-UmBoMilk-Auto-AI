@@ -5,6 +5,16 @@ import { getSettings } from './SettingsService';
 import { emit } from '../sockets';
 import { formatDate, TZ } from '../lib/date';
 import { createHmac, randomBytes } from 'crypto';
+
+/** Định dạng giờ phỏng vấn "dd/MM/yyyy lúc HH:mm" theo múi giờ hệ thống. */
+function formatInterviewTime(d: Date): string {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: TZ,
+    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
+  return `${get('day')}/${get('month')}/${get('year')} lúc ${get('hour')}:${get('minute')}`;
+}
 export class ZaloService {
   private pendingStates = new Map<string, number>();
 
@@ -261,14 +271,6 @@ export class ZaloService {
     if (!c.phongVanAt) throw new Error('Chưa có thời gian phỏng vấn');
     if (!c.ggMeetLink) throw new Error('Chưa có link GG Meet');
 
-    const d = c.phongVanAt;
-    const parts = new Intl.DateTimeFormat('en-GB', {
-      timeZone: TZ,
-      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
-    }).formatToParts(d);
-    const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
-    const time = `${get('day')}/${get('month')}/${get('year')} lúc ${get('hour')}:${get('minute')}`;
-
     const content = [
       '🐮 UMBO MILK – LỜI MỜI PHỎNG VẤN',
       '',
@@ -276,7 +278,7 @@ export class ZaloService {
       '',
       'Chúc mừng bạn đã vượt qua vòng hồ sơ ứng tuyển!',
       '',
-      `Thời gian phỏng vấn: ${time}`,
+      `Thời gian phỏng vấn: ${formatInterviewTime(c.phongVanAt)}`,
       `Hình thức: Online qua Google Meet`,
       `Link phỏng vấn: ${c.ggMeetLink}`,
       '',
@@ -287,6 +289,36 @@ export class ZaloService {
 
     const r = await this.sendRaw(c.sdtZalo, content, c.id);
     return { ok: r.ok, provider: r.provider, messageId: r.messageId };
+  }
+
+  /** Nhắc phỏng vấn trước giờ PV (1 lần/lịch hẹn, chống trùng bằng marker trong nội dung). */
+  async sendInterviewReminder(candidateId: string, remindHours: number): Promise<{ ok: boolean; status: string }> {
+    const c = await prisma.candidate.findUnique({ where: { id: candidateId } });
+    if (!c) throw new Error('Không tìm thấy ứng viên');
+    if (!c.phongVanAt || !c.ggMeetLink) throw new Error('Chưa có lịch phỏng vấn');
+
+    const marker = `[NHACPV:${c.phongVanAt.toISOString()}]`;
+    const content = [
+      marker,
+      '🐮 UMBO MILK – NHẮC PHỎNG VẤN',
+      '',
+      `Chào ${c.tenUv} ❤️`,
+      '',
+      `Chỉ còn ${remindHours} tiếng nữa là đến buổi phỏng vấn của bạn!`,
+      '',
+      `Thời gian phỏng vấn: ${formatInterviewTime(c.phongVanAt)}`,
+      `Link phỏng vấn: ${c.ggMeetLink}`,
+      '',
+      'Hãy vào đúng giờ nhé. Chúc bạn may mắn!',
+    ].join('\n');
+
+    const existed = await prisma.zaloMessage.findFirst({
+      where: { phone: c.sdtZalo, content: { contains: marker } },
+    });
+    if (existed) return { ok: true, status: 'SKIP_DUP' };
+
+    const r = await this.sendRaw(c.sdtZalo, content, c.id);
+    return { ok: r.ok, status: r.status };
   }
 
   /** Nhắc điểm danh trước giờ làm 30 phút (1 ca = 1 tin/ngày, đánh dấu trong nội dung để không gửi trùng). */
