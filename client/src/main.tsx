@@ -24,6 +24,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 // ===== PWA: đăng ký service worker (cache app shell, offline-first) =====
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => undefined);
+    // updateViaCache: 'none' -> sw.js luôn tải mới từ server, không dính HTTP cache cũ
+    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch(() => undefined);
   });
 }
