@@ -16,6 +16,7 @@ interface Row {
   sdtZalo: string;
   chiNhanh: string;
   caLam: string;
+  kenhBietTin: string | null;
   tongDiem: number | null;
   xepLoai: string | null;
   aiRecommendation: string | null;
@@ -30,6 +31,20 @@ function xepLoaiBadge(x: string | null) {
   if (x === 'GIOI') return <Badge className="bg-sky-100 text-sky-700"><TrendingUp size={11} /> GIỎI</Badge>;
   if (x === 'DAT') return <Badge className="bg-emerald-100 text-emerald-700"><CheckCircle2 size={11} /> ĐẠT</Badge>;
   return null;
+}
+
+function isReferralChannel(v: string | null): boolean {
+  if (!v) return false;
+  const n = v.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
+  return ['gioi thieu', 'ban be', 'nguoi quen'].some((k) => n.includes(k));
+}
+
+function scoreCellStyle(diem: number | null): string {
+  if (diem === null) return 'bg-slate-100 text-slate-600';
+  if (diem >= 12) return 'bg-amber-100 text-amber-700 border border-amber-200'; // Xuất Sắc
+  if (diem >= 10) return 'bg-sky-100 text-sky-700'; // Giỏi
+  if (diem >= 8) return 'bg-emerald-100 text-emerald-700'; // Đạt
+  return 'bg-slate-100 text-slate-600';
 }
 
 export default function Scoring() {
@@ -101,6 +116,15 @@ export default function Scoring() {
         <button className="btn-secondary" onClick={() => void load()}><RefreshCw size={15} /> Làm mới</button>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2 text-xs rounded-xl bg-slate-50 px-4 py-2.5 dark:bg-slate-800/60">
+        <span className="font-bold text-slate-600 dark:text-slate-300">Khung AI chấm điểm:</span>
+        <Badge className="bg-emerald-100 text-emerald-700">8–9 điểm: Đạt</Badge>
+        <Badge className="bg-sky-100 text-sky-700">10–11 điểm: Giỏi</Badge>
+        <Badge className="bg-amber-100 text-amber-700 border border-amber-200">≥12 điểm: Xuất Sắc</Badge>
+        <span className="text-slate-400">·</span>
+        <span className="text-slate-500 dark:text-slate-400">Chọn "Bạn Bè, Người quen giới thiệu" → AI chấm <b className="text-rose-600">LOẠI</b> dù điểm cao</span>
+      </div>
+
       {loading ? (
         <div className="space-y-2">
           {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-16" />)}
@@ -119,6 +143,7 @@ export default function Scoring() {
                   <th className="table-th">SĐT</th>
                   <th className="table-th">Chi nhánh</th>
                   <th className="table-th">Ca</th>
+                  <th className="table-th">Kênh biết tin</th>
                   <th className="table-th">Điểm AI</th>
                   <th className="table-th">Gợi ý AI</th>
                   <th className="table-th">Quyết định HR</th>
@@ -135,9 +160,19 @@ export default function Scoring() {
                     <td className="table-td">{r.chiNhanh}</td>
                     <td className="table-td">{r.caLam}</td>
                     <td className="table-td">
+                      {isReferralChannel(r.kenhBietTin) ? (
+                        <div className="flex flex-col gap-1">
+                          <span className="text-xs text-slate-600">Bạn bè / người quen giới thiệu</span>
+                          <Badge className="bg-rose-100 text-rose-700"><XCircle size={11} /> AI CHẤM LOẠI</Badge>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-500">{r.kenhBietTin ? 'Quảng cáo FB/Tiktok/Instagram...' : '—'}</span>
+                      )}
+                    </td>
+                    <td className="table-td">
                       <span className={cn(
                         'inline-flex items-center justify-center w-8 h-8 rounded-xl text-sm font-extrabold',
-                        r.tongDiem !== null && r.tongDiem >= 7 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600',
+                        scoreCellStyle(r.tongDiem),
                       )}>
                         {r.tongDiem ?? '—'}
                       </span>
@@ -148,7 +183,12 @@ export default function Scoring() {
                       ) : (
                         <>
                           {r.aiRecommendation === 'PASS' && <Badge className="bg-emerald-100 text-emerald-700">ĐẠT</Badge>}
-                          {r.aiRecommendation === 'FAIL' && <Badge className="bg-slate-100 text-slate-500">LOẠI</Badge>}
+                          {r.aiRecommendation === 'FAIL' && isReferralChannel(r.kenhBietTin) && (
+                            <Badge className="bg-rose-100 text-rose-700"><XCircle size={11} /> LOẠI (GIỚI THIỆU)</Badge>
+                          )}
+                          {r.aiRecommendation === 'FAIL' && !isReferralChannel(r.kenhBietTin) && (
+                            <Badge className="bg-slate-100 text-slate-500">LOẠI</Badge>
+                          )}
                         </>
                       )}
                       {!r.aiScoredAt && <Badge className="bg-amber-100 text-amber-700">Chưa chấm</Badge>}
