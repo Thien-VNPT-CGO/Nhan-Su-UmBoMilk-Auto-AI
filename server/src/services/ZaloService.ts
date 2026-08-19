@@ -119,8 +119,8 @@ export class ZaloService {
         const res = await fetch(url, { headers: { access_token: token } });
         const data = (await res.json()) as { error?: number; message?: string; id?: string };
         if (!res.ok) return { ok: false, reason: `API_ERROR_${res.status}` };
-        // Token hết hạn/không hợp lệ → thử refresh 1 lần (cần ZALO_APP_ID/SECRET + refresh token lưu từ OAuth)
-        if (data.error === 452 || data.error === -201 || data.error === -216) {
+        // Token hết hạn/không hợp lệ (452/-204/-201/-216) → thử refresh 1 lần (cần ZALO_APP_ID/SECRET + refresh token lưu từ OAuth)
+        if (data.error === 452 || data.error === -204 || data.error === -201 || data.error === -216) {
           if (attempt === 0) {
             const fresh = await this.refreshAccessToken();
             if (!fresh.ok || !fresh.accessToken) {
@@ -178,7 +178,16 @@ export class ZaloService {
       const data = (await res.json()) as { access_token?: string; refresh_token?: string; error?: number; message?: string };
       if (!data.access_token || !data.refresh_token) {
         console.warn('[Zalo] refresh thất bại:', data.error, data.message);
-        return { ok: false, error: `Zalo lỗi ${data.error ?? res.status}: ${data.message ?? 'không rõ'}` };
+        const err = data.error;
+        const hint =
+          err === -14014 || err === -135
+            ? 'refresh token đã hết hạn hoặc đã dùng — bắt buộc bấm "Kết nối Zalo OA" để cấp refresh token mới'
+            : err === -14005
+              ? 'mã ủy quyền không hợp lệ — kết nối lại'
+              : err === 201 || err === -201
+                ? 'thiếu tham số app_id / secret_key — kiểm tra ZALO_APP_ID / ZALO_APP_SECRET trên Render'
+                : 'không rõ';
+        return { ok: false, error: `Zalo lỗi ${data.error ?? res.status} (${hint}${data.message ? ' — ' + data.message : ''})` };
       }
       const { saveSettings } = await import('./SettingsService');
       await saveSettings(
@@ -198,8 +207,9 @@ export class ZaloService {
     }
   }
 
-  /** Chủ động gia hạn token trước khi hết hạn (access token sống 90 ngày → gia hạn mỗi 25 ngày).
-   *  Nhờ refresh token xoay vòng, kết nối Zalo gần như "vĩnh viễn" — không bao giờ phải kết nối lại tay. */
+  /** Chủ động gia hạn refresh token trước khi hết hạn (refresh token Zalo sống 90 ngày, dùng 1 lần,
+   *  mỗi lần refresh được gia hạn thêm → gia hạn mỗi 25 ngày giữ kết nối "vĩnh viễn").
+   *  Access token OA chỉ sống 25 giờ nên được tự động refresh khi phát hiện hết hạn (452/-204) lúc gửi tin. */
   async ensureTokenFresh(): Promise<void> {
     const settings = await getSettings();
     const zaloCfg = settings.zalo ?? {};
@@ -303,7 +313,7 @@ export class ZaloService {
             }
             if (data?.error && data.error !== 0) {
               // Token hết hạn/không hợp lệ (452, -201, -216): refresh 1 lần rồi gửi lại
-              const tokenDead = data.error === 452 || data.error === -201 || data.error === -216;
+              const tokenDead = data.error === 452 || data.error === -204 || data.error === -201 || data.error === -216;
               if (tokenDead && attempt === 0) {
                 const fresh = await this.refreshAccessToken();
                 if (!fresh.ok || !fresh.accessToken) {
