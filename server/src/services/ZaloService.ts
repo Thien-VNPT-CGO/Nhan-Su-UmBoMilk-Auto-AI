@@ -187,6 +187,7 @@ export class ZaloService {
             oaId: cfg.oaId,
             accessToken: data.access_token,
             refreshToken: data.refresh_token,
+            lastRefreshAt: new Date().toISOString(),
           },
         },
         'zalo-auto-refresh',
@@ -195,6 +196,18 @@ export class ZaloService {
     } catch (e) {
       return { ok: false, error: `API_ERROR: ${e instanceof Error ? e.message : String(e)}` };
     }
+  }
+
+  /** Chủ động gia hạn token trước khi hết hạn (access token sống 90 ngày → gia hạn mỗi 25 ngày).
+   *  Nhờ refresh token xoay vòng, kết nối Zalo gần như "vĩnh viễn" — không bao giờ phải kết nối lại tay. */
+  async ensureTokenFresh(): Promise<void> {
+    const settings = await getSettings();
+    const zaloCfg = settings.zalo ?? {};
+    if (!zaloCfg.accessToken) return;
+    const last = zaloCfg.lastRefreshAt ? new Date(zaloCfg.lastRefreshAt).getTime() : 0;
+    if (last && Date.now() - last < 25 * 24 * 60 * 60_000) return;
+    const r = await this.refreshAccessToken();
+    if (!r.ok) console.warn('[Zalo] ensureTokenFresh:', r.error);
   }
 
   /** Tra cứu appuser_id (mã định danh người dùng trong app) của ứng viên theo SĐT hoặc user_id đã biết. */

@@ -147,6 +147,8 @@ export const DEFAULT_SETTINGS = {
     refreshToken: '',
     // AI tự trả lời tin nhắn của ứng viên gửi đến OA (trừ lệnh điểm danh)
     autoReply: true,
+    // Lần cuối refresh token thành công (job gia hạn định kỳ dùng để giữ kết nối "vĩnh viễn")
+    lastRefreshAt: '',
   },
   // Phỏng vấn: nhắc Zalo trước giờ PV + link GG Meet mặc định theo chi nhánh
   interview: {

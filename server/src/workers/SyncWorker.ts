@@ -46,6 +46,8 @@ export class SyncWorker {
   private alertTimer: NodeJS.Timeout | null = null;
   private runningAlert = false;
   private lastQueueAlertAt = 0;
+  private zaloTokenTimer: NodeJS.Timeout | null = null;
+  private runningZaloRefresh = false;
 
   constructor(intervalMs = 3000) {
     this.intervalMs = intervalMs;
@@ -93,6 +95,9 @@ export class SyncWorker {
     this.alertTimer = setInterval(() => {
       void this.tickQueueAlert();
     }, 5 * 60_000);
+    this.zaloTokenTimer = setInterval(() => {
+      void this.tickZaloTokenRefresh();
+    }, 60 * 60_000);
     void this.tick();
     void this.tickFormImport();
     void this.tickAutoDedup();
@@ -101,6 +106,7 @@ export class SyncWorker {
     void this.tickInterviewReminders();
     void this.tickPrune();
     void this.tickQueueAlert();
+    void this.tickZaloTokenRefresh();
     console.log('[SyncWorker] started');
   }
 
@@ -124,6 +130,22 @@ export class SyncWorker {
     this.alertTimer = null;
     if (this.idleTimer) clearTimeout(this.idleTimer);
     this.idleTimer = null;
+  }
+
+  /**
+   * Gia hạn token Zalo OA trước khi hết hạn (mỗi 25 ngày) — refresh token xoay vòng
+   * nên kết nối Zalo duy trì "vĩnh viễn" mà không cần admin kết nối lại tay.
+   */
+  private async tickZaloTokenRefresh(): Promise<void> {
+    if (!this.running || this.runningZaloRefresh) return;
+    this.runningZaloRefresh = true;
+    try {
+      await zaloService.ensureTokenFresh();
+    } catch (e) {
+      console.warn('[SyncWorker] zalo token:', e instanceof Error ? e.message : String(e));
+    } finally {
+      this.runningZaloRefresh = false;
+    }
   }
 
   /**
