@@ -37,6 +37,7 @@ router.get('/oauth-callback', async (req, res) => {
         oaId: result.oaId || oaIdFromQuery || env.zaloOaId,
         accessToken: result.accessToken,
         refreshToken: result.refreshToken,
+        lastRefreshAt: new Date().toISOString(),
       },
     },
     'zalo-oauth',
