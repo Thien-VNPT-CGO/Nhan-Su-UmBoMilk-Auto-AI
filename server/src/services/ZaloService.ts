@@ -490,10 +490,12 @@ export class ZaloService {
     if (!c) throw new Error('Không tìm thấy ứng viên');
     if (!c.ngayBatDauTraining) throw new Error('Chưa có ngày bắt đầu Training');
 
+    const nameGreeting = c.tenUv.trim().toLowerCase().startsWith('sếp') ? c.tenUv.trim() : `Sếp ${c.tenUv.trim()}`;
+
     const content = [
       '🐮 [UMBO MILK] – THÔNG BÁO LỊCH TRAINING 🎓',
       '',
-      `Chào Sếp ${c.tenUv} ❤️`,
+      `Chào ${nameGreeting} ❤️`,
       'UMBO MILK thông báo lịch đào tạo (Training) của bạn như sau:',
       '',
       '📌 CHI TIẾT LỊCH TRAINING:',
@@ -517,10 +519,12 @@ export class ZaloService {
     if (!c.phongVanAt) throw new Error('Chưa có thời gian phỏng vấn');
     if (!c.ggMeetLink) throw new Error('Chưa có link GG Meet');
 
+    const nameGreeting = c.tenUv.trim().toLowerCase().startsWith('sếp') ? c.tenUv.trim() : `Sếp ${c.tenUv.trim()}`;
+
     const content = [
       '🐮 [UMBO MILK] – THƯ MỜI PHỎNG VẤN 📋',
       '',
-      `Chào Sếp ${c.tenUv} ❤️`,
+      `Chào ${nameGreeting} ❤️`,
       'Chúc mừng bạn đã vượt qua vòng lọc hồ sơ ứng tuyển của UMBO MILK!',
       '',
       '📌 THÔNG TIN PHỎNG VẤN:',
@@ -530,13 +534,14 @@ export class ZaloService {
       `• 🏢 Chi nhánh ứng tuyển: ${c.chiNhanh}`,
       `• ⏱️ Ca làm việc đăng ký: ${c.caLam}`,
       '',
-      '👉 Vui lòng nhấn nút [✅ THAM GIA PHỎNG VẤN] bên dưới để hệ thống tự động ghi nhận lịch hẹn của bạn nhé!',
+      '👉 Vui lòng nhắn lại cụm từ "THAM GIA PHỎNG VẤN" (hoặc "THAM GIA") vào khung chat này để hệ thống tự động ghi nhận lịch hẹn của bạn nhé!',
+      '*(Trường hợp bận không tham gia được, bạn nhắn "TỪ CHỐI" giúp UMBO MILK nhé)*',
       '',
       'UMBO MILK rất mong được gặp bạn! ✨',
     ].join('\n');
 
     const buttons = [
-      { title: '✅ THAM GIA PHỎNG VẤN', payload: 'THAM GIA', type: 'oa.query' },
+      { title: '✅ THAM GIA PHỎNG VẤN', payload: 'THAM GIA PHỎNG VẤN', type: 'oa.query' },
       { title: '❌ TỪ CHỐI', payload: 'TỪ CHỐI', type: 'oa.query' },
     ];
 
@@ -545,18 +550,21 @@ export class ZaloService {
   }
 
 
+
   /** Nhắc phỏng vấn trước giờ PV (1 lần/lịch hẹn, chống trùng bằng marker trong nội dung). */
   async sendInterviewReminder(candidateId: string, remindHours: number): Promise<{ ok: boolean; status: string }> {
     const c = await prisma.candidate.findUnique({ where: { id: candidateId } });
     if (!c) throw new Error('Không tìm thấy ứng viên');
     if (!c.phongVanAt || !c.ggMeetLink) throw new Error('Chưa có lịch phỏng vấn');
 
+    const nameGreeting = c.tenUv.trim().toLowerCase().startsWith('sếp') ? c.tenUv.trim() : `Sếp ${c.tenUv.trim()}`;
+
     const marker = `[NHACPV:${c.phongVanAt.toISOString()}]`;
     const content = [
       marker,
       '🐮 [UMBO MILK] – NHẮC LỊCH PHỎNG VẤN ⏰',
       '',
-      `Chào Sếp ${c.tenUv} ❤️`,
+      `Chào ${nameGreeting} ❤️`,
       `Chỉ còn ${remindHours} tiếng nữa là đến buổi phỏng vấn của bạn cùng UMBO MILK!`,
       '',
       '📌 THÔNG TIN LỊCH HẸN:',
