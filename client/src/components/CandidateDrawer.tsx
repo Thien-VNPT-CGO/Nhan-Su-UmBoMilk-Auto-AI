@@ -793,31 +793,34 @@ export default function CandidateDrawer({
                     </div>
                   )}
 
-                  {/* Danh sách tin nhắn Zalo 2 chiều */}
-                  {c.zaloMessages.map((m) => {
-                    const isOut = m.direction !== 'IN';
-                    return (
-                      <div key={m.id} className={cn('flex flex-col', isOut ? 'items-end' : 'items-start')}>
-                        <div className={cn(
-                          'max-w-[82%] px-4 py-3 text-xs whitespace-pre-wrap break-words leading-relaxed shadow-xs',
-                          isOut
-                            ? 'bg-brand-600 text-white rounded-2xl rounded-br-xs'
-                            : 'bg-white border border-slate-200 text-slate-800 rounded-2xl rounded-bl-xs'
-                        )}>
-                          {m.content}
+                  {/* Danh sách tin nhắn Zalo 2 chiều (sắp xếp tăng dần theo thời gian: cũ ở trên -> mới ở dưới cùng) */}
+                  {[...c.zaloMessages]
+                    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+                    .map((m) => {
+                      const isOut = m.direction !== 'IN';
+                      return (
+                        <div key={m.id} className={cn('flex flex-col', isOut ? 'items-end' : 'items-start')}>
+                          <div className={cn(
+                            'max-w-[82%] px-4 py-3 text-xs whitespace-pre-wrap break-words leading-relaxed shadow-xs',
+                            isOut
+                              ? 'bg-brand-600 text-white rounded-2xl rounded-br-xs'
+                              : 'bg-white border border-slate-200 text-slate-800 rounded-2xl rounded-bl-xs'
+                          )}>
+                            {m.content}
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-1 px-1 text-[10px] text-slate-400">
+                            <span>{formatDateTime(m.createdAt)}</span>
+                            {isOut && (
+                              <span className={cn('font-semibold', m.status === 'SENT' ? 'text-emerald-600' : 'text-rose-500')}>
+                                · {m.status === 'SENT' ? 'Đã gửi Zalo' : 'Lỗi gửi'}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1.5 mt-1 px-1 text-[10px] text-slate-400">
-                          <span>{formatDateTime(m.createdAt)}</span>
-                          {isOut && (
-                            <span className={cn('font-semibold', m.status === 'SENT' ? 'text-emerald-600' : 'text-rose-500')}>
-                              · {m.status === 'SENT' ? 'Đã gửi Zalo' : 'Lỗi gửi'}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
                   <div ref={chatBottomRef} />
+
                 </div>
 
                 {/* Thanh Mẫu Tin Nhanh (Quick Replies) */}

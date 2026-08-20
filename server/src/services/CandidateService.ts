@@ -320,7 +320,8 @@ export class CandidateService {
         shifts: { orderBy: { date: 'asc' } },
         attendanceEvents: { orderBy: { createdAt: 'desc' } },
         conflicts: { where: { status: 'OPEN' } },
-        zaloMessages: { orderBy: { createdAt: 'desc' }, take: 20 },
+        zaloMessages: { orderBy: { createdAt: 'asc' }, take: 50 },
+
       },
     });
     if (!c) throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy ứng viên.');
