@@ -643,37 +643,7 @@ export default function CandidateDrawer({
                     </div>
                   </div>
                 )}
-                {c.hrDecision === 'PASS' && c.phongVanAt && (
-                  <div className="rounded-xl bg-slate-50 p-3.5 text-sm space-y-2">
-                    <div className="font-bold text-slate-700">Kết quả phỏng vấn</div>
-                    <div className="flex flex-wrap gap-1.5">
-                      <button
-                        className={cn('btn !px-2.5 !py-1.5 !text-xs', c.interviewStatus === 'DA_PV' ? 'btn-primary' : 'btn-secondary')}
-                        onClick={() => setInterviewStatus('DA_PV')}
-                      >
-                        Đã phỏng vấn
-                      </button>
-                      <button
-                        className={cn('btn !px-2.5 !py-1.5 !text-xs', c.interviewStatus === 'QUA_PV' ? 'btn-success' : 'btn-secondary')}
-                        onClick={() => setInterviewStatus('QUA_PV')}
-                      >
-                        Qua PV
-                      </button>
-                      <button
-                        className={cn('btn !px-2.5 !py-1.5 !text-xs', c.interviewStatus === 'TRUOT_PV' ? 'btn-danger' : 'btn-secondary')}
-                        onClick={() => setInterviewStatus('TRUOT_PV')}
-                      >
-                        Trượt PV
-                      </button>
-                      <button
-                        className={cn('btn !px-2.5 !py-1.5 !text-xs', c.interviewStatus === 'VANG' ? 'btn-danger' : 'btn-secondary')}
-                        onClick={() => setInterviewStatus('VANG')}
-                      >
-                        Vắng
-                      </button>
-                    </div>
-                  </div>
-                )}
+
                 {c.hrDecision && (
                   <div className="rounded-xl bg-slate-50 p-3.5 text-sm space-y-1">
                     <div>Quyết định hiện tại: <b>{decisionLabel[c.hrDecision]?.label ?? c.hrDecision}</b> bởi <b>{c.hrUser ?? ''}</b></div>

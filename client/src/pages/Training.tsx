@@ -170,6 +170,16 @@ export default function Training() {
     }
   };
 
+  const updateInterviewResult = async (id: string, interviewStatus: string) => {
+    try {
+      await api.patch(`/candidates/${id}/interview`, { interviewStatus });
+      toast('success', 'Đã cập nhật kết quả phỏng vấn!');
+      void load();
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Thao tác thất bại.');
+    }
+  };
+
   const openInterviewEdit = (r: TrainingRow) => {
     setInterviewEdit(r);
     setIvPhongVanAt(r.phongVanAt ? r.phongVanAt.slice(0, 16) : '');
@@ -321,27 +331,47 @@ export default function Training() {
                       )}
                     </td>
                     <td className="table-td">
-                      {r.phongVanAt ? (
-                        <div className="flex flex-col gap-0.5">
+                      <div className="flex flex-col gap-1">
+                        {r.phongVanAt ? (
                           <div className="flex items-center gap-1.5">
                             <span className="text-xs font-semibold text-emerald-700">{formatDateTime(r.phongVanAt)}</span>
-                            {r.interviewStatus && INTERVIEW_STATUS_LABEL[r.interviewStatus] && (
-                              <Badge className={INTERVIEW_STATUS_LABEL[r.interviewStatus].cls}>{INTERVIEW_STATUS_LABEL[r.interviewStatus].label}</Badge>
-                            )}
+                            <button className="text-[10px] text-slate-400 hover:text-slate-600 underline" onClick={() => openInterviewEdit(r)}>
+                              Sửa
+                            </button>
                           </div>
-                          {r.ggMeetLink && (
-                            <a className="text-[11px] text-sky-600 underline truncate max-w-[180px]" href={r.ggMeetLink} target="_blank" rel="noreferrer">
-                              {r.ggMeetLink}
-                            </a>
-                          )}
-                          <button className="btn-secondary !px-2.5 !py-0.5 !text-[11px] w-fit mt-0.5" onClick={() => openInterviewEdit(r)}>
-                            Sửa lịch
-                          </button>
+                        ) : (
+                          <span className="text-xs text-slate-400">Chưa hẹn</span>
+                        )}
+
+                        {/* Bộ 4 nút Kết quả phỏng vấn tích hợp trực tiếp cho từng ứng viên */}
+                        <div className="flex flex-wrap gap-1 mt-0.5">
+                          {[
+                            { key: 'DA_PV', label: 'Đã PV', activeCls: 'bg-sky-600 text-white font-bold' },
+                            { key: 'QUA_PV', label: 'Qua PV', activeCls: 'bg-emerald-600 text-white font-bold' },
+                            { key: 'TRUOT_PV', label: 'Trượt PV', activeCls: 'bg-rose-600 text-white font-bold' },
+                            { key: 'VANG', label: 'Vắng', activeCls: 'bg-rose-600 text-white font-bold' },
+                          ].map((st) => {
+                            const isCurrent = r.interviewStatus === st.key;
+                            return (
+                              <button
+                                key={st.key}
+                                type="button"
+                                className={cn(
+                                  'px-2 py-0.5 rounded text-[10px] transition-all border',
+                                  isCurrent
+                                    ? st.activeCls + ' border-transparent shadow-2xs'
+                                    : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-600'
+                                )}
+                                onClick={() => updateInterviewResult(r.id, st.key)}
+                              >
+                                {st.label}
+                              </button>
+                            );
+                          })}
                         </div>
-                      ) : (
-                        <span className="text-xs text-slate-400">Chưa hẹn</span>
-                      )}
+                      </div>
                     </td>
+
                     <td className="table-td">
                       <button
                         className="btn-secondary !px-2 !py-0.5 text-xs"
