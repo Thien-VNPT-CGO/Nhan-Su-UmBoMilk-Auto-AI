@@ -136,25 +136,31 @@ router.post('/auto-reply', requireRole('ADMIN'), async (req: AuthedRequest, res,
   }
 });
 
-router.post('/webhook', async (req, res, next) => {
-  try {
-    const secret = req.headers['x-webhook-secret'] ?? req.query.secret;
-    const body = req.body as Record<string, unknown> | undefined;
-    const looksLikeZalo =
-      !!body &&
-      (typeof body.event_name === 'string' ||
-        (body.sender !== undefined && body.message !== undefined));
-    if (secret !== env.webhookSecret && !looksLikeZalo) {
-      throw ApiError.unauthorized('Webhook secret không hợp lệ.');
+/** Webhook Zalo OA: Nhận tin nhắn & sự kiện từ Zalo Server. */
+router.get('/webhook', (_req, res) => {
+  // Hỗ trợ GET verify URL cho các dịch vụ kiểm tra Webhook
+  res.status(200).send('OK');
+});
+
+router.post('/webhook', (req, res) => {
+  // QUY TẮC BẮT BUỘC ZALO WEBHOOK:
+  // Phản hồi HTTP 200 OK ngay lập tức (< 10ms) để không bị Zalo hủy kết nối (lỗi HTTP 408 Timeout).
+  res.status(200).json({ success: true, message: 'OK' });
+
+  // Đẩy toàn bộ công việc lưu log DB & xử lý Zalo User ID + AI reply ra ngầm (Async Background)
+  const payload = req.body;
+  void (async () => {
+    try {
+      if (payload && typeof payload === 'object') {
+        await prisma.webhookEvent.create({
+          data: { id: nextId('WEB'), source: 'ZALO', payload: payload as object },
+        }).catch(() => undefined);
+        await zaloService.webhook(payload);
+      }
+    } catch (e) {
+      console.error('[ZaloWebhook] Lỗi xử lý ngầm:', e instanceof Error ? e.message : String(e));
     }
-    await prisma.webhookEvent.create({
-      data: { id: nextId('WEB'), source: 'ZALO', payload: req.body as object },
-    });
-    await zaloService.webhook(req.body);
-    res.json({ success: true });
-  } catch (e) {
-    next(e);
-  }
+  })();
 });
 
 export default router;
