@@ -466,11 +466,12 @@ export class ZaloService {
     return { ok: status === 'SENT', provider, messageId: msg.id, status };
   }
 
-  /** Gửi tin text tùy ý (dùng cho auto-reply, thông báo thủ công...). */
-  async sendText(phone: string, content: string, candidateId: string | null): Promise<{ ok: boolean; status: string }> {
+  /** Gửi tin text tùy ý (dùng cho live chat, auto-reply, thông báo thủ công...). */
+  async sendText(phone: string, content: string, candidateId: string | null): Promise<{ ok: boolean; status: string; error?: string | null }> {
     const r = await this.sendRaw(phone, content, candidateId);
-    return { ok: r.ok, status: r.status };
+    return { ok: r.ok, status: r.status, error: r.error };
   }
+
 
   async sendTrainingNotice(candidateId: string): Promise<{ ok: boolean; provider: string; messageId?: string }> {
     const c = await prisma.candidate.findUnique({ where: { id: candidateId } });

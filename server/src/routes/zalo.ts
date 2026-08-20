@@ -122,6 +122,38 @@ router.post('/send', requireWrite(), async (req, res, next) => {
   }
 });
 
+const chatSchema = z.object({
+  candidateId: z.string().min(1),
+  content: z.string().min(1, 'Nội dung tin nhắn không được để trống.'),
+});
+
+/** Nhắn tin trực tiếp 2 chiều (Live Chat) với ứng viên qua Zalo OA. */
+router.post('/chat', requireWrite(), async (req: AuthedRequest, res, next) => {
+  try {
+    const parsed = chatSchema.safeParse(req.body);
+    if (!parsed.success) throw ApiError.badRequest('INVALID_INPUT', 'Nội dung tin nhắn không được để trống.');
+    const { candidateId, content } = parsed.data;
+
+    const candidate = await prisma.candidate.findUnique({
+      where: { id: candidateId },
+      select: { id: true, sdtZalo: true, tenUv: true },
+    });
+    if (!candidate) throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy ứng viên.');
+
+    const result = await zaloService.sendText(candidate.sdtZalo, content.trim(), candidate.id);
+    if (!result.ok) {
+      throw ApiError.badRequest(
+        'SEND_FAILED',
+        result.error ?? 'Gửi tin Zalo thất bại. Nhờ ứng viên nhắn 1 tin bất kỳ cho OA để kết nối Zalo User ID.',
+      );
+    }
+    res.json({ success: true, data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
+
 /** Bật/tắt AI auto-reply cho tin nhắn ứng viên gửi vào OA. */
 const autoReplySchema = z.object({ enabled: z.boolean() });
 

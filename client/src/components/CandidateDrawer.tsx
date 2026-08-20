@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
+
 import {
   User, BrainCircuit, ThumbsUp, GraduationCap, ClipboardCheck, MessageCircle,
   ScrollText, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Send, Briefcase, CalendarDays, Video, Pencil, Search,
@@ -46,7 +47,8 @@ interface CandidateDetail {
   shifts: { date: string; shifts: string; note: string | null }[];
   attendanceEvents: { id: string; date: string; shift: string; checkinAt: string; method: string; valid: boolean; reason: string | null; trainingDay: number | null }[];
   conflicts: { id: string; field: string; webValue: string; sheetValue: string }[];
-  zaloMessages: { id: string; content: string; status: string; createdAt: string }[];
+  zaloMessages: { id: string; content: string; status: string; createdAt: string; direction?: string }[];
+
 }
 
 const TABS = [
@@ -89,6 +91,33 @@ export default function CandidateDrawer({
   const [zaloUserIdDraft, setZaloUserIdDraft] = useState('');
   const [zaloUserIdEditing, setZaloUserIdEditing] = useState(false);
   const [zaloUserIdSaving, setZaloUserIdSaving] = useState(false);
+  const [chatText, setChatText] = useState('');
+  const [sendingChat, setSendingChat] = useState(false);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+
+  const sendLiveChat = async (customContent?: string) => {
+    const textToSend = (customContent || chatText).trim();
+    if (!textToSend) {
+      toast('error', 'Nhập nội dung tin nhắn.');
+      return;
+    }
+    if (!c?.id) return;
+    setSendingChat(true);
+    try {
+      await api.post('/zalo/chat', { candidateId: c.id, content: textToSend });
+      toast('success', 'Đã gửi tin nhắn Zalo!');
+      setChatText('');
+      const updated = await api.get<CandidateDetail>(`/candidates/${c.id}`);
+      setC(updated);
+      onChanged();
+      setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Gửi tin Zalo thất bại.');
+    } finally {
+      setSendingChat(false);
+    }
+  };
+
 
   useEffect(() => {
     if (!candidateId || !open) return;
@@ -674,26 +703,125 @@ export default function CandidateDrawer({
             )}
 
             {tab === 'zalo' && (
-              <div className="space-y-3">
-                <div className="flex justify-end">
-                  <button className="btn-primary" onClick={notifyZalo}>
-                    <MessageCircle size={15} /> Gửi thông báo đào tạo
+              <div className="flex flex-col h-[520px] bg-slate-50/60 rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs">
+                {/* Header chat bar */}
+                <div className="px-4 py-3 bg-white border-b border-slate-200/80 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-brand-100 text-brand-700 font-bold flex items-center justify-center text-xs">
+                      {c.tenUv ? c.tenUv.charAt(0).toUpperCase() : 'Z'}
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-slate-800">{c.tenUv} ({c.sdtZalo})</div>
+                      <div className="text-[11px] text-slate-400 flex items-center gap-1">
+                        {c.zaloUserId ? (
+                          <span className="text-emerald-600 font-medium">✓ Zalo OA Live Connected</span>
+                        ) : (
+                          <span className="text-amber-600 font-medium">⚠️ Chưa có Zalo User ID</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <button className="btn-secondary !text-xs !py-1 !px-2.5" onClick={notifyZalo}>
+                    <Send size={13} /> Gửi thông báo đào tạo
                   </button>
                 </div>
-                {c.zaloMessages.length === 0 && <p className="text-sm text-slate-400">Chưa có tin nhắn nào.</p>}
-                {c.zaloMessages.map((m) => (
-                  <div key={m.id} className="rounded-xl bg-slate-50 p-4">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <Badge className={m.status === 'SENT' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}>
-                        {m.status}
-                      </Badge>
-                      <span className="text-[11px] text-slate-400">{formatDateTime(m.createdAt)}</span>
+
+                {/* Khung nội dung cuộc trò chuyện Live Chat */}
+                <div className="flex-1 p-4 overflow-y-auto space-y-3.5 bg-slate-50/50">
+                  {!c.zaloUserId && (
+                    <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-800 border border-amber-200 flex items-center justify-between gap-2">
+                      <span>⚠️ Ứng viên chưa có Zalo User ID. Hãy bấm &quot;Tự lấy ID&quot; hoặc nhờ ứng viên nhắn 1 tin tới OA.</span>
+                      <button
+                        type="button"
+                        className="btn-primary !text-[11px] !py-1 !px-2 shrink-0"
+                        onClick={() => resolveZaloUserId(false)}
+                        disabled={resolvingZaloId}
+                      >
+                        {resolvingZaloId ? <Spinner size={12} /> : <Search size={12} />} Tự lấy ID
+                      </button>
                     </div>
-                    <pre className="text-xs text-slate-600 whitespace-pre-wrap font-sans">{m.content}</pre>
-                  </div>
-                ))}
+                  )}
+
+                  {c.zaloMessages.length === 0 && (
+                    <div className="text-center py-12 text-slate-400 text-xs">
+                      💬 Chưa có lịch sử tin nhắn. Nhập nội dung bên dưới để bắt đầu chat trực tiếp với ứng viên!
+                    </div>
+                  )}
+
+                  {/* Danh sách tin nhắn Zalo 2 chiều */}
+                  {c.zaloMessages.map((m) => {
+                    const isOut = m.direction !== 'IN';
+                    return (
+                      <div key={m.id} className={cn('flex flex-col', isOut ? 'items-end' : 'items-start')}>
+                        <div className={cn(
+                          'max-w-[82%] px-4 py-3 text-xs whitespace-pre-wrap break-words leading-relaxed shadow-xs',
+                          isOut
+                            ? 'bg-brand-600 text-white rounded-2xl rounded-br-xs'
+                            : 'bg-white border border-slate-200 text-slate-800 rounded-2xl rounded-bl-xs'
+                        )}>
+                          {m.content}
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-1 px-1 text-[10px] text-slate-400">
+                          <span>{formatDateTime(m.createdAt)}</span>
+                          {isOut && (
+                            <span className={cn('font-semibold', m.status === 'SENT' ? 'text-emerald-600' : 'text-rose-500')}>
+                              · {m.status === 'SENT' ? 'Đã gửi Zalo' : 'Lỗi gửi'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div ref={chatBottomRef} />
+                </div>
+
+                {/* Thanh Mẫu Tin Nhanh (Quick Replies) */}
+                <div className="px-3 py-1.5 bg-slate-100/80 border-t border-slate-200 flex items-center gap-1.5 overflow-x-auto text-[11px] text-slate-600">
+                  <span className="font-semibold text-slate-400 shrink-0 text-[10px] uppercase">Mẫu nhanh:</span>
+                  {[
+                    `Chào ${c.tenUv}, UMBO MILK xin thông báo bạn đã ĐẠT vòng sơ tuyển! Bạn có thể đến phỏng vấn không ạ?`,
+                    `Chào ${c.tenUv}, bạn nhớ mang theo CCCD khi đến phỏng vấn tại chi nhánh nhé!`,
+                    `Chào ${c.tenUv}, bạn vui lòng nhắn lại "điểm danh" để xác nhận ca làm việc hôm nay nhé!`,
+                  ].map((tpl, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      className="shrink-0 bg-white hover:bg-slate-200 border border-slate-200 rounded-full px-2.5 py-0.5 text-[11px] text-slate-700 truncate max-w-[180px] transition-colors"
+                      onClick={() => setChatText(tpl)}
+                    >
+                      Mẫu {i + 1}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Live Chat Input Bar */}
+                <div className="p-3 bg-white border-t border-slate-200 flex items-end gap-2">
+                  <textarea
+                    className="input flex-1 min-h-[42px] max-h-[100px] text-xs resize-none py-2.5 font-sans"
+                    rows={1}
+                    value={chatText}
+                    onChange={(e) => setChatText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        void sendLiveChat();
+                      }
+                    }}
+                    placeholder="Nhập tin nhắn Zalo gửi ứng viên (ấn Enter để gửi, Shift+Enter xuống dòng)..."
+                  />
+                  <button
+                    type="button"
+                    className="btn-primary !py-2.5 !px-4 h-[42px] shrink-0 font-semibold text-xs flex items-center gap-1.5"
+                    onClick={() => sendLiveChat()}
+                    disabled={sendingChat || !chatText.trim()}
+                  >
+                    {sendingChat ? <Spinner size={14} /> : <Send size={14} />}
+                    Gửi Zalo
+                  </button>
+                </div>
               </div>
             )}
+
 
             {tab === 'audit' && (
               <div className="space-y-1.5">
