@@ -581,8 +581,7 @@ export class ZaloService {
     const message = p.message ?? {};
     const text = String(message.text ?? '').trim();
 
-    // Nếu Zalo không tự gửi SĐT trong sender (do chính sách bảo mật Zalo),
-    // tự động trích xuất SĐT từ nội dung tin nhắn (ví dụ: ứng viên nhắn SĐT "0912345678" hoặc "SĐT em là 0912345678")
+    // 1. Tự động trích xuất SĐT từ nội dung tin nhắn nếu ứng viên gửi SĐT ("0333137633" hoặc "SĐT em là 0333...")
     if (!phoneRaw && text) {
       const matchPhone = text.match(/(?:84|0)[35789]\d{8}\b/);
       if (matchPhone) {
@@ -590,16 +589,73 @@ export class ZaloService {
       }
     }
 
-    // Tìm ứng viên: ưu tiên theo SĐT, nếu không có SĐT thì theo Zalo User ID; lưu lại user_id để gửi tin sau
-    let candidate = phoneRaw ? await prisma.candidate.findFirst({ where: { sdtZalo: phoneRaw } }) : null;
+    // 2. Tra cứu Zalo Profile (SĐT chia sẻ & Tên Zalo) từ Zalo API bằng zaloUserId
+    let profilePhone = '';
+    let profileName = '';
+    if (zaloUserId) {
+      try {
+        const cfg = await this.getConfig();
+        if (cfg.accessToken) {
+          const profileRes = await fetch(`https://openapi.zalo.me/v2.0/oa/getprofile?uid=${encodeURIComponent(zaloUserId)}`, {
+            headers: this.oaProofHeaders(cfg.accessToken),
+          });
+          const profileData = (await profileRes.json()) as {
+            error?: number;
+            data?: {
+              display_name?: string;
+              shared_info?: { phone?: string | number };
+            };
+          };
+          if (profileData.data) {
+            profileName = String(profileData.data.display_name ?? '').trim();
+            const rawP = String(profileData.data.shared_info?.phone ?? '').trim();
+            if (rawP) {
+              profilePhone = rawP.replace(/^\+?84/, '0');
+            }
+          }
+        }
+      } catch {
+        // bỏ qua lỗi profile
+      }
+    }
+
+    // 3. Thuật toán ghép nối ứng viên đa tầng (Multi-tier Matching Algorithm)
+    const sdtSearch = phoneRaw || profilePhone;
+    let candidate = sdtSearch ? await prisma.candidate.findFirst({ where: { sdtZalo: sdtSearch } }) : null;
     if (!candidate && zaloUserId) {
       candidate = await prisma.candidate.findFirst({ where: { zaloUserId } });
     }
+    // Nếu vẫn chưa tìm thấy theo SĐT / User ID, ghép theo Họ Tên Zalo với hồ sơ chưa có ID
+    if (!candidate && profileName) {
+      candidate = await prisma.candidate.findFirst({
+        where: {
+          zaloUserId: null,
+          tenUv: { contains: profileName, mode: 'insensitive' },
+        },
+        orderBy: { thoiGian: 'desc' },
+      });
+    }
+    // Nếu vẫn chưa tìm thấy và trong 24h qua chỉ có 1 ứng viên vừa nộp form chưa có ID
+    if (!candidate && zaloUserId) {
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const recentPending = await prisma.candidate.findMany({
+        where: { zaloUserId: null, thoiGian: { gte: oneDayAgo } },
+        orderBy: { thoiGian: 'desc' },
+        take: 2,
+      });
+      if (recentPending.length === 1) {
+        candidate = recentPending[0];
+      }
+    }
+
+    // 4. Cập nhật Zalo User ID vào database & thông báo real-time qua Socket cho Web UI
     if (candidate && zaloUserId && candidate.zaloUserId !== zaloUserId) {
       await prisma.candidate.update({ where: { id: candidate.id }, data: { zaloUserId } });
-      console.log(`[ZaloWebhook] ✅ Đã tự động gắn Zalo User ID (${zaloUserId}) cho ứng viên: ${candidate.tenUv} (${candidate.sdtZalo})`);
+      console.log(`[ZaloWebhook] 🎉 TỰ ĐỘNG GHÉP THÀNH CÔNG: Đã gắn Zalo User ID (${zaloUserId}) cho ứng viên: ${candidate.tenUv} (${candidate.sdtZalo})`);
+      emit('candidate:new', { candidateId: candidate.id });
     }
-    const phone = phoneRaw || candidate?.sdtZalo || zaloUserId;
+
+    const phone = sdtSearch || candidate?.sdtZalo || zaloUserId;
     if (!phone) return;
     const candidateId = candidate?.id ?? null;
 
