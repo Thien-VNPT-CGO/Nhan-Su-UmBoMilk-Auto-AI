@@ -68,16 +68,36 @@ export function weekdayVi(date: Date | string | number = new Date()): string {
   return map[idx] ?? '';
 }
 
+export function parseLocalPhanVanAt(s: string | Date | null | undefined): Date | undefined {
+  if (!s) return undefined;
+  if (s instanceof Date) return s;
+  let str = String(s).trim();
+  if (!str) return undefined;
+  if (/Z|[+-]\d{2}:\d{2}$/.test(str)) {
+    const d = new Date(str);
+    return Number.isNaN(d.getTime()) ? undefined : d;
+  }
+  str = str.replace(' ', 'T');
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(str)) {
+    if (str.length === 16) str += ':00';
+    str += '+07:00'; // Ép chuẩn múi giờ Việt Nam (GMT+7)
+    const d = new Date(str);
+    return Number.isNaN(d.getTime()) ? undefined : d;
+  }
+  const d = new Date(str);
+  return Number.isNaN(d.getTime()) ? undefined : d;
+}
+
 export function parseInputDateTime(s: string): Date {
   // accepts dd/MM/yyyy – HH:mm:ss or ISO
   const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})\s*[–-]?\s*(\d{2}):(\d{2})(?::(\d{2}))?/);
   if (m) {
-    const iso = `${m[3]}-${m[2]}-${m[1]}T${m[4]}:${m[5]}:${m[6] ?? '00'}`;
-    const d = new Date(iso);
-    return d;
+    const iso = `${m[3]}-${m[2]}-${m[1]}T${m[4]}:${m[5]}:${m[6] ?? '00'}+07:00`;
+    return new Date(iso);
   }
-  return new Date(s);
+  return parseLocalPhanVanAt(s) ?? new Date(s);
 }
+
 
 export function normalizeDateKey(s: string): string {
   // dd/MM/yyyy -> yyyy-MM-dd ; yyyy-MM-dd passthrough

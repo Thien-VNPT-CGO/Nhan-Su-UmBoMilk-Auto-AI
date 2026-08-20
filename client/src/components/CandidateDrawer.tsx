@@ -220,34 +220,49 @@ export default function CandidateDrawer({
       toast('error', 'Chọn thời gian phỏng vấn.');
       return;
     }
-    if (interviewEditMode) {
-      await act(
-        () =>
-          api.patch<{ zalo: { ok: boolean; provider: string } | null }>(`/candidates/${candidateId}/interview`, {
-            phongVanAt,
-            ggMeetLink: ggMeetLink.trim() || undefined,
-            resend: interviewResend,
-          }).then((res) => {
-            if (interviewResend && !res.zalo?.ok) toast('error', 'Đã lưu lịch nhưng không gửi được tin Zalo (kiểm tra cấu hình OA).');
-          }),
-        interviewResend ? 'Đã sửa lịch phỏng vấn & gửi lại lời mời qua Zalo.' : 'Đã sửa lịch phỏng vấn.',
-      );
-    } else {
-      await act(
-        () =>
-          api.patch<{ zalo: { ok: boolean; provider: string } | null }>(`/candidates/${candidateId}/decision`, {
-            decision: 'PASS',
-            reason: reason || undefined,
-            phongVanAt,
-            ggMeetLink: ggMeetLink.trim() || undefined,
-          }).then((res) => {
-            if (!res.zalo?.ok) toast('error', 'Đã lưu quyết định nhưng không gửi được tin Zalo (kiểm tra cấu hình OA).');
-          }),
-        'Đã lưu quyết định HR & gửi lời mời phỏng vấn qua Zalo.',
-      );
+    try {
+      if (interviewEditMode) {
+        const res = await api.patch<{ zalo: { ok: boolean; provider: string } | null }>(`/candidates/${candidateId}/interview`, {
+          phongVanAt,
+          ggMeetLink: ggMeetLink.trim() || undefined,
+          resend: interviewResend,
+        });
+        const d = await api.get<CandidateDetail>(`/candidates/${candidateId!}`);
+        setC(d);
+        onChanged();
+        if (interviewResend) {
+          if (res?.zalo?.ok) {
+            toast('success', 'Đã sửa lịch phỏng vấn & gửi lại lời mời qua Zalo.');
+          } else {
+            toast('error', 'Đã sửa lịch phỏng vấn. (Tin Zalo chưa gửi được do ứng viên chưa kết nối Zalo OA)');
+          }
+        } else {
+          toast('success', 'Đã sửa lịch phỏng vấn.');
+        }
+      } else {
+        const res = await api.patch<{ zalo: { ok: boolean; provider: string } | null }>(`/candidates/${candidateId}/decision`, {
+          decision: 'PASS',
+          reason: reason || undefined,
+          phongVanAt,
+          ggMeetLink: ggMeetLink.trim() || undefined,
+        });
+        const d = await api.get<CandidateDetail>(`/candidates/${candidateId!}`);
+        setC(d);
+        onChanged();
+        if (res?.zalo?.ok) {
+          toast('success', 'Đã lưu quyết định HR & gửi lời mời phỏng vấn qua Zalo.');
+        } else {
+          toast('error', 'Đã lưu quyết định ĐẠT & hẹn lịch. (Chưa gửi được tin Zalo do ứng viên chưa kết nối Zalo OA)');
+        }
+      }
+
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Thao tác thất bại.');
+    } finally {
+      setInterviewOpen(false);
     }
-    setInterviewOpen(false);
   };
+
 
   const setInterviewStatus = (status: string) =>
     act(

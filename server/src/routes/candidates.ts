@@ -12,6 +12,7 @@ import { ApiError } from '../lib/errors';
 import { prisma } from '../lib/prisma';
 import { emit } from '../sockets';
 import { zaloService } from '../services/ZaloService';
+import { parseLocalPhanVanAt } from '../lib/date';
 
 const router = Router();
 router.use(requireAuth);
@@ -240,8 +241,8 @@ router.patch('/:id/decision', requireWrite(), async (req: AuthedRequest, res, ne
     }
     let phongVanAtDate: Date | undefined;
     if (phongVanAt) {
-      phongVanAtDate = new Date(phongVanAt);
-      if (Number.isNaN(phongVanAtDate.getTime())) {
+      phongVanAtDate = parseLocalPhanVanAt(phongVanAt);
+      if (!phongVanAtDate || Number.isNaN(phongVanAtDate.getTime())) {
         throw ApiError.badRequest('INVALID_DATETIME', 'Thời gian phỏng vấn không hợp lệ.');
       }
     }
@@ -286,8 +287,8 @@ router.patch('/:id/interview', requireWrite(), async (req: AuthedRequest, res, n
 
     let phongVanAtDate: Date | undefined;
     if (phongVanAt) {
-      phongVanAtDate = new Date(phongVanAt);
-      if (Number.isNaN(phongVanAtDate.getTime())) {
+      phongVanAtDate = parseLocalPhanVanAt(phongVanAt);
+      if (!phongVanAtDate || Number.isNaN(phongVanAtDate.getTime())) {
         throw ApiError.badRequest('INVALID_DATETIME', 'Thời gian phỏng vấn không hợp lệ.');
       }
     }
