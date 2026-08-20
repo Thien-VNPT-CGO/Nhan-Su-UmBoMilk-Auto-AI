@@ -34,16 +34,34 @@ export class ZaloService {
     };
   }
 
+  /** Tính appsecret_proof = HMAC-SHA256(access_token, app_secret) — bắt buộc khi app bật chế độ bảo mật
+   *  trên developers.zalo.me (Cài đặt ứng dụng → Bảo mật → "Yêu cầu appsecret_proof"). */
+  private oaProofHeaders(token: string): Record<string, string> {
+    const headers: Record<string, string> = { access_token: token };
+    if (env.zaloAppSecret) {
+      const proof = createHmac('sha256', env.zaloAppSecret).update(token).digest('hex');
+      headers['appsecret_proof'] = proof;
+    }
+    return headers;
+  }
+
   /** Tạo link OAuth để user duyệt quyền trên Zalo rồi tự động lưu token về.
-   *  redirectUri lấy từ request thật (domain Render) + PKCE (Zalo yêu cầu code_challenge từ 2024). */
+   *  redirectUri lấy từ request thật (domain Render) + PKCE (Zalo yêu cầu code_challenge từ 2024).
+   *  FIX BUG 1: Dọn state hết hạn trước khi thêm mới để tránh memory leak và tránh nhầm state cũ. */
   async getAuthUrl(redirectUri: string): Promise<{ url: string; state: string }> {
     if (!env.zaloAppId || !env.zaloAppSecret) {
       throw new Error('Thiếu ZALO_APP_ID / ZALO_APP_SECRET trong .env (khai báo trên Render → Settings → Environment).');
     }
+    // Dọn state hết hạn để tránh memory leak khi gọi nhiều lần
+    const now = Date.now();
+    for (const [key, val] of this.pendingStates.entries()) {
+      if (val.exp < now) this.pendingStates.delete(key);
+    }
     const state = randomBytes(16).toString('hex');
     const codeVerifier = randomBytes(32).toString('base64url');
     const codeChallenge = createHash('sha256').update(codeVerifier).digest('base64url');
-    this.pendingStates.set(state, { exp: Date.now() + 10 * 60 * 1000, codeVerifier });
+    // TTL 15 phút thay vì 10 để có đủ thời gian user duyệt quyền trên mobile
+    this.pendingStates.set(state, { exp: now + 15 * 60 * 1000, codeVerifier });
     const url = new URL('https://oauth.zaloapp.com/v4/oa/permission');
     url.searchParams.set('app_id', env.zaloAppId);
     url.searchParams.set('redirect_uri', redirectUri);
@@ -68,12 +86,14 @@ export class ZaloService {
       return { ok: false, error: 'Thiếu ZALO_APP_ID / ZALO_APP_SECRET trong .env' };
     }
     try {
+      // FIX BUG 2: Thêm redirect_uri vào body — Zalo v4 bắt buộc phải khớp với URL đăng ký
       const res = await fetch('https://oauth.zaloapp.com/v4/oa/access_token', {
         method: 'POST',
         headers: { secret_key: env.zaloAppSecret },
         body: new URLSearchParams({
           app_id: env.zaloAppId,
           code,
+          redirect_uri: redirectUri,
           grant_type: 'authorization_code',
           code_verifier: pending.codeVerifier,
         }),
@@ -83,18 +103,25 @@ export class ZaloService {
         refresh_token?: string;
         error?: number;
         error_description?: string;
+        message?: string;
       };
       if (!data.access_token) {
-        return { ok: false, error: data.error_description ?? `Zalo lỗi: ${data.error}` };
+        const errMsg = data.error_description ?? data.message ?? `Zalo lỗi: ${data.error ?? 'không rõ'}`;
+        console.error('[Zalo] exchangeCode thất bại:', data);
+        return { ok: false, error: errMsg };
       }
-      // Zalo redirect KHÔNG trả oa_id → tự lấy OA id từ graph /me để icon sáng + gửi tin thật
+      // FIX BUG 3: Lấy OA ID từ đúng endpoint OA API (openapi), không phải User Graph (graph)
+      // graph.zalo.me/v2.0/me trả về user ID của người dùng cá nhân, KHÔNG phải OA ID
       let oaId: string | undefined;
       try {
-        const me = await fetch('https://graph.zalo.me/v2.0/me?fields=id,name', {
-          headers: { access_token: data.access_token },
+        const oaRes = await fetch('https://openapi.zalo.me/v2.0/oa/getoa', {
+          headers: this.oaProofHeaders(data.access_token),
         });
-        const meData = (await me.json()) as { id?: string; name?: string; error?: number };
-        if (meData.id) oaId = String(meData.id);
+        const oaData = (await oaRes.json()) as { error?: number; data?: { oa_id?: string; name?: string } };
+        if (!oaData.error && oaData.data?.oa_id) {
+          oaId = String(oaData.data.oa_id);
+          console.log('[Zalo] Lấy OA ID thành công:', oaId, oaData.data.name);
+        }
       } catch {
         // bỏ qua - oaId sẽ lấy từ query/env nếu có
       }
@@ -104,22 +131,20 @@ export class ZaloService {
     }
   }
 
-  /** Kiểm tra access token còn hiệu lực (dùng cho health check trên web) + lý do để hiển thị rõ cho admin. */
+  /** Kiểm tra access token còn hiệu lực (dùng cho health check trên web) + lý do để hiển thị rõ cho admin.
+   *  Dùng đúng endpoint OA API (openapi.zalo.me/v2.0/oa/getoa) + kèm appsecret_proof nếu app bật bảo mật. */
   async ping(): Promise<{ ok: boolean; reason: string }> {
     const cfg = await this.getConfig();
     if (!cfg.accessToken) return { ok: false, reason: 'NO_TOKEN' };
     let token = cfg.accessToken;
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        let url = 'https://graph.zalo.me/v2.0/me?fields=id,name';
-        if (env.zaloAppSecret) {
-          const proof = createHmac('sha256', env.zaloAppSecret).update(token).digest('hex');
-          url += `&appsecret_proof=${proof}`;
-        }
-        const res = await fetch(url, { headers: { access_token: token } });
-        const data = (await res.json()) as { error?: number; message?: string; id?: string };
+        const res = await fetch('https://openapi.zalo.me/v2.0/oa/getoa', {
+          headers: this.oaProofHeaders(token),
+        });
+        const data = (await res.json()) as { error?: number; message?: string; data?: { oa_id?: string; name?: string } };
         if (!res.ok) return { ok: false, reason: `API_ERROR_${res.status}` };
-        // Token hết hạn/không hợp lệ (452/-204/-201/-216) → thử refresh 1 lần (cần ZALO_APP_ID/SECRET + refresh token lưu từ OAuth)
+        // Token hết hạn/không hợp lệ (452/-204/-201/-216) → thử refresh 1 lần
         if (data.error === 452 || data.error === -204 || data.error === -201 || data.error === -216) {
           if (attempt === 0) {
             const fresh = await this.refreshAccessToken();
@@ -131,9 +156,10 @@ export class ZaloService {
           }
           return { ok: false, reason: 'EXPIRED_REFRESH_FAILED' };
         }
-        // 453: token hợp lệ nhưng app bật chế độ appsecret_proof mà server không có secret
-        if (data.error === 453) return { ok: true, reason: 'VALID_NO_PROOF' };
-        return data.id
+        if (data.error && data.error !== 0) {
+          return { ok: false, reason: `INVALID (${data.error} ${data.message ?? ''})`.trim() };
+        }
+        return data.data?.oa_id
           ? { ok: true, reason: 'VALID' }
           : { ok: false, reason: `INVALID (${data.error ?? ''} ${data.message ?? ''})`.trim() };
       } catch {
@@ -207,24 +233,61 @@ export class ZaloService {
     }
   }
 
-  /** Chủ động gia hạn refresh token trước khi hết hạn (refresh token Zalo sống 90 ngày, dùng 1 lần,
-   *  mỗi lần refresh được gia hạn thêm → gia hạn mỗi 25 ngày giữ kết nối "vĩnh viễn").
-   *  Access token OA chỉ sống 25 giờ nên được tự động refresh khi phát hiện hết hạn (452/-204) lúc gửi tin. */
-  async ensureTokenFresh(): Promise<void> {
+  /**
+   * Tự động gia hạn access token + rotate refresh token.
+   * Được gọi từ timer mỗi giờ trong startSystem().
+   *
+   * Chiến lược:
+   *  - Access token Zalo OA sống 25 giờ → refresh chủ động sau 20h (dư 5h buffer).
+   *  - Mỗi lần refresh Zalo cấp ĐỒNG THỜI access_token mới + refresh_token mới (rotate tự động).
+   *  - Refresh token sống 90 ngày nhưng single-use → khi refresh mỗi 20h, refresh_token luôn được
+   *    gia hạn liên tục → kết nối "vĩnh viễn" không cần bấm OAuth lại.
+   *  - Phòng thủ 2 lớp: timer chủ động (20h) + reactive khi gửi tin thất bại (452/-216).
+   */
+  async ensureTokenFresh(): Promise<{ refreshed: boolean; reason?: string }> {
     const settings = await getSettings();
     const zaloCfg = settings.zalo ?? {};
-    if (!zaloCfg.accessToken) return;
+
+    // Không có access token → chưa kết nối, bỏ qua
+    if (!zaloCfg.accessToken) {
+      return { refreshed: false, reason: 'NO_ACCESS_TOKEN' };
+    }
+
+    // Không có refresh token → không thể tự refresh, cần user bấm OAuth lại
+    if (!zaloCfg.refreshToken) {
+      console.warn('[Zalo] ensureTokenFresh: Không có refresh token — cần bấm "Kết nối Zalo OA" để cấp mới.');
+      return { refreshed: false, reason: 'NO_REFRESH_TOKEN' };
+    }
+
+    // Kiểm tra lần refresh gần nhất: nếu < 20h thì chưa cần refresh
     const last = zaloCfg.lastRefreshAt ? new Date(zaloCfg.lastRefreshAt).getTime() : 0;
-    if (last && Date.now() - last < 25 * 24 * 60 * 60_000) return;
+    const REFRESH_INTERVAL_MS = 20 * 60 * 60 * 1000; // 20 giờ (access token sống 25h)
+    if (last && Date.now() - last < REFRESH_INTERVAL_MS) {
+      const nextIn = Math.round((last + REFRESH_INTERVAL_MS - Date.now()) / 60_000);
+      return { refreshed: false, reason: `TOKEN_STILL_FRESH (refresh sau ~${nextIn} phút)` };
+    }
+
+    // Thực hiện refresh
+    console.log('[Zalo] Auto-refresh token (đã >20h kể từ lần refresh cuối)...');
     const r = await this.refreshAccessToken();
-    if (!r.ok) console.warn('[Zalo] ensureTokenFresh:', r.error);
+    if (r.ok) {
+      console.log('[Zalo] ✅ Token tự động gia hạn thành công — access_token + refresh_token đã rotate.');
+      return { refreshed: true };
+    }
+    console.warn('[Zalo] ⚠️ Token tự động gia hạn thất bại:', r.error);
+    return { refreshed: false, reason: r.error };
+  }
+
+  /** Gia hạn token ngay lập tức theo yêu cầu thủ công (bỏ qua kiểm tra 20h). */
+  async forceRefreshToken(): Promise<{ ok: boolean; error?: string }> {
+    return this.refreshAccessToken();
   }
 
   /** Tra cứu appuser_id (mã định danh người dùng trong app) của ứng viên theo SĐT hoặc user_id đã biết. */
   private async resolveUserId(accessToken: string, uid: string): Promise<string | null> {
     try {
       const res = await fetch(`https://openapi.zalo.me/v2.0/oa/getprofile?uid=${encodeURIComponent(uid)}`, {
-        headers: { access_token: accessToken },
+        headers: this.oaProofHeaders(accessToken),
       });
       const data = (await res.json()) as { error?: number; data?: { user_id?: string; id?: string } };
       if (data.error && data.error !== 0) return null;

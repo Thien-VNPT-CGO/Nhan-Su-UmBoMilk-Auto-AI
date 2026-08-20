@@ -54,6 +54,47 @@ router.get('/ping', requireAuth, async (req: AuthedRequest, res, next) => {
   }
 });
 
+/** Trạng thái chi tiết token + thời điểm refresh tiếp theo (dành cho admin debug). */
+router.get('/token-status', requireAuth, async (req: AuthedRequest, res, next) => {
+  try {
+    const { getSettings } = await import('../services/SettingsService');
+    const settings = await getSettings();
+    const z = settings.zalo ?? {};
+    const lastRefreshAt = z.lastRefreshAt ? new Date(z.lastRefreshAt) : null;
+    const REFRESH_INTERVAL_MS = 20 * 60 * 60 * 1000; // 20h
+    const nextRefreshAt = lastRefreshAt ? new Date(lastRefreshAt.getTime() + REFRESH_INTERVAL_MS) : null;
+    const minutesUntilRefresh = nextRefreshAt ? Math.round((nextRefreshAt.getTime() - Date.now()) / 60_000) : null;
+    res.json({
+      success: true,
+      data: {
+        hasAccessToken: !!z.accessToken,
+        hasRefreshToken: !!z.refreshToken,
+        oaId: z.oaId ?? null,
+        lastRefreshAt: lastRefreshAt?.toISOString() ?? null,
+        nextRefreshAt: nextRefreshAt?.toISOString() ?? null,
+        minutesUntilAutoRefresh: minutesUntilRefresh,
+        isRefreshDue: minutesUntilRefresh !== null ? minutesUntilRefresh <= 0 : true,
+      },
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/** Trigger refresh token thủ công ngay lập tức (không cần chờ timer 20h). Dành cho admin. */
+router.post('/refresh-token', requireRole('ADMIN'), async (req: AuthedRequest, res, next) => {
+  try {
+    const r = await zaloService.forceRefreshToken();
+    if (!r.ok) {
+      res.status(400).json({ success: false, error: r.error });
+      return;
+    }
+    res.json({ success: true, data: { message: 'Token đã được gia hạn thủ công thành công.' } });
+  } catch (e) {
+    next(e);
+  }
+});
+
 router.get('/messages', requireAuth, async (req, res, next) => {
   try {
     const messages = await prisma.zaloMessage.findMany({
