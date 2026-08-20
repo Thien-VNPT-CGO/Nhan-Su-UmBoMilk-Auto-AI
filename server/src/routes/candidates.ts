@@ -203,6 +203,25 @@ router.post('/:id/score', requireWrite(), async (req: AuthedRequest, res, next) 
   }
 });
 
+/** Tự động tra cứu Zalo User ID từ SĐT và cập nhật trực tiếp vào hồ sơ ứng viên. */
+router.post('/:id/resolve-zalo-user-id', requireAuth, async (req: AuthedRequest, res, next) => {
+  try {
+    const candidate = await prisma.candidate.findUnique({ where: { id: req.params.id } });
+    if (!candidate) throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy ứng viên.');
+    const userId = await zaloService.tryResolveAndSaveUserId(candidate.id, candidate.sdtZalo);
+    if (!userId) {
+      res.json({
+        success: false,
+        message: 'Chưa tra cứu được Zalo User ID từ SĐT này. Nhờ ứng viên nhắn 1 tin cho OA hoặc nhập tay.',
+      });
+      return;
+    }
+    res.json({ success: true, data: { zaloUserId: userId } });
+  } catch (e) {
+    next(e);
+  }
+});
+
 const decisionSchema = z.object({
   decision: z.enum(['PASS', 'FAIL', 'REVIEW']),
   reason: z.string().optional(),

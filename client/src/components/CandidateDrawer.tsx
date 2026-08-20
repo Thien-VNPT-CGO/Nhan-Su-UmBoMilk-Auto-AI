@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   User, BrainCircuit, ThumbsUp, GraduationCap, ClipboardCheck, MessageCircle,
-  ScrollText, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Send, Briefcase, CalendarDays, Video, Pencil,
+  ScrollText, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Send, Briefcase, CalendarDays, Video, Pencil, Search,
 } from 'lucide-react';
 import { api, ApiError } from '../api/client';
 import { Drawer, Tabs, Badge, Spinner, ConfirmDialog, Field, Skeleton, Modal } from './ui';
@@ -104,6 +104,20 @@ export default function CandidateDrawer({
       .finally(() => setLoading(false));
   }, [candidateId, open, toast]);
 
+  // Khi mở hồ sơ ứng viên chưa có Zalo User ID → tự động thử tra cứu ngầm 1 lần
+  useEffect(() => {
+    if (!c || c.zaloUserId) return;
+    api
+      .post<{ zaloUserId?: string }>(`/candidates/${c.id}/resolve-zalo-user-id`, {})
+      .then((res) => {
+        if (res?.zaloUserId) {
+          setC((prev) => (prev ? { ...prev, zaloUserId: res.zaloUserId! } : prev));
+          onChanged();
+        }
+      })
+      .catch(() => undefined);
+  }, [c?.id, c?.zaloUserId]);
+
   useEffect(() => {
     if (!candidateId || !open || !c) return;
     if (tab === 'audit') {
@@ -138,6 +152,28 @@ export default function CandidateDrawer({
 
   const score = () =>
     act(() => api.post(`/candidates/${candidateId}/score`, {}), 'AI đã chấm xong hồ sơ.');
+
+  const [resolvingZaloId, setResolvingZaloId] = useState(false);
+
+  const resolveZaloUserId = async (silent = false) => {
+    if (!c) return;
+    setResolvingZaloId(true);
+    try {
+      const res = await api.post<{ zaloUserId?: string }>(`/candidates/${c.id}/resolve-zalo-user-id`, {});
+      if (res?.zaloUserId) {
+        if (!silent) toast('success', `Đã tìm thấy Zalo User ID: ${res.zaloUserId}`);
+        const d = await api.get<CandidateDetail>(`/candidates/${candidateId}`);
+        setC(d);
+        onChanged();
+      } else {
+        if (!silent) toast('error', 'Zalo chưa trả về ID cho SĐT này. Nhờ ứng viên nhắn 1 tin cho OA.');
+      }
+    } catch (e) {
+      if (!silent) toast('error', e instanceof ApiError ? e.message : 'Tra cứu Zalo User ID thất bại.');
+    } finally {
+      setResolvingZaloId(false);
+    }
+  };
 
   const saveZaloUserId = async () => {
     if (!c) return;
@@ -313,16 +349,29 @@ export default function CandidateDrawer({
                     </div>
                   ) : (
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm text-slate-800 break-all">{c.zaloUserId ?? '—'}</span>
-                      <button
-                        className="flex items-center gap-1 text-xs text-slate-400 hover:text-brand-600"
-                        onClick={() => {
-                          setZaloUserIdDraft(c.zaloUserId ?? '');
-                          setZaloUserIdEditing(true);
-                        }}
-                      >
-                        <Pencil size={13} /> Sửa
-                      </button>
+                      <span className="text-sm text-slate-800 break-all font-mono font-medium">{c.zaloUserId ?? '—'}</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          className="flex items-center gap-1.5 text-xs text-brand-700 hover:text-brand-800 bg-brand-50 hover:bg-brand-100 font-medium px-2.5 py-1 rounded-lg transition-colors"
+                          onClick={() => resolveZaloUserId(false)}
+                          disabled={resolvingZaloId}
+                          title="Tự động lấy Zalo User ID từ SĐT ứng viên"
+                        >
+                          {resolvingZaloId ? <Spinner size={12} /> : <Search size={13} />}
+                          {resolvingZaloId ? 'Đang lấy ID...' : 'Tự lấy ID'}
+                        </button>
+                        <button
+                          type="button"
+                          className="flex items-center gap-1 text-xs text-slate-400 hover:text-brand-600 px-1 py-1"
+                          onClick={() => {
+                            setZaloUserIdDraft(c.zaloUserId ?? '');
+                            setZaloUserIdEditing(true);
+                          }}
+                        >
+                          <Pencil size={13} /> Sửa
+                        </button>
+                      </div>
                     </div>
                   )}
                   {!c.zaloUserId && (
