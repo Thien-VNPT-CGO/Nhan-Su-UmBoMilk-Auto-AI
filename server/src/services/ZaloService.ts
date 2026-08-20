@@ -348,7 +348,12 @@ export class ZaloService {
           select: { id: true, zaloUserId: true },
         });
         userId = candidate?.zaloUserId ?? '';
+        // Đề phòng trường hợp zaloUserId trong DB bị dán nhầm là SĐT (ví dụ: 0333137633) -> reset để tránh lỗi Zalo -201
+        if (userId && /^0\d{9}$/.test(userId.trim())) {
+          userId = '';
+        }
       }
+
       if (!userId) {
         const resolved = await this.resolveUserId(accessToken, phone);
         if (!resolved) {
@@ -398,8 +403,20 @@ export class ZaloService {
               }
             }
             if (data?.error && data.error !== 0) {
-              // Token hết hạn/không hợp lệ (452, -201, -216): refresh 1 lần rồi gửi lại
-              const tokenDead = data.error === 452 || data.error === -204 || data.error === -201 || data.error === -216;
+              // Lỗi -201 / -205: Mã Zalo User ID bị sai/không hợp lệ -> tự động reset zaloUserId = null trong DB
+              if (data.error === -201 || data.error === -205) {
+                if (candidate) {
+                  await prisma.candidate
+                    .update({ where: { id: candidate.id }, data: { zaloUserId: null } })
+                    .catch(() => undefined);
+                }
+                throw new Error(
+                  'Zalo User ID của ứng viên chưa chính xác hoặc ứng viên chưa bấm "Quan tâm" Zalo OA. Hệ thống đã tự động reset mã để tự lấy lại mã mới.',
+                );
+              }
+
+              // Token hết hạn/không hợp lệ (452, -204, -216): refresh 1 lần rồi gửi lại
+              const tokenDead = data.error === 452 || data.error === -204 || data.error === -216;
               if (tokenDead && attempt === 0) {
                 const fresh = await this.refreshAccessToken();
                 if (!fresh.ok || !fresh.accessToken) {
@@ -410,6 +427,7 @@ export class ZaloService {
               }
               throw new Error(`Zalo API lỗi: ${data.error} ${data.message ?? ''}`);
             }
+
             messageId = data?.data?.message_id;
             status = 'SENT';
             break;
