@@ -5,6 +5,8 @@ import {
   ScrollText, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Send, Briefcase, CalendarDays, Video, Pencil, Search,
 } from 'lucide-react';
 import { api, ApiError } from '../api/client';
+import { getSocket } from '../api/socket';
+
 import { Drawer, Tabs, Badge, Spinner, ConfirmDialog, Field, Skeleton, Modal } from './ui';
 import { useToast } from '../stores/Toast';
 import { cn, trainingStatusLabel, syncStatusStyle, decisionLabel } from '../utils/format';
@@ -147,8 +149,51 @@ export default function CandidateDrawer({
       .catch(() => undefined);
   }, [c?.id, c?.zaloUserId]);
 
+  // Lắng nghe Socket real-time & Polling ngầm 3.5s cho tin nhắn Zalo khi mở tab 'zalo'
+
+  useEffect(() => {
+    if (!candidateId || !open || tab !== 'zalo') return;
+
+    const refreshZaloMessages = () => {
+      api
+        .get<CandidateDetail>(`/candidates/${candidateId}`)
+        .then((updated) => {
+          setC((prev) => {
+            if (!prev) return updated;
+            if (JSON.stringify(prev.zaloMessages) !== JSON.stringify(updated.zaloMessages)) {
+              setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+              return updated;
+            }
+            return prev;
+          });
+        })
+        .catch(() => undefined);
+    };
+
+    const socket = getSocket();
+    const handleSocketEvent = (data: { candidateId?: string }) => {
+      if (!data?.candidateId || data.candidateId === candidateId) {
+        refreshZaloMessages();
+      }
+    };
+
+    socket.on('zalo:incoming', handleSocketEvent);
+    socket.on('zalo:status', handleSocketEvent);
+    socket.on('zalo:message', handleSocketEvent);
+
+    const timer = setInterval(refreshZaloMessages, 3500);
+
+    return () => {
+      socket.off('zalo:incoming', handleSocketEvent);
+      socket.off('zalo:status', handleSocketEvent);
+      socket.off('zalo:message', handleSocketEvent);
+      clearInterval(timer);
+    };
+  }, [candidateId, open, tab]);
+
   useEffect(() => {
     if (!candidateId || !open || !c) return;
+
     if (tab === 'audit') {
       api.get<{ rows: unknown[] }>(`/audit?entityId=${candidateId}&limit=30`).then((d) => setAuditRows(d.rows)).catch(() => undefined);
     }
