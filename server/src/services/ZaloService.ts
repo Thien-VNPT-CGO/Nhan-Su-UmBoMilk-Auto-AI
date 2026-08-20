@@ -373,11 +373,12 @@ export class ZaloService {
       if (userId) {
         for (let attempt = 0; attempt < 2; attempt++) {
           try {
-            let res = await fetch('https://openapi.zalo.me/v2.0/oa/message', {
+            // Zalo v3.0 Message CS API chính thức (v2.0 đã bị Zalo khai tử - lỗi -240)
+            let res = await fetch('https://openapi.zalo.me/v3.0/oa/message/cs', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                access_token: accessToken,
+                ...this.oaProofHeaders(accessToken),
               },
               body: JSON.stringify({
                 recipient: { user_id: userId },
@@ -388,13 +389,18 @@ export class ZaloService {
             try {
               data = (await res.json()) as ZaloMessageResponse;
             } catch {
-              // endpoint v2.0 không phản hồi JSON → thử endpoint v3.0 cũ (message là chuỗi, cần oa_id trong path)
+              // Fallback sang endpoint tin nhắn giao dịch v3.0 transaction nếu CS bị từ chối
               data = null;
-              if (!cfg.oaId) throw new Error(`Zalo API không phản hồi (HTTP ${res.status}) và thiếu OA ID để fallback.`);
-              const fb = await fetch(`https://openapi.zalo.me/v3.0/message/officialaccount/${cfg.oaId}/text`, {
+              const fb = await fetch('https://openapi.zalo.me/v3.0/oa/message/transaction', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', access_token: accessToken },
-                body: JSON.stringify({ recipient: { user_id: userId }, message: content }),
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...this.oaProofHeaders(accessToken),
+                },
+                body: JSON.stringify({
+                  recipient: { user_id: userId },
+                  message: { text: content },
+                }),
               });
               try {
                 data = (await fb.json()) as ZaloMessageResponse;
@@ -402,6 +408,7 @@ export class ZaloService {
                 throw new Error(`Zalo API không phản hồi (HTTP ${fb.status}).`);
               }
             }
+
             if (data?.error && data.error !== 0) {
               // Lỗi -201 / -205: Mã Zalo User ID bị sai/không hợp lệ -> tự động reset zaloUserId = null trong DB
               if (data.error === -201 || data.error === -205) {
