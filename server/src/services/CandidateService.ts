@@ -149,6 +149,9 @@ export class CandidateService {
 
     emit('candidate:new', { candidateId: withHash.id });
 
+    // Tự động lấy Zalo User ID theo SĐT từ Zalo OA API và lưu vào hồ sơ ngay khi điền Form
+    void zaloService.tryResolveAndSaveUserId(withHash.id, sdt).catch(() => undefined);
+
     // Thông báo nội bộ cho HR khi có hồ sơ mới
     try {
       const { notificationService } = await import('./NotificationService');

@@ -297,6 +297,29 @@ export class ZaloService {
     }
   }
 
+  /**
+   * Tự động tra cứu Zalo User ID theo SĐT ứng viên ngay khi ứng viên điền Form đăng ký
+   * và lưu mã Zalo User ID vào hồ sơ database của ứng viên.
+   */
+  async tryResolveAndSaveUserId(candidateId: string, phone: string): Promise<string | null> {
+    try {
+      const cfg = await this.getConfig();
+      if (!cfg.accessToken) return null;
+      const userId = await this.resolveUserId(cfg.accessToken, phone);
+      if (userId) {
+        await prisma.candidate.update({
+          where: { id: candidateId },
+          data: { zaloUserId: userId },
+        }).catch(() => undefined);
+        console.log(`[ZaloService] ✅ Tự động lấy Zalo User ID (${userId}) cho ứng viên ${candidateId} (${phone}) từ Form đăng ký.`);
+        return userId;
+      }
+    } catch (e) {
+      console.warn(`[ZaloService] Chưa tra cứu được Zalo User ID cho SĐT ${phone}:`, e instanceof Error ? e.message : String(e));
+    }
+    return null;
+  }
+
   /** Gửi tin nhắn Zalo OA thật (refresh token nếu hết hạn) và lưu lịch sử.
    *  recipient.user_id phải là appuser_id (mã 19 số) — tra cứu/lưu tự động qua zaloUserId của ứng viên. */
   private async sendRaw(
