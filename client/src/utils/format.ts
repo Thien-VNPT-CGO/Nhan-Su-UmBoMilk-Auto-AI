@@ -21,14 +21,15 @@ export function shiftColor(shift: string): { bg: string; text: string; label: st
 }
 
 export const trainingStatusLabel: Record<string, { label: string; cls: string }> = {
-  CHUA_THAM_GIA: { label: '⏳ CHỜ UV XÁC NHẬN ZALO', cls: 'bg-amber-50 text-amber-700 border border-amber-200' },
-  SAP_BAT_DAU: { label: '✓ ĐÃ XÁC NHẬN (SẮP BẮT ĐẦU)', cls: 'bg-emerald-100 text-emerald-800 font-bold' },
+  CHUA_THAM_GIA: { label: '⏳ CHỜ UV XÁC NHẬN ZALO', cls: 'bg-rose-600 text-white font-bold border border-rose-700 shadow-xs animate-pulse' },
+  SAP_BAT_DAU: { label: '✓ ĐÃ XÁC NHẬN (SẮP BẮT ĐẦU)', cls: 'bg-emerald-600 text-white font-bold border border-emerald-700 shadow-xs' },
   BAT_DAU: { label: 'BẮT ĐẦU', cls: 'bg-amber-100 text-amber-700 font-bold' },
   HOAN_THANH: { label: 'HOÀN THÀNH', cls: 'bg-emerald-100 text-emerald-700 font-bold' },
   KHONG_DU_NGAY: { label: 'KHÔNG ĐỦ NGÀY', cls: 'bg-rose-100 text-rose-700' },
   LOAI: { label: 'LOẠI / TỪ CHỐI', cls: 'bg-red-100 text-red-700' },
   NHAN_VIEN_CHINH_THUC: { label: 'NHÂN VIÊN CHÍNH THỨC', cls: 'bg-violet-100 text-violet-700' },
 };
+
 
 
 export const decisionLabel: Record<string, { label: string; cls: string }> = {

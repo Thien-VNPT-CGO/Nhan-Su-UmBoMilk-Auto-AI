@@ -300,123 +300,170 @@ export default function Training() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {visible.map((r) => (
-                  <tr key={r.id} className="hover:bg-brand-50/40">
-                    <td className="table-td font-mono text-xs font-bold text-brand-600">{r.id}</td>
-                    <td className="table-td font-semibold">{r.tenUv}</td>
-                    <td className="table-td">{r.sdtZalo}</td>
-                    <td className="table-td">
-                      {r.chiNhanh && !r.chiNhanh.includes('Có thể làm') ? (
-                        <span className="font-medium text-slate-800">{r.chiNhanh}</span>
-                      ) : (
-                        <button
-                          type="button"
-                          className="text-[11px] font-semibold text-amber-700 bg-amber-100/90 hover:bg-amber-200 px-2.5 py-1 rounded-lg border border-amber-300 flex items-center gap-1 shadow-2xs animate-pulse"
-                          onClick={() => openEditModal(r)}
-                          title="Click để chốt chi nhánh làm việc chính thức"
-                        >
-                          ⚠️ Chốt chi nhánh
-                        </button>
-                      )}
-                    </td>
-                    <td className="table-td">
-                      {r.caLam && !r.caLam.includes('Có thể làm') ? (
-                        <button className="btn-secondary !px-2.5 !py-1 text-xs" onClick={() => openEditModal(r)}>
-                          {r.caLam}
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          className="text-[11px] font-semibold text-rose-700 bg-rose-100/90 hover:bg-rose-200 px-2.5 py-1 rounded-lg border border-rose-300 flex items-center gap-1 shadow-2xs animate-pulse"
-                          onClick={() => openEditModal(r)}
-                          title="Click để chốt ca làm việc chính thức"
-                        >
-                          ⚠️ Chốt ca làm
-                        </button>
-                      )}
-                    </td>
-                    <td className="table-td">
-                      <div className="flex flex-col gap-1">
-                        {r.phongVanAt ? (
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-semibold text-emerald-700">{formatDateTime(r.phongVanAt)}</span>
-                            <button className="text-[10px] text-slate-400 hover:text-slate-600 underline" onClick={() => openInterviewEdit(r)}>
-                              Sửa
-                            </button>
-                          </div>
+                {visible.map((r) => {
+                  const isPendingConfirm = r.trangThaiTraining === 'CHUA_THAM_GIA';
+                  return (
+                    <tr key={r.id} className={cn('hover:bg-brand-50/40 transition-colors', isPendingConfirm && 'bg-rose-50/30')}>
+                      <td className="table-td font-mono text-xs font-bold text-brand-600">{r.id}</td>
+                      <td className="table-td font-semibold">{r.tenUv}</td>
+                      <td className="table-td">{r.sdtZalo}</td>
+                      <td className="table-td">
+                        {r.chiNhanh && !r.chiNhanh.includes('Có thể làm') ? (
+                          <span className="font-medium text-slate-800">{r.chiNhanh}</span>
                         ) : (
-                          <span className="text-xs text-slate-400">Chưa hẹn</span>
+                          <button
+                            type="button"
+                            disabled={isPendingConfirm}
+                            className={cn(
+                              'text-[11px] font-semibold text-amber-700 bg-amber-100/90 hover:bg-amber-200 px-2.5 py-1 rounded-lg border border-amber-300 flex items-center gap-1 shadow-2xs animate-pulse',
+                              isPendingConfirm && 'opacity-40 cursor-not-allowed pointer-events-none'
+                            )}
+                            onClick={() => openEditModal(r)}
+                            title={isPendingConfirm ? 'Chờ ứng viên xác nhận Zalo' : 'Click để chốt chi nhánh làm việc chính thức'}
+                          >
+                            ⚠️ Chốt chi nhánh
+                          </button>
                         )}
-
-                        {/* Bộ 4 nút Kết quả phỏng vấn tích hợp trực tiếp cho từng ứng viên */}
-                        <div className="flex flex-wrap gap-1 mt-0.5">
-                          {[
-                            { key: 'DA_PV', label: 'Đã PV', activeCls: 'bg-sky-600 text-white font-bold' },
-                            { key: 'QUA_PV', label: 'Qua PV', activeCls: 'bg-emerald-600 text-white font-bold' },
-                            { key: 'TRUOT_PV', label: 'Trượt PV', activeCls: 'bg-rose-600 text-white font-bold' },
-                            { key: 'VANG', label: 'Vắng', activeCls: 'bg-rose-600 text-white font-bold' },
-                          ].map((st) => {
-                            const isCurrent = r.interviewStatus === st.key;
-                            return (
+                      </td>
+                      <td className="table-td">
+                        {r.caLam && !r.caLam.includes('Có thể làm') ? (
+                          <button className="btn-secondary !px-2.5 !py-1 text-xs disabled:opacity-40 disabled:cursor-not-allowed" disabled={isPendingConfirm} onClick={() => openEditModal(r)}>
+                            {r.caLam}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={isPendingConfirm}
+                            className={cn(
+                              'text-[11px] font-semibold text-rose-700 bg-rose-100/90 hover:bg-rose-200 px-2.5 py-1 rounded-lg border border-rose-300 flex items-center gap-1 shadow-2xs animate-pulse',
+                              isPendingConfirm && 'opacity-40 cursor-not-allowed pointer-events-none'
+                            )}
+                            onClick={() => openEditModal(r)}
+                            title={isPendingConfirm ? 'Chờ ứng viên xác nhận Zalo' : 'Click để chốt ca làm việc chính thức'}
+                          >
+                            ⚠️ Chốt ca làm
+                          </button>
+                        )}
+                      </td>
+                      <td className="table-td">
+                        <div className="flex flex-col gap-1">
+                          {r.phongVanAt ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-semibold text-emerald-700">{formatDateTime(r.phongVanAt)}</span>
                               <button
-                                key={st.key}
-                                type="button"
-                                className={cn(
-                                  'px-2 py-0.5 rounded text-[10px] transition-all border',
-                                  isCurrent
-                                    ? st.activeCls + ' border-transparent shadow-2xs'
-                                    : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-600'
-                                )}
-                                onClick={() => updateInterviewResult(r.id, st.key)}
+                                className="text-[10px] text-slate-400 hover:text-slate-600 underline disabled:opacity-40 disabled:cursor-not-allowed"
+                                disabled={isPendingConfirm}
+                                onClick={() => openInterviewEdit(r)}
                               >
-                                {st.label}
+                                Sửa
                               </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </td>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-400">Chưa hẹn</span>
+                          )}
 
-                    <td className="table-td">
-                      <button
-                        className="btn-secondary !px-2 !py-0.5 text-xs"
-                        onClick={() => openEditModal(r)}
-                      >
-                        {formatDate(r.ngayBatDauTraining) || 'Chưa đặt'}
-                      </button>
-                    </td>
-                    <td className="table-td">
-                      <span className="font-bold text-brand-700">{r.soNgayDaTraining}/7</span>
-                    </td>
-                    <td className="table-td">
-                      <select
-                        className="input !py-1 !text-xs"
-                        value={r.trangThaiTraining ?? 'CHUA_THAM_GIA'}
-                        onChange={(e) => setConfirmStatus({ row: r, status: e.target.value })}
-                      >
-                        {STATUS_OPTIONS.map((st) => (
-                          <option key={st} value={st}>
-                            {trainingStatusLabel[st]?.label ?? st}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="table-td">
-                      <div className="flex items-center gap-1">
+                          {/* Bộ 4 nút Kết quả phỏng vấn */}
+                          <div className="flex flex-wrap gap-1 mt-0.5">
+                            {[
+                              { key: 'DA_PV', label: 'Đã PV', activeCls: 'bg-sky-600 text-white font-bold' },
+                              { key: 'QUA_PV', label: 'Qua PV', activeCls: 'bg-emerald-600 text-white font-bold' },
+                              { key: 'TRUOT_PV', label: 'Trượt PV', activeCls: 'bg-rose-600 text-white font-bold' },
+                              { key: 'VANG', label: 'Vắng', activeCls: 'bg-rose-600 text-white font-bold' },
+                            ].map((st) => {
+                              const isCurrent = r.interviewStatus === st.key;
+                              return (
+                                <button
+                                  key={st.key}
+                                  type="button"
+                                  disabled={isPendingConfirm}
+                                  className={cn(
+                                    'px-2 py-0.5 rounded text-[10px] transition-all border',
+                                    isCurrent
+                                      ? st.activeCls + ' border-transparent shadow-2xs'
+                                      : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-600',
+                                    isPendingConfirm && 'opacity-40 cursor-not-allowed pointer-events-none'
+                                  )}
+                                  onClick={() => updateInterviewResult(r.id, st.key)}
+                                >
+                                  {st.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="table-td">
                         <button
-                          className="btn-primary !px-2.5 !py-1.5 !text-xs"
+                          className="btn-secondary !px-2 !py-0.5 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                          disabled={isPendingConfirm}
                           onClick={() => openEditModal(r)}
-                          title="Cập nhật chi nhánh, ca làm & ngày bắt đầu"
                         >
-                          Chốt ca & lịch
+                          {formatDate(r.ngayBatDauTraining) || 'Chưa đặt'}
                         </button>
-                        <button className="btn-secondary !px-2.5 !py-1.5" onClick={() => navigate(`/shifts`)}>
-                          <CalendarDays size={13} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="table-td">
+                        <span className="font-bold text-brand-700">{r.soNgayDaTraining}/7</span>
+                      </td>
+
+                      <td className="table-td">
+                        {isPendingConfirm ? (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold bg-rose-600 text-white border border-rose-700 shadow-2xs animate-pulse">
+                              ⏳ CHỜ UV XÁC NHẬN ZALO
+                            </span>
+                            <span className="text-[10px] text-rose-600 font-semibold italic text-center">🔒 Khóa thao tác đến khi UV xác nhận Zalo</span>
+                          </div>
+                        ) : r.trangThaiTraining === 'SAP_BAT_DAU' ? (
+                          <select
+                            className="input !py-1.5 !text-xs font-bold bg-emerald-600 text-white border-emerald-700 rounded-xl shadow-2xs cursor-pointer"
+                            value={r.trangThaiTraining}
+                            onChange={(e) => setConfirmStatus({ row: r, status: e.target.value })}
+                          >
+                            {STATUS_OPTIONS.map((st) => (
+                              <option key={st} value={st} className="bg-white text-slate-800 font-medium">
+                                {trainingStatusLabel[st]?.label ?? st}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <select
+                            className="input !py-1 !text-xs"
+                            value={r.trangThaiTraining ?? 'CHUA_THAM_GIA'}
+                            onChange={(e) => setConfirmStatus({ row: r, status: e.target.value })}
+                          >
+                            {STATUS_OPTIONS.map((st) => (
+                              <option key={st} value={st}>
+                                {trainingStatusLabel[st]?.label ?? st}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </td>
+
+                      <td className="table-td">
+                        <div className="flex items-center gap-1">
+                          <button
+                            className="btn-primary !px-2.5 !py-1.5 !text-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                            disabled={isPendingConfirm}
+                            onClick={() => openEditModal(r)}
+                            title={isPendingConfirm ? 'Khóa thao tác: Vui lòng chờ ứng viên bấm xác nhận qua Zalo' : 'Cập nhật chi nhánh, ca làm & ngày bắt đầu'}
+                          >
+                            Chốt ca & lịch
+                          </button>
+                          <button
+                            className="btn-secondary !px-2.5 !py-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                            disabled={isPendingConfirm}
+                            onClick={() => navigate(`/shifts`)}
+                          >
+                            <CalendarDays size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+
               </tbody>
             </table>
           </div>
