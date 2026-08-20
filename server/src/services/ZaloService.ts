@@ -568,16 +568,22 @@ export class ZaloService {
   async webhook(payload: unknown): Promise<void> {
     const p = payload as {
       user_id_by_app?: string;
+      user_id?: string;
+      fromuid?: string;
       follower?: { id?: string };
       sender?: { phone?: string; user_id?: string; id?: string };
+      info?: { phone?: string | number };
       message?: {
         text?: string;
         type?: string;
         location?: { lat?: number | string; long?: number | string };
       };
     };
-    const zaloUserId = String(p.sender?.user_id ?? p.sender?.id ?? p.user_id_by_app ?? p.follower?.id ?? '').trim();
-    let phoneRaw = String(p.sender?.phone ?? '').trim();
+    const zaloUserId = String(
+      p.sender?.user_id ?? p.sender?.id ?? p.user_id_by_app ?? p.user_id ?? p.fromuid ?? p.follower?.id ?? '',
+    ).trim();
+    let phoneRaw = String(p.sender?.phone ?? p.info?.phone ?? '').trim();
+
 
     const message = p.message ?? {};
     const text = String(message.text ?? '').trim();
