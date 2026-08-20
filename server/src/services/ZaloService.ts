@@ -328,7 +328,7 @@ export class ZaloService {
     phone: string,
     content: string,
     candidateId: string | null,
-    options: { direction?: string; messageType?: string } = {},
+    options: { direction?: string; messageType?: string; buttons?: Array<{ title: string; payload: string; type?: string }> } = {},
   ): Promise<{ ok: boolean; provider: string; messageId?: string; status: string; error?: string | null }> {
     const cfg = await this.getConfig();
     let accessToken = cfg.accessToken;
@@ -375,7 +375,16 @@ export class ZaloService {
       if (userId) {
         for (let attempt = 0; attempt < 2; attempt++) {
           try {
-            // Zalo v3.0 Message CS API chính thức (v2.0 đã bị Zalo khai tử - lỗi -240)
+            // Zalo v3.0 Message CS API chính thức (hỗ trợ Nút bấm tương tác - Interactive Buttons)
+            const msgBody: Record<string, unknown> = { text: content };
+            if (options.buttons && options.buttons.length > 0) {
+              msgBody.buttons = options.buttons.map((b) => ({
+                title: b.title,
+                payload: b.payload,
+                type: b.type ?? 'oa.query',
+              }));
+            }
+
             let res = await fetch('https://openapi.zalo.me/v3.0/oa/message/cs', {
               method: 'POST',
               headers: {
@@ -384,7 +393,7 @@ export class ZaloService {
               },
               body: JSON.stringify({
                 recipient: { user_id: userId },
-                message: { text: content },
+                message: msgBody,
               }),
             });
             let data: ZaloMessageResponse | null = null;
@@ -401,7 +410,7 @@ export class ZaloService {
                 },
                 body: JSON.stringify({
                   recipient: { user_id: userId },
-                  message: { text: content },
+                  message: msgBody,
                 }),
               });
               try {
@@ -410,6 +419,7 @@ export class ZaloService {
                 throw new Error(`Zalo API không phản hồi (HTTP ${fb.status}).`);
               }
             }
+
 
             if (data?.error && data.error !== 0) {
               // Lỗi -201 / -205: Mã Zalo User ID bị sai/không hợp lệ -> tự động reset zaloUserId = null trong DB
@@ -520,14 +530,19 @@ export class ZaloService {
       `🔗 Link phỏng vấn: ${c.ggMeetLink}`,
       `🏢 Chi nhánh: ${c.chiNhanh}`,
       '',
-      '👉 Vui lòng trả lời tin nhắn này: "CÓ" hoặc "XÁC NHẬN" hoặc "THAM GIA" để xác nhận tham dự phỏng vấn nhé!',
-      '*(Hệ thống sẽ tự động cập nhật bạn vào danh sách Nhân Viên Training ngay khi nhận được phản hồi)*',
+      '👉 Vui lòng nhấn nút [✅ THAM GIA PHỎNG VẤN] bên dưới hoặc trả lời tin nhắn này để xác nhận nhé!',
+      '*(Hệ thống sẽ tự động cập nhật bạn vào danh sách Nhân Viên Training ngay khi bạn nhấn nút)*',
     ].join('\n');
 
+    const buttons = [
+      { title: '✅ THAM GIA PHỎNG VẤN', payload: 'THAM GIA', type: 'oa.query' },
+      { title: '❌ TỪ CHỐI', payload: 'TỪ CHỐI', type: 'oa.query' },
+    ];
 
-    const r = await this.sendRaw(c.sdtZalo, content, c.id);
+    const r = await this.sendRaw(c.sdtZalo, content, c.id, { buttons });
     return { ok: r.ok, provider: r.provider, messageId: r.messageId };
   }
+
 
   /** Nhắc phỏng vấn trước giờ PV (1 lần/lịch hẹn, chống trùng bằng marker trong nội dung). */
   async sendInterviewReminder(candidateId: string, remindHours: number): Promise<{ ok: boolean; status: string }> {
@@ -615,7 +630,10 @@ export class ZaloService {
 
 
     const message = p.message ?? {};
-    const text = String(message.text ?? '').trim();
+    const textRaw = String(message.text ?? (message as { payload?: string }).payload ?? '').trim();
+    const eventName = String((p as { event_name?: string }).event_name ?? '').trim();
+    const text = textRaw || eventName;
+
 
     // 1. Tự động trích xuất SĐT từ nội dung tin nhắn nếu ứng viên gửi SĐT ("0333137633" hoặc "SĐT em là 0333...")
     if (!phoneRaw && text) {
