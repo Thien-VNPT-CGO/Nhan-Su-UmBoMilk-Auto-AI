@@ -568,6 +568,7 @@ export class ZaloService {
   async webhook(payload: unknown): Promise<void> {
     const p = payload as {
       user_id_by_app?: string;
+      follower?: { id?: string };
       sender?: { phone?: string; user_id?: string; id?: string };
       message?: {
         text?: string;
@@ -575,7 +576,7 @@ export class ZaloService {
         location?: { lat?: number | string; long?: number | string };
       };
     };
-    const zaloUserId = String(p.sender?.user_id ?? p.sender?.id ?? p.user_id_by_app ?? '').trim();
+    const zaloUserId = String(p.sender?.user_id ?? p.sender?.id ?? p.user_id_by_app ?? p.follower?.id ?? '').trim();
     let phoneRaw = String(p.sender?.phone ?? '').trim();
 
     const message = p.message ?? {};
