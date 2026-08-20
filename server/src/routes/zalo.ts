@@ -111,7 +111,7 @@ router.get('/messages', requireAuth, async (req, res, next) => {
 
 const sendSchema = z.object({ candidateId: z.string().min(1) });
 
-router.post('/send', requireWrite(), async (req, res, next) => {
+router.post('/send', requireAuth, requireWrite(), async (req, res, next) => {
   try {
     const parsed = sendSchema.safeParse(req.body);
     if (!parsed.success) throw ApiError.badRequest('INVALID_INPUT', 'Dữ liệu không hợp lệ.');
@@ -128,7 +128,8 @@ const chatSchema = z.object({
 });
 
 /** Nhắn tin trực tiếp 2 chiều (Live Chat) với ứng viên qua Zalo OA. */
-router.post('/chat', requireWrite(), async (req: AuthedRequest, res, next) => {
+router.post('/chat', requireAuth, requireWrite(), async (req: AuthedRequest, res, next) => {
+
   try {
     const parsed = chatSchema.safeParse(req.body);
     if (!parsed.success) throw ApiError.badRequest('INVALID_INPUT', 'Nội dung tin nhắn không được để trống.');
