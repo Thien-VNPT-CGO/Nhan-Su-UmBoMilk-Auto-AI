@@ -57,12 +57,9 @@ const TABS = [
   { key: 'profile', label: 'Hồ sơ' },
   { key: 'score', label: 'Điểm AI' },
   { key: 'decision', label: 'Quyết định HR' },
-  { key: 'training', label: 'Đào tạo' },
-  { key: 'attendance', label: 'Chấm công' },
   { key: 'zalo', label: 'Zalo' },
-  { key: 'audit', label: 'Nhật ký' },
-  { key: 'sync', label: 'Lịch sử đồng bộ' },
 ];
+
 
 export default function CandidateDrawer({
   candidateId,
@@ -687,65 +684,7 @@ export default function CandidateDrawer({
               </div>
             )}
 
-            {tab === 'training' && (
-              <div className="space-y-4">
-                <div className="flex flex-wrap gap-3 items-center">
-                  <div className="rounded-xl bg-slate-50 px-4 py-3">
-                    <div className="label">Ngày bắt đầu</div>
-                    <div className="text-sm font-bold">{formatDate(c.ngayBatDauTraining) || 'Chưa đặt'}</div>
-                  </div>
-                  <div className="rounded-xl bg-slate-50 px-4 py-3">
-                    <div className="label">Số ngày đã training</div>
-                    <div className="text-sm font-bold">{c.soNgayDaTraining}/7</div>
-                  </div>
-                  <div className="flex-1" />
-                  {c.trangThaiTraining === 'HOAN_THANH' && (
-                    <button className="btn-primary" onClick={confirmEmployee}>
-                      <Briefcase size={15} /> Nhận việc chính thức
-                    </button>
-                  )}
-                  <button className="btn-primary" onClick={startTraining}>
-                    <GraduationCap size={15} /> Đặt ngày bắt đầu
-                  </button>
-                  <button className="btn-secondary" onClick={notifyZalo}>
-                    <Send size={15} /> Thông báo Zalo
-                  </button>
-                </div>
 
-                <div className="rounded-xl bg-slate-50 p-4">
-                  <div className="label mb-2">Lịch đã xếp ({c.shifts.length} ngày)</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {c.shifts.slice(0, 40).map((s) => (
-                      <span key={s.date} className="rounded-lg bg-white border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-600">
-                        {formatDate(s.date)}: <span className="text-brand-600">{s.shifts.split('|').join(' + ')}</span>
-                      </span>
-                    ))}
-                    {c.shifts.length === 0 && <span className="text-xs text-slate-400">Chưa có lịch. Xếp ca tại trang Lịch làm việc.</span>}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {tab === 'attendance' && (
-              <div className="space-y-2">
-                {c.attendanceEvents.length === 0 && <p className="text-sm text-slate-400">Chưa có lịch sử điểm danh.</p>}
-                {c.attendanceEvents.map((a) => (
-                  <div key={a.id} className="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-2.5">
-                    <span className={cn('w-8 h-8 rounded-lg flex items-center justify-center', a.valid ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600')}>
-                      {a.valid ? <CheckCircle2 size={16} /> : <XCircle size={16} />}
-                    </span>
-                    <div className="flex-1">
-                      <div className="text-sm font-semibold text-slate-800">{formatDate(a.date)} · {a.shift}</div>
-                      <div className="text-[11px] text-slate-500">
-                        {formatDateTime(a.checkinAt)} · {a.method}
-                        {a.reason && a.reason !== 'VALID' && ` · ${a.reason}`}
-                        {a.trainingDay && ` · Đào tạo ngày ${a.trainingDay}`}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
 
             {tab === 'zalo' && (
               <div className="flex flex-col h-[520px] bg-slate-50/60 rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs">
@@ -871,57 +810,7 @@ export default function CandidateDrawer({
             )}
 
 
-            {tab === 'audit' && (
-              <div className="space-y-1.5">
-                {auditRows.length === 0 && <p className="text-sm text-slate-400">Không có nhật ký.</p>}
-                {auditRows.map((a) => {
-                  const row = a as { id: string; user: string; action: string; time: string; oldValue: string | null; newValue: string | null; version: number | null };
-                  return (
-                    <div key={row.id} className="rounded-xl bg-slate-50 px-4 py-2.5 text-xs">
-                      <div className="flex items-center gap-2">
-                        <b className="text-slate-700">{row.user}</b>
-                        <Badge className="bg-slate-200 text-slate-600">{row.action}</Badge>
-                        {row.version !== null && <span className="text-slate-400">v{row.version}</span>}
-                        <span className="ml-auto text-slate-400">{formatDateTime(row.time)}</span>
-                      </div>
-                      {(row.oldValue || row.newValue) && (
-                        <div className="mt-1 text-slate-500 truncate">
-                          {row.oldValue} → {row.newValue}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
 
-            {tab === 'sync' && (
-              <div className="space-y-1.5">
-                {syncRows.filter((s) => (s as { entityId: string }).entityId === c.id).length === 0 && (
-                  <p className="text-sm text-slate-400">Không có job đồng bộ.</p>
-                )}
-                {syncRows
-                  .filter((s) => (s as { entityId: string }).entityId === c.id)
-                  .map((s) => {
-                    const row = s as { id: string; entity: string; operation: string; field: string | null; oldValue: string | null; newValue: string | null; version: number; status: string; retryCount: number; createdAt: string; lastError: string | null };
-                    return (
-                      <div key={row.id} className="rounded-xl bg-slate-50 px-4 py-2.5 text-xs space-y-0.5">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-brand-600">{row.id}</span>
-                          <Badge className={syncStatusStyle[row.status]?.cls}>{syncStatusStyle[row.status]?.label}</Badge>
-                          {row.retryCount > 0 && <span className="text-slate-400">retry ×{row.retryCount}</span>}
-                          <span className="ml-auto text-slate-400">{formatDateTime(row.createdAt)}</span>
-                        </div>
-                        <div className="text-slate-500">
-                          {row.operation} · {row.field ?? row.entity}
-                          {row.field && row.oldValue !== null && ` · ${row.oldValue} → ${row.newValue}`}
-                        </div>
-                        {row.lastError && <div className="text-rose-500 truncate">⚠ {row.lastError}</div>}
-                      </div>
-                    );
-                  })}
-              </div>
-            )}
           </div>
         </>
       )}
