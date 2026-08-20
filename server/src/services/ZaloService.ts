@@ -4,7 +4,9 @@ import { env } from '../config/env';
 import { getSettings } from './SettingsService';
 import { emit } from '../sockets';
 import { formatDate, TZ } from '../lib/date';
+import { TRAINING_STATUS } from '../lib/constants';
 import { createHmac, createHash, randomBytes } from 'crypto';
+
 
 /** Định dạng giờ phỏng vấn "dd/MM/yyyy lúc HH:mm" theo múi giờ hệ thống. */
 function formatInterviewTime(d: Date): string {
@@ -513,14 +515,15 @@ export class ZaloService {
       '',
       'Chúc mừng bạn đã vượt qua vòng hồ sơ ứng tuyển!',
       '',
-      `Thời gian phỏng vấn: ${formatInterviewTime(c.phongVanAt)}`,
-      `Hình thức: Online qua Google Meet`,
-      `Link phỏng vấn: ${c.ggMeetLink}`,
+      `⏰ Thời gian phỏng vấn: ${formatInterviewTime(c.phongVanAt)}`,
+      `📍 Hình thức: Online qua Google Meet`,
+      `🔗 Link phỏng vấn: ${c.ggMeetLink}`,
+      `🏢 Chi nhánh: ${c.chiNhanh}`,
       '',
-      `Chi nhánh: ${c.chiNhanh}`,
-      '',
-      'Vui lòng nhắn lại tin này: "có" để xác nhận tham dự nhé.',
+      '👉 Vui lòng trả lời tin nhắn này: "CÓ" hoặc "XÁC NHẬN" hoặc "THAM GIA" để xác nhận tham dự phỏng vấn nhé!',
+      '*(Hệ thống sẽ tự động cập nhật bạn vào danh sách Nhân Viên Training ngay khi nhận được phản hồi)*',
     ].join('\n');
+
 
     const r = await this.sendRaw(c.sdtZalo, content, c.id);
     return { ok: r.ok, provider: r.provider, messageId: r.messageId };
@@ -742,8 +745,60 @@ export class ZaloService {
       return;
     }
 
+    // 5. Xử lý phản hồi XÁC NHẬN / TỪ CHỐI phỏng vấn qua Zalo OA
+    if (candidate && text) {
+      const confirmKeywords = ['CÓ', 'CO', 'XÁC NHẬN', 'XAC NHAN', 'THAM GIA', 'ĐỒNG Ý', 'DONG Y', 'OK', 'EM THAM GIA', 'DẠ CÓ', 'DA CO', 'SẼ THAM GIA', 'SE THAM GIA'];
+      const declineKeywords = ['KHÔNG', 'KHONG', 'HỦY', 'HUY', 'BẬN', 'BAN', 'TỪ CHỐI', 'TU CHOI', 'KHÔNG THAM GIA', 'KHONG THAM GIA'];
+
+      const isConfirm = confirmKeywords.some((k) => upper === k || upper.includes(` ${k} `) || upper.startsWith(`${k} `) || upper.endsWith(` ${k}`));
+      const isDecline = declineKeywords.some((k) => upper === k || upper.includes(` ${k} `) || upper.startsWith(`${k} `) || upper.endsWith(` ${k}`));
+
+      if (isConfirm) {
+        await prisma.candidate.update({
+          where: { id: candidate.id },
+          data: {
+            trangThaiTraining: TRAINING_STATUS.SAP_BAT_DAU,
+            interviewStatus: 'QUA_PV',
+          },
+        });
+        emit('training:updated', { candidateId: candidate.id });
+        emit('candidate:update', { candidateId: candidate.id });
+        emit('candidate:decision', { candidateId: candidate.id, decision: 'PASS' });
+
+        const confirmReply = [
+          `🎉 Cảm ơn ${candidate.tenUv}!`,
+          `UMBO MILK đã ghi nhận bạn THAM GIA PHỎNG VẤN!`,
+          `Hệ thống đã tự động thêm bạn vào danh sách Nhân Viên Training.`,
+          `Vui lòng tham gia phỏng vấn đúng giờ nhé ❤️`,
+        ].join('\n');
+        await this.sendRaw(phone, confirmReply, candidate.id).catch(() => undefined);
+        return;
+      }
+
+      if (isDecline) {
+        await prisma.candidate.update({
+          where: { id: candidate.id },
+          data: {
+            trangThaiTraining: TRAINING_STATUS.LOAI,
+            interviewStatus: 'TU_CHOI',
+          },
+        });
+        emit('training:updated', { candidateId: candidate.id });
+        emit('candidate:update', { candidateId: candidate.id });
+
+        const declineReply = [
+          `Cảm ơn ${candidate.tenUv} đã phản hồi!`,
+          `UMBO MILK đã ghi nhận bạn không thể tham gia đợt phỏng vấn này.`,
+          `Hẹn gặp lại bạn ở các cơ hội tuyển dụng tiếp theo nhé ❤️`,
+        ].join('\n');
+        await this.sendRaw(phone, declineReply, candidate.id).catch(() => undefined);
+        return;
+      }
+    }
+
     // Tin nhắn thường → AI auto-reply
     if (!text) return;
+
     const settings = await getSettings();
     if (settings.zalo?.autoReply === false) return;
     try {

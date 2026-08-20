@@ -457,10 +457,12 @@ export class CandidateService {
         phongVanAt,
         ggMeetLink,
         calendarEventId,
+        trangThaiTraining: decision === 'PASS' ? TRAINING_STATUS.CHUA_THAM_GIA : candidate.trangThaiTraining,
         dataVersion: newVersion,
         updatedBy: user,
       },
     });
+
     await prisma.candidate.update({ where: { id }, data: { dataHash: computeHash(updated) } });
     const final = await prisma.candidate.findUniqueOrThrow({ where: { id } });
 
