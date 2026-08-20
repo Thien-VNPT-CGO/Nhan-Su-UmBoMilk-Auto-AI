@@ -491,20 +491,19 @@ export class ZaloService {
     if (!c.ngayBatDauTraining) throw new Error('Chưa có ngày bắt đầu Training');
 
     const content = [
-      '🐮 UMBO MILK – THÔNG BÁO TRAINING',
+      '🐮 [UMBO MILK] – THÔNG BÁO LỊCH TRAINING 🎓',
       '',
-      `Chào ${c.tenUv} ❤️`,
+      `Chào Sếp ${c.tenUv} ❤️`,
+      'UMBO MILK thông báo lịch đào tạo (Training) của bạn như sau:',
       '',
-      'Ngày bắt đầu:',
-      formatDate(c.ngayBatDauTraining),
+      '📌 CHI TIẾT LỊCH TRAINING:',
+      `• 📅 Ngày bắt đầu: ${formatDate(c.ngayBatDauTraining)}`,
+      `• 🏢 Chi nhánh làm việc: ${c.chiNhanh}`,
+      `• ⏱️ Ca làm việc chính thức: ${c.caLam}`,
       '',
-      'Chi nhánh:',
-      c.chiNhanh,
+      '👉 Vui lòng có mặt đúng giờ và thực hiện điểm danh theo hướng dẫn nhé!',
       '',
-      'Ca:',
-      c.caLam,
-      '',
-      'Vui lòng có mặt đúng giờ và thực hiện điểm danh theo hướng dẫn.',
+      'UMBO MILK chúc bạn có một quá trình đào tạo thuận lợi và hiệu quả! ✨',
     ].join('\n');
 
     const r = await this.sendRaw(c.sdtZalo, content, c.id);
@@ -519,19 +518,21 @@ export class ZaloService {
     if (!c.ggMeetLink) throw new Error('Chưa có link GG Meet');
 
     const content = [
-      '🐮 UMBO MILK – LỜI MỜI PHỎNG VẤN',
+      '🐮 [UMBO MILK] – THƯ MỜI PHỎNG VẤN 📋',
       '',
-      `Chào ${c.tenUv} ❤️`,
+      `Chào Sếp ${c.tenUv} ❤️`,
+      'Chúc mừng bạn đã vượt qua vòng lọc hồ sơ ứng tuyển của UMBO MILK!',
       '',
-      'Chúc mừng bạn đã vượt qua vòng hồ sơ ứng tuyển!',
+      '📌 THÔNG TIN PHỎNG VẤN:',
+      `• ⏰ Thời gian: ${formatInterviewTime(c.phongVanAt)}`,
+      `• 📍 Hình thức: Phỏng vấn Online qua Google Meet`,
+      `• 🔗 Link Google Meet: ${c.ggMeetLink}`,
+      `• 🏢 Chi nhánh ứng tuyển: ${c.chiNhanh}`,
+      `• ⏱️ Ca làm việc đăng ký: ${c.caLam}`,
       '',
-      `⏰ Thời gian phỏng vấn: ${formatInterviewTime(c.phongVanAt)}`,
-      `📍 Hình thức: Online qua Google Meet`,
-      `🔗 Link phỏng vấn: ${c.ggMeetLink}`,
-      `🏢 Chi nhánh: ${c.chiNhanh}`,
+      '👉 Vui lòng nhấn nút [✅ THAM GIA PHỎNG VẤN] bên dưới để hệ thống tự động ghi nhận lịch hẹn của bạn nhé!',
       '',
-      '👉 Vui lòng nhấn nút [✅ THAM GIA PHỎNG VẤN] bên dưới hoặc trả lời tin nhắn này để xác nhận nhé!',
-      '*(Hệ thống sẽ tự động cập nhật bạn vào danh sách Nhân Viên Training ngay khi bạn nhấn nút)*',
+      'UMBO MILK rất mong được gặp bạn! ✨',
     ].join('\n');
 
     const buttons = [
@@ -553,16 +554,18 @@ export class ZaloService {
     const marker = `[NHACPV:${c.phongVanAt.toISOString()}]`;
     const content = [
       marker,
-      '🐮 UMBO MILK – NHẮC PHỎNG VẤN',
+      '🐮 [UMBO MILK] – NHẮC LỊCH PHỎNG VẤN ⏰',
       '',
-      `Chào ${c.tenUv} ❤️`,
+      `Chào Sếp ${c.tenUv} ❤️`,
+      `Chỉ còn ${remindHours} tiếng nữa là đến buổi phỏng vấn của bạn cùng UMBO MILK!`,
       '',
-      `Chỉ còn ${remindHours} tiếng nữa là đến buổi phỏng vấn của bạn!`,
+      '📌 THÔNG TIN LỊCH HẸN:',
+      `• ⏰ Thời gian: ${formatInterviewTime(c.phongVanAt)}`,
+      `• 🔗 Link phỏng vấn: ${c.ggMeetLink}`,
       '',
-      `Thời gian phỏng vấn: ${formatInterviewTime(c.phongVanAt)}`,
-      `Link phỏng vấn: ${c.ggMeetLink}`,
+      '👉 Bạn vui lòng kiểm tra kết nối mạng và chuẩn bị tham gia đúng giờ nhé.',
       '',
-      'Hãy vào đúng giờ nhé. Chúc bạn may mắn!',
+      'UMBO MILK chúc bạn có buổi phỏng vấn thành công tốt đẹp! ✨',
     ].join('\n');
 
     const existed = await prisma.zaloMessage.findFirst({
@@ -581,17 +584,17 @@ export class ZaloService {
     shift: string,
     shiftStart: string,
   ): Promise<{ ok: boolean; status: string }> {
-    const marker = `[NHAC:${date}:${shift}]`;
+    const marker = `[NHACDIEMDANH:${date}:${shift}]`;
     const content = [
       marker,
-      '🐮 UMBO MILK – NHẮC ĐIỂM DANH',
+      '🐮 [UMBO MILK] – NHẮC NHỞ ĐIỂM DANH CA LÀM 🥤',
       '',
-      `Chào ${candidate.tenUv} ❤️`,
+      `Chào Sếp ${candidate.tenUv} ❤️`,
+      `Ca làm việc (${shift}) của bạn tại ${candidate.chiNhanh} sắp bắt đầu trong 30 phút tới.`,
       '',
-      `Hôm nay (${date}) bạn có ca ${shift} lúc ${shiftStart} tại ${candidate.chiNhanh}.`,
+      '👉 Vui lòng có mặt đúng giờ và mở Zalo thực hiện gửi Vị trí / Điểm danh nhé!',
       '',
-      'Vui lòng nhắn: điểm danh',
-      'đến OA UMBO MILK trong khung giờ cho phép.',
+      'Chúc bạn một ca làm việc tràn đầy năng lượng và hiệu quả! ✨',
     ].join('\n');
 
     const existed = await prisma.zaloMessage.findFirst({
@@ -784,10 +787,16 @@ export class ZaloService {
         emit('candidate:decision', { candidateId: candidate.id, decision: 'PASS' });
 
         const confirmReply = [
-          `🎉 Cảm ơn ${candidate.tenUv}!`,
-          `UMBO MILK đã ghi nhận bạn THAM GIA PHỎNG VẤN!`,
-          `Hệ thống đã tự động thêm bạn vào danh sách Nhân Viên Training.`,
-          `Vui lòng tham gia phỏng vấn đúng giờ nhé ❤️`,
+          '🎉 [UMBO MILK] – ĐÃ GHI NHẬN THAM GIA PHỎNG VẤN!',
+          '',
+          `Chào Sếp ${candidate.tenUv} ❤️`,
+          'Cảm ơn bạn đã xác nhận THAM GIA PHỎNG VẤN!',
+          '',
+          '📌 HỆ THỐNG ĐÃ CẬP NHẬT:',
+          '• Bạn đã được tự động thêm vào danh sách Nhân Viên Training.',
+          `• Thời gian phỏng vấn: ${candidate.phongVanAt ? formatInterviewTime(candidate.phongVanAt) : 'Theo lịch đã hẹn'}`,
+          '',
+          'Vui lòng tham gia phỏng vấn đúng giờ nhé. Hẹn gặp lại bạn! ✨',
         ].join('\n');
         await this.sendRaw(phone, confirmReply, candidate.id).catch(() => undefined);
         return;
@@ -805,9 +814,12 @@ export class ZaloService {
         emit('candidate:update', { candidateId: candidate.id });
 
         const declineReply = [
-          `Cảm ơn ${candidate.tenUv} đã phản hồi!`,
-          `UMBO MILK đã ghi nhận bạn không thể tham gia đợt phỏng vấn này.`,
-          `Hẹn gặp lại bạn ở các cơ hội tuyển dụng tiếp theo nhé ❤️`,
+          '🔴 [UMBO MILK] – ĐÃ GHI NHẬN PHẢN HỒI',
+          '',
+          `Chào Sếp ${candidate.tenUv} ❤️`,
+          'UMBO MILK đã ghi nhận bạn chưa thể tham gia đợt phỏng vấn này.',
+          '',
+          'Cảm ơn bạn đã quan tâm đến tuyển dụng của UMBO MILK. Hẹn gặp lại bạn ở các cơ hội tiếp theo nhé! ✨',
         ].join('\n');
         await this.sendRaw(phone, declineReply, candidate.id).catch(() => undefined);
         return;
