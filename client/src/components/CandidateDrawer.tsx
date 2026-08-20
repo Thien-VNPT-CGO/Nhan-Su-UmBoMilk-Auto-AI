@@ -1,4 +1,5 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+
 
 import {
   User, BrainCircuit, ThumbsUp, GraduationCap, ClipboardCheck, MessageCircle,
@@ -118,6 +119,19 @@ export default function CandidateDrawer({
   };
 
 
+  const [bookedInterviews, setBookedInterviews] = useState<{ id: string; tenUv: string; phongVanAt: string }[]>([]);
+
+  const loadBookedInterviews = useCallback(async () => {
+    try {
+      const data = await api.get<{ id: string; tenUv: string; phongVanAt: string }[]>('/candidates/booked-interviews');
+      setBookedInterviews(data);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+
+
   useEffect(() => {
     if (!candidateId || !open) return;
     setTab('profile');
@@ -131,6 +145,7 @@ export default function CandidateDrawer({
       .catch((e) => toast('error', e instanceof ApiError ? e.message : 'Lỗi tải chi tiết.'))
       .finally(() => setLoading(false));
   }, [candidateId, open, toast]);
+
 
   // Khi mở hồ sơ ứng viên chưa có Zalo User ID → tự động thử tra cứu ngầm 1 lần
   useEffect(() => {
@@ -270,21 +285,23 @@ export default function CandidateDrawer({
     );
 
   const openInterviewModal = () => {
+    void loadBookedInterviews();
     setInterviewEditMode(false);
     setInterviewResend(true);
     setPhongVanAt('');
-    // Calendar bật → để trống để server tự tạo link Meet; chưa có Calendar → prefill link mặc định chi nhánh
     setGgMeetLink(calendarEnabled ? '' : (c ? branchMeetLinks[c.chiNhanh] ?? '' : ''));
     setInterviewOpen(true);
   };
 
   const openEditInterviewModal = () => {
+    void loadBookedInterviews();
     setInterviewEditMode(true);
     setInterviewResend(false);
     setPhongVanAt(c?.phongVanAt ? c.phongVanAt.slice(0, 16) : '');
     setGgMeetLink(c?.ggMeetLink ?? '');
     setInterviewOpen(true);
   };
+
 
   const submitInterview = async () => {
     if (!phongVanAt) {
@@ -377,7 +394,51 @@ export default function CandidateDrawer({
     { label: 'Kênh biết tin', key: 'p_kenhBietTin' },
   ];
 
+  const selectedTimestamp = phongVanAt ? new Date(phongVanAt).getTime() : 0;
+  const timeConflict = useMemo(() => {
+    if (!selectedTimestamp || Number.isNaN(selectedTimestamp)) return null;
+    return bookedInterviews.find((b) => {
+      if (b.id === c?.id) return false;
+      if (!b.phongVanAt) return false;
+      const bTime = new Date(b.phongVanAt).getTime();
+      return Math.abs(selectedTimestamp - bTime) / (60 * 1000) < 60;
+    });
+  }, [selectedTimestamp, bookedInterviews, c?.id]);
+
+  const availableSlots = useMemo(() => {
+    let datePrefix = phongVanAt ? phongVanAt.slice(0, 10) : '';
+    if (!datePrefix) {
+      const d = new Date();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      datePrefix = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    }
+
+    const standardHours = [
+      '08:00', '09:00', '10:00', '11:00',
+      '13:30', '14:30', '15:30', '16:30',
+      '17:30', '19:00', '20:00'
+    ];
+
+    return standardHours.map((timeStr) => {
+      const slotIso = `${datePrefix}T${timeStr}`;
+      const slotTime = new Date(slotIso).getTime();
+
+      const conflictUser = bookedInterviews.find((b) => {
+        if (b.id === c?.id) return false;
+        if (!b.phongVanAt) return false;
+        return Math.abs(slotTime - new Date(b.phongVanAt).getTime()) / (60 * 1000) < 60;
+      });
+
+      return {
+        timeStr,
+        iso: slotIso,
+        conflictUser: conflictUser ? conflictUser.tenUv : null,
+      };
+    });
+  }, [phongVanAt, bookedInterviews, c?.id]);
+
   return (
+
     <Drawer open={open} onClose={onClose} title={c ? `${c.id} – ${c.tenUv}` : 'Chi tiết ứng viên'} width="max-w-3xl">
       {loading || !c ? (
         <div className="p-5 space-y-3">
@@ -654,11 +715,8 @@ export default function CandidateDrawer({
               </div>
             )}
 
-
-
             {tab === 'zalo' && (
               <div className="flex flex-col h-[520px] bg-slate-50/60 rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs">
-                {/* Header chat bar */}
                 <div className="px-4 py-3 bg-white border-b border-slate-200/80 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-full bg-brand-100 text-brand-700 font-bold flex items-center justify-center text-xs">
@@ -680,7 +738,6 @@ export default function CandidateDrawer({
                   </button>
                 </div>
 
-                {/* Khung nội dung cuộc trò chuyện Live Chat */}
                 <div className="flex-1 p-4 overflow-y-auto space-y-3.5 bg-slate-50/50">
                   {!c.zaloUserId && (
                     <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-800 border border-amber-200 flex items-center justify-between gap-2">
@@ -702,7 +759,6 @@ export default function CandidateDrawer({
                     </div>
                   )}
 
-                  {/* Danh sách tin nhắn Zalo 2 chiều (sắp xếp tăng dần theo thời gian: cũ ở trên -> mới ở dưới cùng) */}
                   {[...c.zaloMessages]
                     .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
                     .map((m) => {
@@ -732,7 +788,6 @@ export default function CandidateDrawer({
 
                 </div>
 
-                {/* Thanh Mẫu Tin Nhanh (Quick Replies) */}
                 <div className="px-3 py-1.5 bg-slate-100/80 border-t border-slate-200 flex items-center gap-1.5 overflow-x-auto text-[11px] text-slate-600">
                   <span className="font-semibold text-slate-400 shrink-0 text-[10px] uppercase">Mẫu nhanh:</span>
                   {[
@@ -751,7 +806,6 @@ export default function CandidateDrawer({
                   ))}
                 </div>
 
-                {/* Live Chat Input Bar */}
                 <div className="p-3 bg-white border-t border-slate-200 flex items-end gap-2">
                   <textarea
                     className="input flex-1 min-h-[42px] max-h-[100px] text-xs resize-none py-2.5 font-sans"
@@ -778,9 +832,6 @@ export default function CandidateDrawer({
                 </div>
               </div>
             )}
-
-
-
           </div>
         </>
       )}
@@ -797,28 +848,50 @@ export default function CandidateDrawer({
 
       <Modal open={interviewOpen} onClose={() => setInterviewOpen(false)} title={`${interviewEditMode ? 'Sửa lịch phỏng vấn' : 'Chấm ĐẠT & hẹn phỏng vấn'} – ${c?.tenUv ?? ''}`}>
         <div className="space-y-4">
-          <Field label="Thời gian phỏng vấn">
-            <input type="datetime-local" className="input" value={phongVanAt} onChange={(e) => setPhongVanAt(e.target.value)} />
+          <Field label="Thời gian phỏng vấn (Bắt buộc cách ứng viên khác >= 1 tiếng)">
+            <input type="datetime-local" className="input font-semibold" value={phongVanAt} onChange={(e) => setPhongVanAt(e.target.value)} />
           </Field>
-          <div className="flex flex-wrap gap-1.5">
-            {[
-              { label: '+1 giờ', get: () => new Date(Date.now() + 60 * 60_000) },
-              { label: '+3 giờ', get: () => new Date(Date.now() + 3 * 60 * 60_000) },
-              { label: 'Hôm nay 14:00', get: () => { const d = new Date(); d.setHours(14, 0, 0, 0); return d; } },
-              { label: 'Hôm nay 15:30', get: () => { const d = new Date(); d.setHours(15, 30, 0, 0); return d; } },
-              { label: 'Mai 9:00', get: () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); return d; } },
-              { label: 'Mai 14:00', get: () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(14, 0, 0, 0); return d; } },
-            ].map((q) => {
-              const d = q.get();
-              const pad = (n: number) => String(n).padStart(2, '0');
-              return (
-                <button key={q.label} className="btn-secondary !px-2.5 !py-1 !text-[11px]" onClick={() => setPhongVanAt(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`)}>
-                  {q.label}
+
+          {timeConflict && (
+            <div className="rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs text-rose-700 font-medium space-y-1 animate-pulse">
+              <div className="font-bold text-rose-800 flex items-center gap-1.5">
+                🔒 XUNG ĐỘT THỜI GIAN (CÁCH NHAU TỐI THIỂU 1 TIẾNG)
+              </div>
+              <div>
+                Khung giờ này quá gần lịch đã hẹn của <b>Sếp {timeConflict.tenUv}</b> lúc <b>{formatDateTime(timeConflict.phongVanAt)}</b>.
+              </div>
+              <div className="text-[11px] text-rose-600 font-bold">
+                Vui lòng chọn khung giờ khác cách tối thiểu 1 tiếng!
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <div className="text-xs font-semibold text-slate-600">Khung giờ gợi ý (Tô đen = Đã có lịch hẹn):</div>
+            <div className="flex flex-wrap gap-1.5">
+              {availableSlots.map((slot) => (
+                <button
+                  key={slot.timeStr}
+                  type="button"
+                  disabled={!!slot.conflictUser}
+                  className={cn(
+                    'px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all border',
+                    slot.conflictUser
+                      ? 'bg-slate-200 text-slate-400 border-slate-300 cursor-not-allowed line-through opacity-60'
+                      : phongVanAt === slot.iso
+                      ? 'bg-brand-600 text-white border-brand-600 shadow-xs'
+                      : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700'
+                  )}
+                  onClick={() => setPhongVanAt(slot.iso)}
+                  title={slot.conflictUser ? `Đã hẹn phỏng vấn với Sếp ${slot.conflictUser}` : `Chọn khung giờ ${slot.timeStr}`}
+                >
+                  {slot.conflictUser ? `🔒 ${slot.timeStr} (${slot.conflictUser})` : slot.timeStr}
                 </button>
-              );
-            })}
+              ))}
+            </div>
           </div>
-          <Field label="Link Google Meet (để trống = hệ thống tự quyết định)">
+
+          <Field label="Link Google Meet (để trống = hệ thống tự tạo)">
             <input type="url" className="input" value={ggMeetLink} onChange={(e) => setGgMeetLink(e.target.value)} placeholder="https://meet.google.com/xxx-xxxx-xxx" />
           </Field>
           <p className="text-[11px] text-slate-400">
@@ -832,7 +905,7 @@ export default function CandidateDrawer({
               Gửi lại lời mời phỏng vấn qua Zalo sau khi lưu
             </label>
           )}
-          <button className="btn-success w-full" onClick={submitInterview}>
+          <button className="btn-success w-full" onClick={submitInterview} disabled={!!timeConflict}>
             <Video size={15} /> {interviewEditMode ? 'Lưu lịch phỏng vấn' : 'Xác nhận ĐẠT & gửi lời mời phỏng vấn'}
           </button>
         </div>

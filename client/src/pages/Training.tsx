@@ -180,7 +180,12 @@ export default function Training() {
     }
   };
 
+  const [bookedInterviews, setBookedInterviews] = useState<{ id: string; tenUv: string; phongVanAt: string }[]>([]);
+
   const openInterviewEdit = (r: TrainingRow) => {
+    api.get<{ id: string; tenUv: string; phongVanAt: string }[]>('/candidates/booked-interviews')
+      .then((data) => setBookedInterviews(data))
+      .catch(() => undefined);
     setInterviewEdit(r);
     setIvPhongVanAt(r.phongVanAt ? r.phongVanAt.slice(0, 16) : '');
     setIvGgMeetLink(r.ggMeetLink ?? '');
@@ -483,27 +488,80 @@ export default function Training() {
 
       <Modal open={!!interviewEdit} onClose={() => setInterviewEdit(null)} title={`Sửa lịch phỏng vấn – ${interviewEdit?.tenUv ?? ''}`}>
         <div className="space-y-4">
-          <Field label="Thời gian phỏng vấn">
-            <input type="datetime-local" className="input" value={ivPhongVanAt} onChange={(e) => setIvPhongVanAt(e.target.value)} />
+          <Field label="Thời gian phỏng vấn (Bắt buộc cách ứng viên khác >= 1 tiếng)">
+            <input type="datetime-local" className="input font-semibold" value={ivPhongVanAt} onChange={(e) => setIvPhongVanAt(e.target.value)} />
           </Field>
-          <div className="flex flex-wrap gap-1.5">
-            {[
-              { label: '+1 giờ', get: () => new Date(Date.now() + 60 * 60_000) },
-              { label: '+3 giờ', get: () => new Date(Date.now() + 3 * 60 * 60_000) },
-              { label: 'Hôm nay 14:00', get: () => { const d = new Date(); d.setHours(14, 0, 0, 0); return d; } },
-              { label: 'Hôm nay 15:30', get: () => { const d = new Date(); d.setHours(15, 30, 0, 0); return d; } },
-              { label: 'Mai 9:00', get: () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); return d; } },
-              { label: 'Mai 14:00', get: () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(14, 0, 0, 0); return d; } },
-            ].map((q) => {
-              const d = q.get();
-              const pad = (n: number) => String(n).padStart(2, '0');
-              return (
-                <button key={q.label} className="btn-secondary !px-2.5 !py-1 !text-[11px]" onClick={() => setIvPhongVanAt(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`)}>
-                  {q.label}
-                </button>
-              );
-            })}
+
+          {/* Cảnh báo xung đột lịch phỏng vấn */}
+          {(() => {
+            const ivTimestamp = ivPhongVanAt ? new Date(ivPhongVanAt).getTime() : 0;
+            if (!ivTimestamp || Number.isNaN(ivTimestamp)) return null;
+            const conflict = bookedInterviews.find((b) => {
+              if (b.id === interviewEdit?.id) return false;
+              if (!b.phongVanAt) return false;
+              return Math.abs(ivTimestamp - new Date(b.phongVanAt).getTime()) / (60 * 1000) < 60;
+            });
+            if (!conflict) return null;
+            return (
+              <div className="rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs text-rose-700 font-medium space-y-1 animate-pulse">
+                <div className="font-bold text-rose-800 flex items-center gap-1.5">
+                  🔒 XUNG ĐỘT THỜI GIAN (CÁCH NHAU TỐI THIỂU 1 TIẾNG)
+                </div>
+                <div>
+                  Khung giờ này quá gần lịch đã hẹn của <b>Sếp {conflict.tenUv}</b> lúc <b>{formatDateTime(conflict.phongVanAt)}</b>.
+                </div>
+                <div className="text-[11px] text-rose-600 font-bold">
+                  Vui lòng chọn khung giờ khác cách tối thiểu 1 tiếng!
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Khay khung giờ gợi ý (tô đen khung giờ bị trùng) */}
+          <div className="space-y-1.5">
+            <div className="text-xs font-semibold text-slate-600">Khung giờ gợi ý (Tô đen = Đã có lịch hẹn):</div>
+            <div className="flex flex-wrap gap-1.5">
+              {(() => {
+                let datePrefix = ivPhongVanAt ? ivPhongVanAt.slice(0, 10) : '';
+                if (!datePrefix) {
+                  const d = new Date();
+                  const pad = (n: number) => String(n).padStart(2, '0');
+                  datePrefix = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+                }
+                const standardHours = ['08:00', '09:00', '10:00', '11:00', '13:30', '14:30', '15:30', '16:30', '17:30', '19:00', '20:00'];
+                return standardHours.map((timeStr) => {
+                  const slotIso = `${datePrefix}T${timeStr}`;
+                  const slotTime = new Date(slotIso).getTime();
+                  const conflictUser = bookedInterviews.find((b) => {
+                    if (b.id === interviewEdit?.id) return false;
+                    if (!b.phongVanAt) return false;
+                    return Math.abs(slotTime - new Date(b.phongVanAt).getTime()) / (60 * 1000) < 60;
+                  });
+                  const isConflict = !!conflictUser;
+                  return (
+                    <button
+                      key={timeStr}
+                      type="button"
+                      disabled={isConflict}
+                      className={cn(
+                        'px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all border',
+                        isConflict
+                          ? 'bg-slate-200 text-slate-400 border-slate-300 cursor-not-allowed line-through opacity-60'
+                          : ivPhongVanAt === slotIso
+                          ? 'bg-brand-600 text-white border-brand-600 shadow-xs'
+                          : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700'
+                      )}
+                      onClick={() => setIvPhongVanAt(slotIso)}
+                      title={conflictUser ? `Đã hẹn phỏng vấn với Sếp ${conflictUser.tenUv}` : `Chọn khung giờ ${timeStr}`}
+                    >
+                      {conflictUser ? `🔒 ${timeStr} (${conflictUser.tenUv})` : timeStr}
+                    </button>
+                  );
+                });
+              })()}
+            </div>
           </div>
+
           <Field label="Link Google Meet">
             <input type="url" className="input" value={ivGgMeetLink} onChange={(e) => setIvGgMeetLink(e.target.value)} placeholder="https://meet.google.com/xxx-xxxx-xxx" />
           </Field>
@@ -511,11 +569,24 @@ export default function Training() {
             <input type="checkbox" className="w-4 h-4 accent-brand-600" checked={ivResend} onChange={(e) => setIvResend(e.target.checked)} />
             Gửi lại lời mời phỏng vấn qua Zalo sau khi lưu
           </label>
-          <button className="btn-primary w-full" onClick={saveInterviewEdit}>
+          <button
+            className="btn-primary w-full"
+            onClick={saveInterviewEdit}
+            disabled={(() => {
+              const ivTimestamp = ivPhongVanAt ? new Date(ivPhongVanAt).getTime() : 0;
+              if (!ivTimestamp || Number.isNaN(ivTimestamp)) return false;
+              return bookedInterviews.some((b) => {
+                if (b.id === interviewEdit?.id) return false;
+                if (!b.phongVanAt) return false;
+                return Math.abs(ivTimestamp - new Date(b.phongVanAt).getTime()) / (60 * 1000) < 60;
+              });
+            })()}
+          >
             <Video size={15} /> Lưu lịch phỏng vấn
           </button>
         </div>
       </Modal>
     </div>
   );
+
 }

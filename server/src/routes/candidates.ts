@@ -32,7 +32,21 @@ const CANDIDATE_FIELDS: Record<string, { label: string; schema: z.ZodTypeAny }> 
   kenhBietTin: { label: 'KENH_BIET_TIN', schema: z.string() },
 };
 
+router.get('/booked-interviews', async (_req, res, next) => {
+  try {
+    const list = await prisma.candidate.findMany({
+      where: { phongVanAt: { not: null } },
+      select: { id: true, tenUv: true, phongVanAt: true, ggMeetLink: true },
+      orderBy: { phongVanAt: 'asc' },
+    });
+    res.json({ success: true, data: list });
+  } catch (e) {
+    next(e);
+  }
+});
+
 router.get('/', async (req: AuthedRequest, res, next) => {
+
   try {
     const result = await candidateService.list({
       search: String(req.query.search ?? ''),
