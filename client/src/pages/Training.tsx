@@ -56,10 +56,28 @@ export default function Training() {
   const [confirmEmployee, setConfirmEmployee] = useState<TrainingRow | null>(null);
   const [startDate, setStartDate] = useState(dateKey());
   const [newShift, setNewShift] = useState('');
+  const [newBranch, setNewBranch] = useState('');
   const [interviewEdit, setInterviewEdit] = useState<TrainingRow | null>(null);
   const [ivPhongVanAt, setIvPhongVanAt] = useState('');
   const [ivGgMeetLink, setIvGgMeetLink] = useState('');
   const [ivResend, setIvResend] = useState(true);
+
+  const BRANCH_OPTIONS = [
+    '111 Tôn Đản, Quận 4',
+    '232 Nguyễn Thị Minh Khai, Quận 3',
+    'Chi Nhánh Quận 1',
+    'Chi Nhánh Gò Vấp',
+    'Chi Nhánh Bình Thạnh',
+  ];
+
+  const SHIFT_OPTIONS = [
+    'Ca Sáng: 7g00 - 12g00',
+    'Ca Chiều: 12g00 - 17g00',
+    'Ca Tối: 17g00 - 22g00',
+    'Ca Sáng + Ca Tối',
+    'Ca Sáng + Ca Chiều',
+    'Ca Chiều + Ca Tối',
+  ];
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -87,17 +105,29 @@ export default function Training() {
     };
   }, [load]);
 
-  const saveStart = async () => {
+  const openEditModal = (r: TrainingRow) => {
+    setEdit(r);
+    setStartDate(r.ngayBatDauTraining ? r.ngayBatDauTraining.slice(0, 10) : dateKey());
+    setNewShift(r.caLam || '');
+    setNewBranch(r.chiNhanh || '');
+  };
+
+  const saveTrainingInfo = async () => {
     if (!edit) return;
     try {
-      await api.patch(`/training/${edit.id}`, { ngayBatDau: `${startDate}T00:00:00` });
-      toast('success', 'Đã lưu ngày bắt đầu Training.');
+      await api.patch(`/training/${edit.id}`, {
+        ngayBatDau: `${startDate}T00:00:00`,
+        caLam: newShift.trim() || undefined,
+        chiNhanh: newBranch.trim() || undefined,
+      });
+      toast('success', 'Đã cập nhật Ngày bắt đầu, Ca làm & Chi nhánh chính thức!');
       setEdit(null);
       void load();
     } catch (e) {
       toast('error', e instanceof ApiError ? e.message : 'Thất bại.');
     }
   };
+
 
   const changeStatus = async () => {
     if (!confirmStatus) return;
@@ -260,11 +290,35 @@ export default function Training() {
                     <td className="table-td font-mono text-xs font-bold text-brand-600">{r.id}</td>
                     <td className="table-td font-semibold">{r.tenUv}</td>
                     <td className="table-td">{r.sdtZalo}</td>
-                    <td className="table-td">{r.chiNhanh}</td>
                     <td className="table-td">
-                      <button className="btn-secondary !px-2 !py-0.5 text-xs" onClick={() => { setEdit(r); setNewShift(r.caLam); }}>
-                        {r.caLam}
-                      </button>
+                      {r.chiNhanh && !r.chiNhanh.includes('Có thể làm') ? (
+                        <span className="font-medium text-slate-800">{r.chiNhanh}</span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="text-[11px] font-semibold text-amber-700 bg-amber-100/90 hover:bg-amber-200 px-2.5 py-1 rounded-lg border border-amber-300 flex items-center gap-1 shadow-2xs animate-pulse"
+                          onClick={() => openEditModal(r)}
+                          title="Click để chốt chi nhánh làm việc chính thức"
+                        >
+                          ⚠️ Chốt chi nhánh
+                        </button>
+                      )}
+                    </td>
+                    <td className="table-td">
+                      {r.caLam && !r.caLam.includes('Có thể làm') ? (
+                        <button className="btn-secondary !px-2.5 !py-1 text-xs" onClick={() => openEditModal(r)}>
+                          {r.caLam}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="text-[11px] font-semibold text-rose-700 bg-rose-100/90 hover:bg-rose-200 px-2.5 py-1 rounded-lg border border-rose-300 flex items-center gap-1 shadow-2xs animate-pulse"
+                          onClick={() => openEditModal(r)}
+                          title="Click để chốt ca làm việc chính thức"
+                        >
+                          ⚠️ Chốt ca làm
+                        </button>
+                      )}
                     </td>
                     <td className="table-td">
                       {r.phongVanAt ? (
@@ -280,7 +334,7 @@ export default function Training() {
                               {r.ggMeetLink}
                             </a>
                           )}
-                          <button className="btn-secondary !px-2 !py-0.5 !text-[11px] w-fit mt-0.5" onClick={() => openInterviewEdit(r)}>
+                          <button className="btn-secondary !px-2.5 !py-0.5 !text-[11px] w-fit mt-0.5" onClick={() => openInterviewEdit(r)}>
                             Sửa lịch
                           </button>
                         </div>
@@ -291,51 +345,35 @@ export default function Training() {
                     <td className="table-td">
                       <button
                         className="btn-secondary !px-2 !py-0.5 text-xs"
-                        onClick={() => {
-                          setEdit(r);
-                          setStartDate(r.ngayBatDauTraining ? r.ngayBatDauTraining.slice(0, 10) : dateKey());
-                        }}
+                        onClick={() => openEditModal(r)}
                       >
                         {formatDate(r.ngayBatDauTraining) || 'Chưa đặt'}
                       </button>
                     </td>
                     <td className="table-td">
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-20 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                          <div className="h-full bg-brand-500 rounded-full" style={{ width: `${Math.min(100, (r.soNgayDaTraining / 7) * 100)}%` }} />
-                        </div>
-                        <span className="text-xs font-bold text-slate-600">{r.soNgayDaTraining}/7</span>
-                      </div>
+                      <span className="font-bold text-brand-700">{r.soNgayDaTraining}/7</span>
                     </td>
                     <td className="table-td">
                       <select
-                        className="input !w-auto !py-1 text-xs"
+                        className="input !py-1 !text-xs"
                         value={r.trangThaiTraining ?? 'CHUA_THAM_GIA'}
                         onChange={(e) => setConfirmStatus({ row: r, status: e.target.value })}
                       >
-                        {STATUS_OPTIONS.map((s) => (
-                          <option key={s} value={s}>{trainingStatusLabel[s]?.label ?? s}</option>
+                        {STATUS_OPTIONS.map((st) => (
+                          <option key={st} value={st}>
+                            {trainingStatusLabel[st]?.label ?? st}
+                          </option>
                         ))}
                       </select>
                     </td>
                     <td className="table-td">
-                      <div className="flex gap-1.5">
-                        {r.trangThaiTraining === 'HOAN_THANH' && (
-                          <button
-                            className="btn-primary !px-2.5 !py-1.5 !text-xs"
-                            onClick={() => setConfirmEmployee(r)}
-                            title="Xác nhận nhân viên chính thức"
-                          >
-                            <Briefcase size={13} /> Nhận việc
-                          </button>
-                        )}
-                        {r.phongVanAt && !r.ngayBatDauTraining && (
-                          <button className="btn-secondary !px-2.5 !py-1.5" onClick={() => notifyInterview(r.id)} title="Gửi lại lời mời phỏng vấn qua Zalo">
-                            <Video size={13} />
-                          </button>
-                        )}
-                        <button className="btn-secondary !px-2.5 !py-1.5" onClick={() => notify(r.id)} title="Gửi thông báo Training Zalo">
-                          <Send size={13} />
+                      <div className="flex items-center gap-1">
+                        <button
+                          className="btn-primary !px-2.5 !py-1.5 !text-xs"
+                          onClick={() => openEditModal(r)}
+                          title="Cập nhật chi nhánh, ca làm & ngày bắt đầu"
+                        >
+                          Chốt ca & lịch
                         </button>
                         <button className="btn-secondary !px-2.5 !py-1.5" onClick={() => navigate(`/shifts`)}>
                           <CalendarDays size={13} />
@@ -350,24 +388,47 @@ export default function Training() {
         </div>
       )}
 
-      <Modal open={!!edit} onClose={() => setEdit(null)} title={`Chỉnh Training – ${edit?.tenUv ?? ''}`}>
+      <Modal open={!!edit} onClose={() => setEdit(null)} title={`Cập Nhật Thông Tin Đào Tạo & Phân Ca – ${edit?.tenUv ?? ''}`}>
         <div className="space-y-4">
+          <Field label="Chi nhánh làm việc chính thức">
+            <div className="space-y-2">
+              <select className="input text-xs" value={newBranch} onChange={(e) => setNewBranch(e.target.value)}>
+                <option value="">-- Chọn chi nhánh chính thức --</option>
+                {BRANCH_OPTIONS.map((b) => <option key={b} value={b}>{b}</option>)}
+              </select>
+              <input
+                className="input text-xs"
+                placeholder="Hoặc nhập chi nhánh tùy chỉnh tại đây..."
+                value={newBranch}
+                onChange={(e) => setNewBranch(e.target.value)}
+              />
+            </div>
+          </Field>
+
+          <Field label="Ca làm việc chính thức">
+            <div className="space-y-2">
+              <select className="input text-xs" value={newShift} onChange={(e) => setNewShift(e.target.value)}>
+                <option value="">-- Chọn ca làm chính thức --</option>
+                {SHIFT_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <input
+                className="input text-xs"
+                placeholder="Hoặc nhập ca làm tùy chỉnh (Ví dụ: Ca Sáng + Ca Tối)..."
+                value={newShift}
+                onChange={(e) => setNewShift(e.target.value)}
+              />
+            </div>
+          </Field>
+
           <Field label="Ngày bắt đầu đào tạo">
             <input type="date" className="input" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
           </Field>
-          <button className="btn-primary w-full" onClick={saveStart}>
-            <GraduationCap size={15} /> Lưu ngày bắt đầu
+
+          <button className="btn-primary w-full !py-3 font-bold text-xs flex items-center justify-center gap-2" onClick={saveTrainingInfo}>
+            <GraduationCap size={16} /> Lưu Cập Nhật Đào Tạo & Phân Ca
           </button>
-          <div className="border-t border-slate-100 pt-4">
-            <Field label="Đổi ca">
-              <select className="input" value={newShift} onChange={(e) => setNewShift(e.target.value)}>
-                {['SÁNG', 'CHIỀU', 'TỐI', 'CA 2 (SÁNG + CHIỀU)', 'CA 3 (SÁNG + TỐI)'].map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </Field>
-            <button className="btn-secondary w-full mt-3" onClick={saveShift}>Lưu ca mới</button>
-          </div>
           <p className="text-[11px] text-slate-400">
-            Lịch chi tiết từng ngày được quản lý tại trang <b>Lịch làm việc</b>. Deadline tự động: {formatDate(addDays(new Date(`${startDate}T00:00:00`), 14))} (14 ngày).
+            Lịch chi tiết từng ngày được tự động đồng bộ sang trang <b>Lịch làm việc</b>.
           </p>
         </div>
       </Modal>

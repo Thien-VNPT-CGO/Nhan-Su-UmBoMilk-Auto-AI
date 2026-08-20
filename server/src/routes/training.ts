@@ -39,15 +39,24 @@ router.patch('/:id', requireWrite(), async (req: AuthedRequest, res, next) => {
     }
 
     if (body.caLam !== undefined || body.chiNhanh !== undefined) {
-      const patch: Record<string, string> = {};
-      const labels: Record<string, string> = {};
-      if (body.caLam !== undefined) { patch.caLam = String(body.caLam); labels.caLam = 'CA_LAM'; }
-      if (body.chiNhanh !== undefined) { patch.chiNhanh = String(body.chiNhanh); labels.chiNhanh = 'CHI_NHANH'; }
-      await candidateService.updateFields(id, req.user!.username, Number(body.version ?? 0) || 0, patch as never, labels);
+      const dataToUpdate: { caLam?: string; chiNhanh?: string } = {};
+      if (body.caLam !== undefined) dataToUpdate.caLam = String(body.caLam).trim();
+      if (body.chiNhanh !== undefined) dataToUpdate.chiNhanh = String(body.chiNhanh).trim();
+      if (Object.keys(dataToUpdate).length > 0) {
+        const { prisma } = await import('../lib/prisma');
+        const { emit } = await import('../sockets');
+        await prisma.candidate.update({
+          where: { id },
+          data: dataToUpdate,
+        });
+        emit('training:updated', { id });
+        emit('candidate:update', { id });
+      }
     }
 
     const updated = await candidateService.getById(id);
     res.json({ success: true, data: updated });
+
   } catch (e) {
     next(e);
   }

@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { RefreshCw, CalendarDays, GraduationCap, Briefcase } from 'lucide-react';
 import { api, ApiError } from '../api/client';
-import { Skeleton, Badge, Modal, Spinner } from '../components/ui';
+import { Skeleton, Badge, Modal, Spinner, Field } from '../components/ui';
+
 import { useToast } from '../stores/Toast';
 import { getSocket } from '../api/socket';
 import { dateKey, addDays, weekdayVi } from '../utils/date';
@@ -33,6 +34,25 @@ export default function Shifts() {
   const [edit, setEdit] = useState<{ candidateId: string; tenUv: string; date: string; current: string } | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [editInfo, setEditInfo] = useState<{ candidateId: string; tenUv: string; chiNhanh: string; caLam: string } | null>(null);
+  const [branchDraft, setBranchDraft] = useState('');
+  const [shiftDraft, setShiftDraft] = useState('');
+
+  const saveBranchAndShift = async () => {
+    if (!editInfo) return;
+    try {
+      await api.patch(`/training/${editInfo.candidateId}`, {
+        chiNhanh: branchDraft.trim() || undefined,
+        caLam: shiftDraft.trim() || undefined,
+      });
+      toast('success', 'Đã cập nhật Chi nhánh & Ca làm chính thức!');
+      setEditInfo(null);
+      void load();
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Thao tác thất bại.');
+    }
+  };
+
 
   const today = startOfToday();
   const endDate = '2026-12-31';
@@ -195,10 +215,43 @@ export default function Shifts() {
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.candidateId} className="hover:bg-brand-50/30">
-                    <td className="sticky left-0 bg-white z-10 min-w-[180px] px-3 py-2 border-r border-slate-100">
+                    <td className="sticky left-0 bg-white z-10 min-w-[200px] px-3 py-2 border-r border-slate-100">
                       <div className="font-semibold text-slate-800 text-sm">{r.tenUv}</div>
-                      <div className="text-[10px] text-slate-400">{r.candidateId} · {r.chiNhanh}</div>
+                      <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                        <span className="text-[10px] font-mono text-brand-600 font-bold">{r.candidateId}</span>
+                        {r.chiNhanh && !r.chiNhanh.includes('Có thể làm') ? (
+                          <span className="text-[10px] text-slate-500 font-medium">· {r.chiNhanh}</span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="text-[9px] font-bold text-amber-700 bg-amber-100/90 hover:bg-amber-200 px-1.5 py-0.5 rounded border border-amber-300 animate-pulse"
+                            onClick={() => {
+                              setEditInfo({ candidateId: r.candidateId, tenUv: r.tenUv, chiNhanh: r.chiNhanh, caLam: r.caLam });
+                              setBranchDraft(r.chiNhanh || '');
+                              setShiftDraft(r.caLam || '');
+                            }}
+                          >
+                            ⚠️ Chốt chi nhánh
+                          </button>
+                        )}
+                        {r.caLam && !r.caLam.includes('Có thể làm') ? (
+                          <span className="text-[10px] text-slate-400">· {r.caLam}</span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="text-[9px] font-bold text-rose-700 bg-rose-100/90 hover:bg-rose-200 px-1.5 py-0.5 rounded border border-rose-300 animate-pulse"
+                            onClick={() => {
+                              setEditInfo({ candidateId: r.candidateId, tenUv: r.tenUv, chiNhanh: r.chiNhanh, caLam: r.caLam });
+                              setBranchDraft(r.chiNhanh || '');
+                              setShiftDraft(r.caLam || '');
+                            }}
+                          >
+                            ⚠️ Chốt ca
+                          </button>
+                        )}
+                      </div>
                     </td>
+
                     {dates.map((d) => {
                       const cell = r.shifts?.[d];
                       const shifts = cell ? cell.shifts.split('|').filter(Boolean) : [];
@@ -280,6 +333,31 @@ export default function Shifts() {
           </div>
         </div>
       </Modal>
+
+      <Modal open={!!editInfo} onClose={() => setEditInfo(null)} title={`Chốt Chi Nhánh & Ca Làm Chính Thức – ${editInfo?.tenUv ?? ''}`}>
+        <div className="space-y-4">
+          <Field label="Chi nhánh làm việc chính thức">
+            <input
+              className="input text-xs font-medium"
+              placeholder="Nhập chi nhánh chính thức (VD: 111 Tôn Đản, Quận 4)..."
+              value={branchDraft}
+              onChange={(e) => setBranchDraft(e.target.value)}
+            />
+          </Field>
+          <Field label="Ca làm việc chính thức">
+            <input
+              className="input text-xs font-medium"
+              placeholder="Nhập ca làm chính thức (VD: Ca Sáng: 7g00 - 12g00)..."
+              value={shiftDraft}
+              onChange={(e) => setShiftDraft(e.target.value)}
+            />
+          </Field>
+          <button className="btn-primary w-full !py-3 text-xs font-bold" onClick={saveBranchAndShift}>
+            Lưu Chi Nhánh & Ca Làm Chính Thức
+          </button>
+        </div>
+      </Modal>
     </div>
   );
+
 }
