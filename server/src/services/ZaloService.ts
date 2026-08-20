@@ -544,6 +544,7 @@ export class ZaloService {
    */
   async webhook(payload: unknown): Promise<void> {
     const p = payload as {
+      user_id_by_app?: string;
       sender?: { phone?: string; user_id?: string; id?: string };
       message?: {
         text?: string;
@@ -551,8 +552,20 @@ export class ZaloService {
         location?: { lat?: number | string; long?: number | string };
       };
     };
-    const zaloUserId = String(p.sender?.user_id ?? p.sender?.id ?? '').trim();
-    const phoneRaw = String(p.sender?.phone ?? '').trim();
+    const zaloUserId = String(p.sender?.user_id ?? p.sender?.id ?? p.user_id_by_app ?? '').trim();
+    let phoneRaw = String(p.sender?.phone ?? '').trim();
+
+    const message = p.message ?? {};
+    const text = String(message.text ?? '').trim();
+
+    // Nếu Zalo không tự gửi SĐT trong sender (do chính sách bảo mật Zalo),
+    // tự động trích xuất SĐT từ nội dung tin nhắn (ví dụ: ứng viên nhắn SĐT "0912345678" hoặc "SĐT em là 0912345678")
+    if (!phoneRaw && text) {
+      const matchPhone = text.match(/(?:84|0)[35789]\d{8}\b/);
+      if (matchPhone) {
+        phoneRaw = matchPhone[0].replace(/^84/, '0');
+      }
+    }
 
     // Tìm ứng viên: ưu tiên theo SĐT, nếu không có SĐT thì theo Zalo User ID; lưu lại user_id để gửi tin sau
     let candidate = phoneRaw ? await prisma.candidate.findFirst({ where: { sdtZalo: phoneRaw } }) : null;
@@ -561,13 +574,12 @@ export class ZaloService {
     }
     if (candidate && zaloUserId && candidate.zaloUserId !== zaloUserId) {
       await prisma.candidate.update({ where: { id: candidate.id }, data: { zaloUserId } });
+      console.log(`[ZaloWebhook] ✅ Đã tự động gắn Zalo User ID (${zaloUserId}) cho ứng viên: ${candidate.tenUv} (${candidate.sdtZalo})`);
     }
-    const phone = phoneRaw || zaloUserId;
+    const phone = phoneRaw || candidate?.sdtZalo || zaloUserId;
     if (!phone) return;
     const candidateId = candidate?.id ?? null;
 
-    const message = p.message ?? {};
-    const text = String(message.text ?? '').trim();
     const upper = text.toUpperCase();
     const isLocation = message.type === 'location';
     let location: { lat: number; lng: number } | null = null;
