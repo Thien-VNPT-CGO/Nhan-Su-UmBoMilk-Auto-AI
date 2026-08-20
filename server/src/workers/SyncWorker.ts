@@ -48,6 +48,7 @@ export class SyncWorker {
   private lastQueueAlertAt = 0;
   private zaloTokenTimer: NodeJS.Timeout | null = null;
   private runningZaloRefresh = false;
+  private runningZaloUserId = false;
 
   constructor(intervalMs = 3000) {
     this.intervalMs = intervalMs;
@@ -107,6 +108,7 @@ export class SyncWorker {
     void this.tickPrune();
     void this.tickQueueAlert();
     void this.tickZaloTokenRefresh();
+    void this.tickAutoZaloUserId();
     console.log('[SyncWorker] started');
   }
 
@@ -130,6 +132,29 @@ export class SyncWorker {
     this.alertTimer = null;
     if (this.idleTimer) clearTimeout(this.idleTimer);
     this.idleTimer = null;
+  }
+
+  /**
+   * AI tự động quét và lấy Zalo User ID theo SĐT cho tất cả ứng viên chưa có ID (chạy ngầm tự động).
+   */
+  private async tickAutoZaloUserId(): Promise<void> {
+    if (!this.running || this.runningZaloUserId) return;
+    this.runningZaloUserId = true;
+    try {
+      const candidates = await prisma.candidate.findMany({
+        where: { zaloUserId: null },
+        select: { id: true, sdtZalo: true },
+        take: 10,
+      });
+      for (const c of candidates) {
+        if (!c.sdtZalo) continue;
+        await zaloService.tryResolveAndSaveUserId(c.id, c.sdtZalo);
+      }
+    } catch (e) {
+      console.warn('[SyncWorker] auto zalo user id:', e instanceof Error ? e.message : String(e));
+    } finally {
+      this.runningZaloUserId = false;
+    }
   }
 
   /**
