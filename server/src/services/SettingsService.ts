@@ -10,7 +10,11 @@ function deepMerge(base: Record<string, unknown>, patch: Record<string, unknown>
   const out = { ...base };
   for (const key of Object.keys(patch)) {
     const pv = patch[key];
-    if (pv === undefined || pv === null) continue;
+    if (pv === undefined) continue;
+    if (pv === null) {
+      out[key] = null;
+      continue;
+    }
     const bv = out[key];
     if (Array.isArray(pv)) {
       out[key] = pv;

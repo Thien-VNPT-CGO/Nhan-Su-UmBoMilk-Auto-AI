@@ -93,7 +93,7 @@ export class ZaloPersonalService {
   }
 
   /** Đăng xuất Zalo Cá nhân khỏi hệ thống. */
-  async logout(): Promise<void> {
+  async logout(): Promise<ZaloPersonalStatus> {
     await saveSettings(
       {
         zaloPersonal: {
@@ -109,6 +109,7 @@ export class ZaloPersonalService {
       'zalo-personal-logout',
     );
     console.log('[ZaloPersonal] 🚪 Đã đăng xuất Zalo Cá nhân.');
+    return this.getStatus();
   }
 
   /**

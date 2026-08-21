@@ -215,8 +215,8 @@ export default function Settings() {
 
   const handleLogoutPersonal = async () => {
     try {
-      await api.post('/zalo/personal/logout', {});
-      void loadZaloPersonal();
+      const res = await api.post<ZaloPersonalState>('/zalo/personal/logout', {});
+      setZaloPersonal(res);
       toast('success', 'Đã đăng xuất Zalo Cá Nhân.');
     } catch {
       toast('error', 'Đăng xuất thất bại.');

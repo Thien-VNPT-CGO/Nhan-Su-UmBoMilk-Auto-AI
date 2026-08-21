@@ -229,8 +229,8 @@ router.post('/personal/connect', requireAuth, requireWrite(), async (req, res, n
 
 router.post('/personal/logout', requireAuth, requireWrite(), async (_req, res, next) => {
   try {
-    await zaloPersonalService.logout();
-    res.json({ success: true, message: 'Đã đăng xuất Zalo Cá nhân thành công.' });
+    const status = await zaloPersonalService.logout();
+    res.json({ success: true, data: status });
   } catch (e) {
     next(e);
   }
