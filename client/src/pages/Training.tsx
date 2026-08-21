@@ -225,6 +225,7 @@ export default function Training() {
   const [bookedInterviews, setBookedInterviews] = useState<{ id: string; tenUv: string; phongVanAt: string }[]>([]);
 
   const openInterviewEdit = (r: TrainingRow) => {
+    if (!isAdmin) return;
     api.get<{ id: string; tenUv: string; phongVanAt: string }[]>('/candidates/booked-interviews')
       .then((data) => setBookedInterviews(data))
       .catch(() => undefined);
@@ -235,7 +236,7 @@ export default function Training() {
   };
 
   const saveInterviewEdit = async () => {
-    if (!interviewEdit) return;
+    if (!isAdmin || !interviewEdit) return;
     if (!ivPhongVanAt) {
       toast('error', 'Chọn thời gian phỏng vấn.');
       return;
@@ -396,13 +397,15 @@ export default function Training() {
                           {r.phongVanAt ? (
                             <div className="flex items-center justify-between gap-1">
                               <span className="text-xs font-bold text-slate-800">{formatDateTime(r.phongVanAt)}</span>
-                              <button
-                                className="text-[10px] text-slate-400 hover:text-slate-600 underline disabled:opacity-40"
-                                disabled={isPendingConfirm}
-                                onClick={() => openInterviewEdit(r)}
-                              >
-                                Sửa
-                              </button>
+                              {isAdmin && (
+                                <button
+                                  className="text-[10px] text-slate-400 hover:text-slate-600 underline disabled:opacity-40"
+                                  disabled={isPendingConfirm}
+                                  onClick={() => openInterviewEdit(r)}
+                                >
+                                  Sửa
+                                </button>
+                              )}
                             </div>
                           ) : (
                             <span className="text-xs text-slate-400">Chưa hẹn</span>

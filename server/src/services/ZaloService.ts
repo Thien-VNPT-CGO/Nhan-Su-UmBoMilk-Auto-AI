@@ -95,8 +95,6 @@ export class ZaloService {
       '👉 VUI LÒNG BẤM LINK DƯỚI ĐÂY ĐỂ XÁC NHẬN THAM GIA PHỎNG VẤN 1-CLICK:',
       `🔗 ${confirmUrl}`,
       '',
-      '*(Hoặc nhắn lại "XÁC NHẬN THAM GIA" vào Zalo này để hệ thống tự động ghi nhận)*',
-      '',
       'UMBO MILK rất mong được gặp bạn! ✨',
     ].join('\n');
 
@@ -188,7 +186,7 @@ export class ZaloService {
     return { refreshed: false, reason: 'NOT_NEEDED_FOR_PERSONAL' };
   }
 
-  async webhook(_payload: unknown): Promise<void> {}
+  async webhook(_payload: unknown): Promise<void> { }
 }
 
 export const zaloService = new ZaloService();

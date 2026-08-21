@@ -10,6 +10,7 @@ import { getSocket } from '../api/socket';
 
 import { Drawer, Tabs, Badge, Spinner, ConfirmDialog, Field, Skeleton, Modal } from './ui';
 import { useToast } from '../stores/Toast';
+import { useAuth } from '../stores/auth';
 import { cn, trainingStatusLabel, syncStatusStyle, decisionLabel } from '../utils/format';
 import { formatDateTime, formatDate, toLocalDatetimeInput } from '../utils/date';
 
@@ -74,6 +75,8 @@ export default function CandidateDrawer({
   onChanged: () => void;
 }) {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const [c, setC] = useState<CandidateDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState('profile');
@@ -297,6 +300,7 @@ export default function CandidateDrawer({
   };
 
   const openEditInterviewModal = () => {
+    if (!isAdmin) return;
     void loadBookedInterviews();
     setInterviewEditMode(true);
     setInterviewResend(false);
@@ -313,6 +317,7 @@ export default function CandidateDrawer({
     }
     try {
       if (interviewEditMode) {
+        if (!isAdmin) return;
         await api.patch(`/candidates/${candidateId}/interview`, {
           phongVanAt,
           ggMeetLink: ggMeetLink.trim() || undefined,
@@ -682,9 +687,11 @@ export default function CandidateDrawer({
                       >
                         <span>💬 Mở App Zalo gửi Thư Mời PV</span>
                       </button>
-                      <button className="btn-secondary !px-2.5 !py-1.5 !text-xs" onClick={openEditInterviewModal}>
-                        <CalendarDays size={13} /> Sửa lịch
-                      </button>
+                      {isAdmin && (
+                        <button className="btn-secondary !px-2.5 !py-1.5 !text-xs" onClick={openEditInterviewModal}>
+                          <CalendarDays size={13} /> Sửa lịch
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}

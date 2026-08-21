@@ -293,6 +293,9 @@ router.patch('/:id/interview', requireWrite(), async (req: AuthedRequest, res, n
 
     let phongVanAtDate: Date | undefined;
     if (phongVanAt) {
+      if (req.user?.role !== 'ADMIN') {
+        throw ApiError.forbidden('Chỉ có Admin mới có quyền sửa lịch phỏng vấn.');
+      }
       phongVanAtDate = parseLocalPhanVanAt(phongVanAt);
       if (!phongVanAtDate || Number.isNaN(phongVanAtDate.getTime())) {
         throw ApiError.badRequest('INVALID_DATETIME', 'Thời gian phỏng vấn không hợp lệ.');
