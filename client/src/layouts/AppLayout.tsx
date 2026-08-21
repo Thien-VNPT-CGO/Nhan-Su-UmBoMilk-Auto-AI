@@ -9,6 +9,7 @@ import { useAuth } from '../stores/auth';
 import { useToast } from '../stores/Toast';
 import { useI18n } from '../utils/i18n';
 import { useTheme } from '../utils/theme';
+import { NotificationManager } from '../components/NotificationManager';
 import { api } from '../api/client';
 import { getSocket } from '../api/socket';
 import { cn } from '../utils/format';
@@ -275,6 +276,9 @@ export default function AppLayout() {
                   ? `● ${pendingTotal} ${t('header.pending')}`
                   : `● ${t('header.synced')}`}
           </button>
+
+          {/* Desktop Web Push Notification Manager */}
+          <NotificationManager />
 
           {/* Language toggle */}
           <button

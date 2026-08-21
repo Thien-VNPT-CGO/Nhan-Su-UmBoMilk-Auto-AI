@@ -134,6 +134,9 @@ export async function startSystem(server: http.Server) {
   const { syncQueue } = await import('./services/SyncQueueService');
   syncQueue.setWakeCallback(() => syncWorker.wake());
   startBackupTimer();
+
+  const { interviewReminderWorker } = await import('./workers/InterviewReminderWorker');
+  interviewReminderWorker.start();
 }
 
 let backupTimer: NodeJS.Timeout | null = null;
@@ -185,6 +188,8 @@ let trainingRefreshTimer: NodeJS.Timeout | null = null;
 export async function shutdownSystem() {
   syncWorker.stop();
   reconciliationService.stop();
+  const { interviewReminderWorker } = await import('./workers/InterviewReminderWorker');
+  interviewReminderWorker.stop();
   if (trainingRefreshTimer) clearInterval(trainingRefreshTimer);
   trainingRefreshTimer = null;
   if (backupTimer) clearInterval(backupTimer);
