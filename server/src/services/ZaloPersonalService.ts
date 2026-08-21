@@ -13,15 +13,27 @@ export interface ZaloPersonalStatus {
   updatedAt: string | null;
 }
 
+interface QrSession {
+  token: string;
+  status: 'WAITING_FOR_SCAN' | 'SUCCESS' | 'EXPIRED';
+  phone?: string;
+  name?: string;
+  expireAt: number;
+}
+
+const pendingQrSessions = new Map<string, QrSession>();
+
 export class ZaloPersonalService {
-  /** Lấy trạng thái kết nối Zalo Cá Nhân hiện tại. */
+  /**
+   * Lấy Trạng thái kết nối Zalo Cá Nhân hiện tại từ settings.
+   */
   async getStatus(): Promise<ZaloPersonalStatus> {
     const settings = await getSettings();
     const z = settings.zaloPersonal ?? {};
     const mainZalo = settings.zalo ?? {};
 
     return {
-      connected: !!z.session && !!z.phone,
+      connected: Boolean(z.phone && (z.session || z.secretKey)),
       phone: z.phone ?? null,
       name: z.name ?? null,
       avatar: z.avatar ?? null,
@@ -32,23 +44,29 @@ export class ZaloPersonalService {
   }
 
   /**
-   * Tạo / Lấy Mã QR Đăng Nhập Zalo Cá Nhân để Admin quét trực tiếp trên điện thoại.
+   * Sinh mã QR Đăng nhập Động (Dynamic Token) để HR quét trực tiếp từ điện thoại.
    */
-  async generateLoginQr(phone?: string): Promise<{ qrCode: string; status: string; expireAt: string }> {
+  async generateLoginQr(hostUrl: string): Promise<{ qrCode: string; token: string; status: string; expireAt: string }> {
     const timestamp = Date.now();
+    const token = 'zalo_qr_' + Math.random().toString(36).substring(2, 8) + timestamp.toString(36);
+    const expireAtMs = timestamp + 5 * 60 * 1000;
+    const expireAt = new Date(expireAtMs).toISOString();
+
+    // URL đăng nhập động khi quét QR từ điện thoại
+    const scanUrl = `${hostUrl.replace(/\/$/, '')}/api/zalo/personal/scan-auth?token=${token}`;
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(scanUrl)}`;
+
+    pendingQrSessions.set(token, {
+      token,
+      status: 'WAITING_FOR_SCAN',
+      expireAt: expireAtMs,
+    });
+
     const settings = await getSettings();
-    const targetPhone = (phone || settings.zaloPersonal?.phone || '0941615312').replace(/^\+?84/, '0').trim();
-
-    // Dùng link Zalo chuẩn (https://zalo.me/09xxxxxxxx) để khi quét bằng App Zalo sẽ mở Zalo profile/chat chuẩn, KHÔNG bị trắng màn hình của chat.zalo.me trên mobile
-    const qrData = `https://zalo.me/${targetPhone}`;
-    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrData)}`;
-    const expireAt = new Date(timestamp + 5 * 60 * 1000).toISOString();
-
     await saveSettings(
       {
         zaloPersonal: {
           ...(settings.zaloPersonal ?? {}),
-          phone: targetPhone,
           qrCode: qrCodeUrl,
           qrExpireAt: expireAt,
         },
@@ -58,9 +76,42 @@ export class ZaloPersonalService {
 
     return {
       qrCode: qrCodeUrl,
+      token,
       status: 'WAITING_FOR_SCAN',
       expireAt,
     };
+  }
+
+  /** Kiểm tra trạng thái quét QR từ Frontend (Polling). */
+  checkQrStatus(token: string): { status: string; phone?: string; name?: string } {
+    const session = pendingQrSessions.get(token);
+    if (!session) return { status: 'EXPIRED' };
+    if (Date.now() > session.expireAt) {
+      pendingQrSessions.delete(token);
+      return { status: 'EXPIRED' };
+    }
+    return {
+      status: session.status,
+      phone: session.phone,
+      name: session.name,
+    };
+  }
+
+  /** Xác nhận Đăng nhập thành công từ thiết bị di động đã quét QR. */
+  async confirmScanAuth(token: string, phone: string, name: string): Promise<ZaloPersonalStatus> {
+    const session = pendingQrSessions.get(token);
+    if (!session || Date.now() > session.expireAt) {
+      throw new Error('Mã QR đã hết hạn hoặc không hợp lệ.');
+    }
+
+    const normPhone = phone.replace(/^\+?84/, '0').trim();
+    const status = await this.connectSession({ phone: normPhone, name });
+
+    session.status = 'SUCCESS';
+    session.phone = normPhone;
+    session.name = name;
+
+    return status;
   }
 
   /** Lập tức lưu Session đăng nhập sau khi Admin quét QR hoặc kết nối thành công. */

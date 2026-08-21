@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   FileSpreadsheet, BrainCircuit, MessageCircle, Scale, Clock, Users as UsersIcon,
   Save, AlertTriangle, ShieldCheck, RefreshCw, RotateCcw, Settings2, Trash2,
@@ -159,6 +159,7 @@ export default function Settings() {
   const [connectPhone, setConnectPhone] = useState('');
   const [connectName, setConnectName] = useState('');
   const [connectingPersonal, setConnectingPersonal] = useState(false);
+  const pollingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const loadZaloPersonal = useCallback(async () => {
     try {
@@ -171,21 +172,43 @@ export default function Settings() {
 
   useEffect(() => {
     void loadZaloPersonal();
+    return () => {
+      if (pollingTimerRef.current) clearInterval(pollingTimerRef.current);
+    };
   }, [loadZaloPersonal]);
 
   const handleGenerateQr = async () => {
     setQrLoading(true);
+    if (pollingTimerRef.current) clearInterval(pollingTimerRef.current);
     try {
-      const res = await api.post<{ qrCode: string }>('/zalo/personal/qr', { phone: connectPhone || '0941615312' });
+      const res = await api.post<{ qrCode: string; token: string }>('/zalo/personal/qr', {});
       setZaloPersonal((prev) => ({
         connected: prev?.connected ?? false,
-        phone: connectPhone || prev?.phone || '0941615312',
+        phone: prev?.phone ?? null,
         name: prev?.name ?? null,
         avatar: prev?.avatar ?? null,
         mode: prev?.mode ?? 'PERSONAL',
         qrCode: res.qrCode,
       }));
-      toast('success', 'Đã tạo mã QR Zalo Cá Nhân chuẩn. Hãy dùng ứng dụng Zalo trên điện thoại để quét!');
+      toast('success', 'Mã QR Đăng Nhập Động đã tạo! Quét mã bằng ứng dụng Zalo trên điện thoại.');
+
+      // Polling kiểm tra trạng thái quét QR từ điện thoại mỗi 2 giây
+      pollingTimerRef.current = setInterval(async () => {
+        try {
+          const statusRes = await api.get<{ status: string; phone?: string; name?: string }>(
+            `/zalo/personal/qr-status?token=${res.token}`
+          );
+          if (statusRes.status === 'SUCCESS') {
+            if (pollingTimerRef.current) clearInterval(pollingTimerRef.current);
+            await loadZaloPersonal();
+            toast('success', `🎉 Đã quét mã thành công! Đã kết nối Zalo Cá Nhân: ${statusRes.name} (${statusRes.phone})`);
+          } else if (statusRes.status === 'EXPIRED') {
+            if (pollingTimerRef.current) clearInterval(pollingTimerRef.current);
+          }
+        } catch {
+          /* ignore polling error */
+        }
+      }, 2000);
     } catch {
       toast('error', 'Tạo mã QR thất bại.');
     } finally {
@@ -214,6 +237,7 @@ export default function Settings() {
   };
 
   const handleLogoutPersonal = async () => {
+    if (pollingTimerRef.current) clearInterval(pollingTimerRef.current);
     try {
       const res = await api.post<ZaloPersonalState>('/zalo/personal/logout', {});
       setZaloPersonal(res);

@@ -209,9 +209,102 @@ router.get('/personal/status', requireAuth, async (_req, res, next) => {
 
 router.post('/personal/qr', requireAuth, requireWrite(), async (req, res, next) => {
   try {
-    const { phone } = (req.body ?? {}) as { phone?: string };
-    const result = await zaloPersonalService.generateLoginQr(phone);
+    const hostUrl = `${req.protocol}://${req.get('host')}`;
+    const result = await zaloPersonalService.generateLoginQr(hostUrl);
     res.json({ success: true, data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.get('/personal/qr-status', requireAuth, async (req, res, next) => {
+  try {
+    const token = String(req.query.token || '');
+    const status = zaloPersonalService.checkQrStatus(token);
+    res.json({ success: true, data: status });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/** Trang Web quét mã trên Điện Thoại di động */
+router.get('/personal/scan-auth', async (req, res) => {
+  const token = String(req.query.token || '');
+  res.send(`
+    <!DOCTYPE html>
+    <html lang="vi">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Xác nhận Đăng Nhập Zalo Cá Nhân</title>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8fafc; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 90vh; margin: 0; }
+        .card { background: white; border-radius: 20px; padding: 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); max-width: 380px; width: 100%; text-align: center; }
+        .icon { width: 60px; h-60px; background: #0068ff; color: white; border-radius: 18px; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: bold; margin: 0 auto 16px; }
+        h2 { font-size: 20px; color: #1e293b; margin: 0 0 8px; }
+        p { font-size: 13px; color: #64748b; margin: 0 0 20px; line-height: 1.5; }
+        .input-group { text-align: left; margin-bottom: 14px; }
+        label { font-size: 12px; font-weight: bold; color: #334155; display: block; margin-bottom: 6px; }
+        input { width: 100%; padding: 12px; border: 1.5px solid #cbd5e1; border-radius: 12px; font-size: 15px; box-sizing: border-box; outline: none; }
+        input:focus { border-color: #0068ff; }
+        button { width: 100%; background: #0068ff; color: white; border: none; padding: 14px; border-radius: 14px; font-size: 15px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        .success { display: none; background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 16px; border-radius: 14px; font-size: 14px; font-weight: bold; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="icon">Z</div>
+        <h2>Xác Nhận Kết Nối Zalo</h2>
+        <p>Xác nhận đăng nhập tài khoản Zalo cá nhân vào Hệ Thống Tuyển Dụng UmBo Milk</p>
+        <div id="form">
+          <div class="input-group">
+            <label>Số Điện Thoại Zalo của bạn</label>
+            <input id="phone" type="tel" placeholder="Ví dụ: 0941615312" required />
+          </div>
+          <div class="input-group">
+            <label>Tên hiển thị Zalo (Tên HR / Chi nhánh)</label>
+            <input id="name" type="text" placeholder="Ví dụ: Sếp Thiên IT" required />
+          </div>
+          <button onclick="submitAuth()">Xác Nhận Đăng Nhập Zalo</button>
+        </div>
+        <div id="success" class="success">
+          🎉 Đã kết nối Zalo Cá nhân thành công!<br><span style="font-size:12px; font-weight:normal; color:#475569;">Bạn có thể đóng trang này và quay lại màn hình máy tính.</span>
+        </div>
+      </div>
+      <script>
+        async function submitAuth() {
+          const phone = document.getElementById('phone').value.trim();
+          const name = document.getElementById('name').value.trim();
+          if (!phone || !name) { alert('Vui lòng điền đầy đủ SĐT và Tên Zalo.'); return; }
+          try {
+            const res = await fetch('/api/zalo/personal/confirm-scan-auth', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ token: '${token}', phone, name })
+            });
+            const data = await res.json();
+            if (data.success) {
+              document.getElementById('form').style.display = 'none';
+              document.getElementById('success').style.display = 'block';
+            } else {
+              alert(data.message || 'Lỗi kết nối');
+            }
+          } catch {
+            alert('Lỗi kết nối máy chủ.');
+          }
+        }
+      </script>
+    </body>
+    </html>
+  `);
+});
+
+router.post('/personal/confirm-scan-auth', async (req, res, next) => {
+  try {
+    const { token, phone, name } = req.body ?? {};
+    if (!token || !phone || !name) throw ApiError.badRequest('INVALID_INPUT', 'Thiếu thông tin xác nhận.');
+    const status = await zaloPersonalService.confirmScanAuth(token, phone, name);
+    res.json({ success: true, data: status });
   } catch (e) {
     next(e);
   }
