@@ -364,7 +364,7 @@ export default function Training() {
                 {visible.map((r) => {
                   const isPendingConfirm = r.trangThaiTraining === 'CHUA_THAM_GIA';
                   const pvRealtimeStatus = getInterviewStatus(r.phongVanAt);
-                  const isPassDecision = r.hrDecision === 'PASS' || r.hrDecision === 'PASS_PV' || r.hrDecision === 'PASS_HS';
+                  const isPassDecision = r.hrDecision === 'PASS_PV' || r.hrDecision === 'PASS_HS';
                   const isInterviewPassed = isPassDecision && r.trangThaiTraining !== 'CHUA_THAM_GIA' && r.trangThaiTraining !== 'LOAI';
                   const isRestLocked = isPendingConfirm || (!isPassDecision && pvRealtimeStatus !== 'DA_PV') || !isInterviewPassed;
                   const isInterviewDone = (isPassDecision || r.hrDecision === 'FAIL' || r.trangThaiTraining === 'LOAI' || r.interviewStatus === 'QUA_PV' || r.interviewStatus === 'TRUOT_PV') && pvRealtimeStatus === 'DA_PV';
@@ -471,7 +471,7 @@ export default function Training() {
                                 </span>
                               )}
                             </div>
-                          ) : (r.hrDecision === 'PASS_PV' || r.hrDecision === 'PASS') && pvRealtimeStatus !== 'CHUA_PV' ? (
+                          ) : r.hrDecision === 'PASS_PV' && pvRealtimeStatus !== 'CHUA_PV' ? (
                             /* Đã PASS_PV -> Hiển thị thẻ ✅ ĐẠT PHỎNG VẤN */
                             <div className="flex flex-col items-center gap-1">
                               <div className="inline-flex items-center justify-center gap-1 px-3 py-1 rounded-xl text-xs font-black bg-emerald-600 text-white shadow-2xs">

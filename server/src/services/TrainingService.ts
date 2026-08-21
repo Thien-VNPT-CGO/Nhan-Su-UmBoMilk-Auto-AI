@@ -66,7 +66,8 @@ export class TrainingService {
     const now = new Date();
     return rows.map((c) => {
       const isFutureInterview = c.phongVanAt && new Date(c.phongVanAt) > now;
-      const effectiveHrDecision = (isFutureInterview && c.hrDecision !== 'PASS_HS') ? null : c.hrDecision;
+      const isRealGraded = c.hrDecision === 'PASS_PV' || c.hrDecision === 'PASS_HS' || c.hrDecision === 'FAIL';
+      const effectiveHrDecision = isRealGraded ? c.hrDecision : null;
       const effectiveInterviewStatus = (isFutureInterview && c.hrDecision !== 'PASS_HS') ? 'CHUA_PV' : c.interviewStatus;
       return {
         id: c.id,
