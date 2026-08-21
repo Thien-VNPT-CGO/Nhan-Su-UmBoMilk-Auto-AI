@@ -10,6 +10,9 @@ export function playNotificationSound() {
     const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     if (!AudioCtx) return;
     const ctx = new AudioCtx();
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => undefined);
+    }
 
     const now = ctx.currentTime;
     const osc1 = ctx.createOscillator();
@@ -43,12 +46,33 @@ export function playNotificationSound() {
 
 let swRegistration: ServiceWorkerRegistration | null = null;
 
-if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').then((reg) => {
-      swRegistration = reg;
-    }).catch(() => undefined);
-  });
+if (typeof window !== 'undefined') {
+  const unlockAudio = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (AudioCtx) {
+        const dummyCtx = new AudioCtx();
+        dummyCtx.resume().then(() => dummyCtx.close()).catch(() => undefined);
+      }
+    } catch {
+      /* ignore */
+    }
+  };
+  window.addEventListener('click', unlockAudio, { once: true });
+  window.addEventListener('keydown', unlockAudio, { once: true });
+
+  if ('serviceWorker' in navigator) {
+    const registerSW = () => {
+      navigator.serviceWorker.register('/sw.js').then((reg) => {
+        swRegistration = reg;
+      }).catch(() => undefined);
+    };
+    if (document.readyState === 'complete') {
+      registerSW();
+    } else {
+      window.addEventListener('load', registerSW);
+    }
+  }
 }
 
 /** Xin quyền thông báo Desktop từ trình duyệt */

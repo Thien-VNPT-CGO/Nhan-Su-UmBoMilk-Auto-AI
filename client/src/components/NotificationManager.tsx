@@ -79,21 +79,44 @@ export function NotificationManager() {
       notifyDesktop(`⏰ Nhắc lịch phỏng vấn với Sếp ${candidateName}!`, item.message, '/training');
     };
 
+    const handleNotificationNew = (data: { title?: string; body?: string; url?: string }) => {
+      if (!data?.title) return;
+      const item: ToastItem = {
+        id: String(Date.now()),
+        title: data.title,
+        candidateName: 'Hệ thống',
+        message: data.body || '',
+        type: 'ACCEPT',
+        url: data.url || '/candidates',
+      };
+      setActiveToast(item);
+      notifyDesktop(data.title, data.body || '', data.url);
+    };
+
     socket.on('zalo:ai_confirmed', handleAiConfirmed);
     socket.on('interview:remind_hr', handleInterviewRemind);
+    socket.on('notification:new', handleNotificationNew);
 
     return () => {
       socket.off('zalo:ai_confirmed', handleAiConfirmed);
       socket.off('interview:remind_hr', handleInterviewRemind);
+      socket.off('notification:new', handleNotificationNew);
     };
   }, []);
 
-  const handleEnableNotifications = async () => {
+  const handleTestNotification = async () => {
     const res = await requestNotificationPermission();
     setPermission(res);
-    if (res === 'granted') {
-      notifyDesktop('🎉 Đã bật thông báo Desktop thành công!', 'Bạn sẽ nhận được thông báo ngay khi ứng viên xác nhận PV.');
-    }
+    const testItem: ToastItem = {
+      id: String(Date.now()),
+      title: '🔔 THỬ NGHIỆM THÔNG BÁO THÀNH CÔNG!',
+      candidateName: 'Hệ Thống HR',
+      message: 'Âm thanh chuông & thông báo Desktop máy tính hoạt động hoàn hảo!',
+      type: 'ACCEPT',
+      url: '/training',
+    };
+    setActiveToast(testItem);
+    notifyDesktop('🔔 Thử thông báo Hệ thống HR', 'Âm thanh chuông & thông báo Desktop máy tính đang hoạt động rất tốt!', '/training');
   };
 
   const handleToastClick = () => {
@@ -105,17 +128,22 @@ export function NotificationManager() {
 
   return (
     <>
-      {/* Nút Trạng Thái Thông Báo Trên Header */}
+      {/* Nút Trạng Thái Thông Báo Trên Header (Bấm để thử nghiệm) */}
       {permission === 'granted' ? (
-        <div className="flex items-center gap-1 text-[11px] font-semibold text-pink-600 bg-pink-50 px-2.5 py-1 rounded-full border border-pink-200/80" title="Thông báo Desktop máy tính đang hoạt động">
-          <Bell size={13} className="animate-pulse" />
-          <span>Desktop Notify Active</span>
-        </div>
+        <button
+          type="button"
+          onClick={handleTestNotification}
+          className="flex items-center gap-1.5 text-[11px] font-bold text-pink-700 bg-pink-50 hover:bg-pink-100 px-3 py-1 rounded-full border border-pink-200 transition-all shadow-2xs cursor-pointer"
+          title="Bấm vào đây để thử nghiệm âm thanh chuông & thông báo Desktop máy tính"
+        >
+          <Bell size={13} className="animate-pulse text-pink-600" />
+          <span>Desktop Notify Active (Bấm thử)</span>
+        </button>
       ) : (
         <button
           type="button"
-          onClick={handleEnableNotifications}
-          className="flex items-center gap-1.5 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 px-3 py-1 rounded-full border border-amber-200 transition-all shadow-2xs"
+          onClick={handleTestNotification}
+          className="flex items-center gap-1.5 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 px-3 py-1 rounded-full border border-amber-200 transition-all shadow-2xs cursor-pointer"
           title="Bấm để cho phép trình duyệt gửi thông báo đẩy Desktop khi có ứng viên xác nhận PV"
         >
           <BellOff size={14} />
