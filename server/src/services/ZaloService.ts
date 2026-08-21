@@ -172,6 +172,57 @@ export class ZaloService {
     return { ok: r.ok, status: r.status };
   }
 
+  /** Gửi thông báo kết quả PV (ĐẠT / LOẠI) tự động qua Zalo cho ứng viên. */
+  async sendInterviewOutcomeNotice(
+    candidateId: string,
+    decision: 'PASS_PV' | 'PASS_HS' | 'FAIL',
+    note?: string
+  ): Promise<{ ok: boolean; provider: string; messageId?: string }> {
+    const c = await prisma.candidate.findUnique({ where: { id: candidateId } });
+    if (!c) throw new Error('Không tìm thấy ứng viên');
+
+    const nameGreeting = c.tenUv.trim().toLowerCase().startsWith('sếp') ? c.tenUv.trim() : `Sếp ${c.tenUv.trim()}`;
+
+    let content = '';
+
+    if (decision === 'PASS_PV' || decision === 'PASS_HS') {
+      const typeLabel = decision === 'PASS_HS' ? 'ĐẠT HỒ SƠ' : 'ĐẠT PHỎNG VẤN';
+      content = [
+        '🐮 [UMBO MILK] – THÔNG BÁO KẾT QUẢ TUYỂN DỤNG 🎉',
+        '',
+        `Chào ${nameGreeting} ❤️`,
+        `Chúc mừng bạn đã xuất sắc đạt kết quả (${typeLabel}) trong đợt tuyển dụng của UMBO MILK!`,
+        '',
+        '📌 THÔNG TIN NHẬN VIỆC & ĐÀO TẠO:',
+        `• 🏢 Chi nhánh chính thức: ${c.chiNhanh || 'Đang xếp chi nhánh'}`,
+        `• ⏱️ Ca làm việc chính thức: ${c.caLam || 'Đang xếp ca'}`,
+        `• 📅 Ngày bắt đầu đào tạo: ${c.ngayBatDauTraining ? formatDate(c.ngayBatDauTraining) : 'Theo lịch hẹn'}`,
+        '',
+        '📌 HỒ SƠ CẦN CHUẨN BỊ KHI NHẬN CA:',
+        '1. Bản photo CCCD/CMND (kèm bản gốc để đối chiếu)',
+        '2. Sơ yếu lý lịch / Giấy xác nhận hạnh kiểm',
+        '3. 2 ảnh thẻ 3x4',
+        '',
+        note ? `📝 Ghi chú từ HR: ${note}\n` : '',
+        'Vui lòng có mặt đúng giờ và giữ liên lạc với Quản lý chi nhánh nhé! Chúc bạn làm việc hiệu quả tại UMBO MILK! ✨',
+      ].filter(Boolean).join('\n');
+    } else {
+      content = [
+        '🐮 [UMBO MILK] – THƯ CẢM ƠN TỪ HỆ THỐNG TUYỂN DỤNG 💌',
+        '',
+        `Chào ${nameGreeting},`,
+        'Cảm ơn bạn đã dành thời gian tham gia ứng tuyển và phỏng vấn vị trí công việc tại UMBO MILK.',
+        '',
+        'Rất tiếc tại thời điểm này, lịch làm việc hoặc thông tin ứng tuyển của bạn chưa thực sự phù hợp nhất với chỉ tiêu ca làm đợt này. UMBO MILK xin phép lưu lại thông tin của bạn và sẽ chủ động liên hệ khi có vị trí phù hợp trong tương lai.',
+        '',
+        'Chúc bạn luôn nhiều sức khỏe, may mắn và thành công trên con đường sự nghiệp! ✨',
+      ].join('\n');
+    }
+
+    const r = await this.sendRaw(c.sdtZalo, content, c.id);
+    return { ok: r.ok, provider: r.provider, messageId: r.messageId };
+  }
+
 
   // Stubs cho backwards compatibility
   async tryResolveAndSaveUserId(_candidateId: string, _phone: string): Promise<string | null> {

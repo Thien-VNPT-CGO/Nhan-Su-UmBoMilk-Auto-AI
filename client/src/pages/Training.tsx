@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GraduationCap, CalendarDays, Send, RefreshCw, Briefcase, Video, CheckCircle2, XCircle, FileCheck } from 'lucide-react';
+import { GraduationCap, CalendarDays, Send, RefreshCw, Briefcase, Video, CheckCircle2, XCircle, FileCheck, FileText } from 'lucide-react';
 import { api, ApiError } from '../api/client';
 import { Badge, Skeleton, EmptyState, Modal, Field, ConfirmDialog } from '../components/ui';
+import InterviewScoreModal from '../components/InterviewScoreModal';
 import { useToast } from '../stores/Toast';
 import { useAuth } from '../stores/auth';
 import { getSocket } from '../api/socket';
@@ -16,6 +17,7 @@ interface TrainingRow {
   chiNhanh: string;
   caLam: string;
   sdtZalo: string;
+  kinhNghiem?: string;
   ngayBatDauTraining: string | null;
   trangThaiTraining: string | null;
   soNgayDaTraining: number;
@@ -23,6 +25,7 @@ interface TrainingRow {
   ggMeetLink: string | null;
   interviewStatus: string | null;
   hrDecision: string | null;
+  hrReason?: string | null;
   dataVersion: number;
 }
 
@@ -203,25 +206,38 @@ export default function Training() {
     }
   };
 
-  const handleUpdateInterviewDecision = async (id: string, decision: 'PASS_PV' | 'PASS_HS' | 'FAIL') => {
+  const [scoreModalCandidate, setScoreModalCandidate] = useState<TrainingRow | null>(null);
+
+  const handleUpdateInterviewDecision = async (id: string, decision: 'PASS_PV' | 'PASS_HS' | 'FAIL', note?: string) => {
     try {
-      if (decision === 'PASS_PV') {
-        await api.patch(`/candidates/${id}/interview`, { hrDecision: 'PASS_PV', interviewStatus: 'QUA_PV' });
+      if (decision === 'PASS_PV' || decision === 'PASS_HS') {
+        await api.patch(`/candidates/${id}/interview`, {
+          hrDecision: decision,
+          hrReason: note,
+          interviewStatus: 'QUA_PV',
+          sendZaloNotice: true,
+        });
         await api.patch(`/training/${id}`, { trangThaiTraining: 'BAT_DAU' });
-        toast('success', '🎉 Đã cập nhật ứng viên ĐẠT PHỎNG VẤN (PASS PV)!');
-      } else if (decision === 'PASS_HS') {
-        await api.patch(`/candidates/${id}/interview`, { hrDecision: 'PASS_HS', interviewStatus: 'QUA_PV' });
-        await api.patch(`/training/${id}`, { trangThaiTraining: 'BAT_DAU' });
-        toast('success', '🎉 Đã cập nhật ứng viên ĐẠT HỒ SƠ (PASS HS)! Đã mở khóa các thao tác chốt ca & lịch.');
+        toast('success', `🎉 Đã cập nhật ứng viên ${decision === 'PASS_HS' ? 'ĐẠT HỒ SƠ' : 'ĐẠT PHỎNG VẤN'} & tự động gửi Zalo thông báo!`);
       } else {
-        await api.patch(`/candidates/${id}/interview`, { hrDecision: 'FAIL', interviewStatus: 'TRUOT_PV' });
+        await api.patch(`/candidates/${id}/interview`, {
+          hrDecision: 'FAIL',
+          hrReason: note,
+          interviewStatus: 'TRUOT_PV',
+          sendZaloNotice: true,
+        });
         await api.patch(`/training/${id}`, { trangThaiTraining: 'LOAI' });
-        toast('error', '❌ Đã cập nhật ứng viên FAIL (Trượt phỏng vấn).');
+        toast('error', '❌ Đã cập nhật ứng viên FAIL (Trượt phỏng vấn) & gửi tin cảm ơn Zalo.');
       }
       void load();
     } catch (e) {
       toast('error', e instanceof ApiError ? e.message : 'Cập nhật kết quả phỏng vấn thất bại.');
     }
+  };
+
+  const handleScoreSuccess = async (decision: 'PASS_PV' | 'PASS_HS' | 'FAIL', note: string, score: number) => {
+    if (!scoreModalCandidate) return;
+    await handleUpdateInterviewDecision(scoreModalCandidate.id, decision, note);
   };
 
   const [bookedInterviews, setBookedInterviews] = useState<{ id: string; tenUv: string; phongVanAt: string }[]>([]);
@@ -444,21 +460,42 @@ export default function Training() {
                             <span className="text-[10px] font-semibold text-rose-600 italic">⏳ CHỜ UV XÁC NHẬN ZALO</span>
                           ) : r.hrDecision === 'PASS_HS' ? (
                             /* Đã PASS_HS -> Hiển thị thẻ 📄 ĐẠT HỒ SƠ */
-                            <div className="inline-flex items-center justify-center gap-1 px-3 py-1 rounded-xl text-xs font-black bg-teal-600 text-white shadow-2xs">
-                              <FileCheck size={15} />
-                              <span>📄 ĐẠT HỒ SƠ</span>
+                            <div className="flex flex-col items-center gap-1">
+                              <div className="inline-flex items-center justify-center gap-1 px-3 py-1 rounded-xl text-xs font-black bg-teal-600 text-white shadow-2xs">
+                                <FileCheck size={15} />
+                                <span>📄 ĐẠT HỒ SƠ</span>
+                              </div>
+                              {r.hrReason && (
+                                <span className="text-[10px] text-slate-600 bg-teal-50 px-2 py-0.5 rounded-lg border border-teal-200/80 max-w-[200px] truncate" title={`Nhận xét từ HR: ${r.hrReason}`}>
+                                  📝 {r.hrReason}
+                                </span>
+                              )}
                             </div>
                           ) : (r.hrDecision === 'PASS_PV' || r.hrDecision === 'PASS') && pvRealtimeStatus !== 'CHUA_PV' ? (
                             /* Đã PASS_PV -> Hiển thị thẻ ✅ ĐẠT PHỎNG VẤN */
-                            <div className="inline-flex items-center justify-center gap-1 px-3 py-1 rounded-xl text-xs font-black bg-emerald-600 text-white shadow-2xs">
-                              <CheckCircle2 size={15} />
-                              <span>✅ ĐẠT PHỎNG VẤN</span>
+                            <div className="flex flex-col items-center gap-1">
+                              <div className="inline-flex items-center justify-center gap-1 px-3 py-1 rounded-xl text-xs font-black bg-emerald-600 text-white shadow-2xs">
+                                <CheckCircle2 size={15} />
+                                <span>✅ ĐẠT PHỎNG VẤN</span>
+                              </div>
+                              {r.hrReason && (
+                                <span className="text-[10px] text-slate-600 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200/80 max-w-[200px] truncate" title={`Nhận xét từ HR: ${r.hrReason}`}>
+                                  📝 {r.hrReason}
+                                </span>
+                              )}
                             </div>
                           ) : r.hrDecision === 'FAIL' || r.trangThaiTraining === 'LOAI' ? (
                             /* Đã FAIL -> Hiển thị thẻ ❌ TRƯỢT (FAIL) */
-                            <div className="inline-flex items-center justify-center gap-1 px-3 py-1 rounded-xl text-xs font-black bg-rose-600 text-white shadow-2xs">
-                              <XCircle size={15} />
-                              <span>❌ TRƯỢT (FAIL)</span>
+                            <div className="flex flex-col items-center gap-1">
+                              <div className="inline-flex items-center justify-center gap-1 px-3 py-1 rounded-xl text-xs font-black bg-rose-600 text-white shadow-2xs">
+                                <XCircle size={15} />
+                                <span>❌ TRƯỢT (FAIL)</span>
+                              </div>
+                              {r.hrReason && (
+                                <span className="text-[10px] text-rose-600 bg-rose-50 px-2 py-0.5 rounded-lg border border-rose-200/80 max-w-[200px] truncate" title={`Nhận xét từ HR: ${r.hrReason}`}>
+                                  📝 {r.hrReason}
+                                </span>
+                              )}
                             </div>
                           ) : pvRealtimeStatus === 'CHUA_PV' ? (
                             <div className="flex flex-col items-center justify-center gap-1">
@@ -469,17 +506,26 @@ export default function Training() {
                               </div>
                               <button
                                 type="button"
-                                onClick={() => handleUpdateInterviewDecision(r.id, 'PASS_HS')}
-                                className="bg-teal-600 hover:bg-teal-700 text-white !py-0.5 !px-2 text-[10px] font-extrabold shadow-2xs rounded-lg flex items-center gap-0.5 transition-all hover:scale-102 cursor-pointer"
-                                title="Chấm ĐẠT HỒ SƠ ngay lập tức (Không cần chờ phỏng vấn, mở chốt ca & lịch)"
+                                onClick={() => setScoreModalCandidate(r)}
+                                className="bg-indigo-600 hover:bg-indigo-700 text-white !py-0.5 !px-2 text-[10px] font-extrabold shadow-2xs rounded-lg flex items-center gap-0.5 transition-all hover:scale-102 cursor-pointer"
+                                title="Mở phiếu chấm điểm phỏng vấn theo bộ tiêu chí CÓ KN / KHÔNG KN"
                               >
-                                <FileCheck size={11} />
-                                <span>📄 Đạt Hồ Sơ (Mở chốt ca)</span>
+                                <FileText size={11} />
+                                <span>📝 Bảng điểm PV</span>
                               </button>
                             </div>
                           ) : (
-                            /* Đã PV / Đang PV hoặc sẵn sàng chốt -> Cho phép HR chọn PASS PV / PASS HS / FAIL */
+                            /* Đã PV / Đang PV hoặc sẵn sàng chốt -> Cho phép HR chọn PASS PV / PASS HS / FAIL hoặc Mở Bảng điểm */
                             <div className="flex flex-wrap items-center justify-center gap-1 pt-0.5">
+                              <button
+                                type="button"
+                                onClick={() => setScoreModalCandidate(r)}
+                                className="bg-indigo-600 hover:bg-indigo-700 text-white !py-1 !px-2.5 text-[10px] font-extrabold shadow-2xs rounded-xl flex items-center gap-1 hover:scale-102 transition-all cursor-pointer"
+                                title="Mở Phiếu Chấm Điểm Phỏng Vấn Nhanh (Có KN / Không KN)"
+                              >
+                                <FileText size={12} />
+                                <span>📝 Bảng điểm PV</span>
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => handleUpdateInterviewDecision(r.id, 'PASS_PV')}
@@ -768,6 +814,17 @@ export default function Training() {
           </button>
         </div>
       </Modal>
+
+      {scoreModalCandidate && (
+        <InterviewScoreModal
+          open={!!scoreModalCandidate}
+          onClose={() => setScoreModalCandidate(null)}
+          candidateId={scoreModalCandidate.id}
+          candidateName={scoreModalCandidate.tenUv}
+          kinhNghiem={scoreModalCandidate.kinhNghiem}
+          onSuccess={handleScoreSuccess}
+        />
+      )}
     </div>
   );
 }

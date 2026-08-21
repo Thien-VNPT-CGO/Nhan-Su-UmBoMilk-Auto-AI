@@ -282,6 +282,8 @@ const interviewPatchSchema = z.object({
   ggMeetLink: z.string().optional(),
   interviewStatus: z.enum(['CHUA_PV', 'DA_PV', 'QUA_PV', 'TRUOT_PV', 'VANG']).optional(),
   hrDecision: z.string().optional(),
+  hrReason: z.string().optional(),
+  sendZaloNotice: z.boolean().optional(),
   resend: z.boolean().optional(),
 });
 
@@ -290,7 +292,7 @@ router.patch('/:id/interview', requireWrite(), async (req: AuthedRequest, res, n
   try {
     const parsed = interviewPatchSchema.safeParse(req.body);
     if (!parsed.success) throw ApiError.badRequest('INVALID_INPUT', 'Dữ liệu không hợp lệ.');
-    const { phongVanAt, ggMeetLink, interviewStatus, hrDecision, resend } = parsed.data;
+    const { phongVanAt, ggMeetLink, interviewStatus, hrDecision, hrReason, sendZaloNotice, resend } = parsed.data;
 
     let phongVanAtDate: Date | undefined;
     if (phongVanAt) {
@@ -308,6 +310,7 @@ router.patch('/:id/interview', requireWrite(), async (req: AuthedRequest, res, n
       ggMeetLink,
       interviewStatus,
       hrDecision,
+      hrReason,
     });
 
     let zalo: { ok: boolean; provider: string; messageId?: string } | null = null;
@@ -317,6 +320,13 @@ router.patch('/:id/interview', requireWrite(), async (req: AuthedRequest, res, n
       } catch (e) {
         zalo = { ok: false, provider: 'ERROR' };
         console.error('Zalo interview resend failed:', e);
+      }
+    } else if (sendZaloNotice && hrDecision && ['PASS_PV', 'PASS_HS', 'FAIL'].includes(hrDecision)) {
+      try {
+        zalo = await zaloService.sendInterviewOutcomeNotice(candidate.id, hrDecision as 'PASS_PV' | 'PASS_HS' | 'FAIL', hrReason);
+      } catch (e) {
+        zalo = { ok: false, provider: 'ERROR' };
+        console.error('Zalo interview outcome notice failed:', e);
       }
     }
     res.json({ success: true, data: candidate, zalo });

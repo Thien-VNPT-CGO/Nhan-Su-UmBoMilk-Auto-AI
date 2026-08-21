@@ -74,6 +74,7 @@ export class TrainingService {
         chiNhanh: c.chiNhanh,
         caLam: c.caLam,
         sdtZalo: c.sdtZalo,
+        kinhNghiem: c.kinhNghiem,
         ngayBatDauTraining: c.ngayBatDauTraining,
         trangThaiTraining: c.trangThaiTraining,
         soNgayDaTraining: new Set(c.attendanceEvents.map((a) => a.date)).size,
@@ -81,6 +82,7 @@ export class TrainingService {
         ggMeetLink: c.ggMeetLink,
         interviewStatus: effectiveInterviewStatus,
         hrDecision: effectiveHrDecision,
+        hrReason: c.hrReason,
         dataVersion: c.dataVersion,
         ngayHomNay: dateKey(),
       };
