@@ -162,8 +162,8 @@ export default function Settings() {
 
   const loadZaloPersonal = useCallback(async () => {
     try {
-      const res = await api.get<{ data: ZaloPersonalState }>('/zalo/personal/status');
-      setZaloPersonal(res.data);
+      const res = await api.get<ZaloPersonalState>('/zalo/personal/status');
+      setZaloPersonal(res);
     } catch {
       /* fallback */
     }
@@ -176,14 +176,14 @@ export default function Settings() {
   const handleGenerateQr = async () => {
     setQrLoading(true);
     try {
-      const res = await api.post<{ data: { qrCode: string } }>('/zalo/personal/qr', {});
+      const res = await api.post<{ qrCode: string }>('/zalo/personal/qr', {});
       setZaloPersonal((prev) => ({
         connected: prev?.connected ?? false,
         phone: prev?.phone ?? null,
         name: prev?.name ?? null,
         avatar: prev?.avatar ?? null,
         mode: prev?.mode ?? 'PERSONAL',
-        qrCode: res.data.qrCode,
+        qrCode: res.qrCode,
       }));
       toast('success', 'Đã tạo mã QR Đăng nhập Zalo Cá Nhân. Hãy dùng Zalo trên điện thoại để quét!');
     } catch {
@@ -200,12 +200,12 @@ export default function Settings() {
     }
     setConnectingPersonal(true);
     try {
-      const res = await api.post<{ data: ZaloPersonalState }>('/zalo/personal/connect', {
+      const res = await api.post<ZaloPersonalState>('/zalo/personal/connect', {
         phone: connectPhone,
         name: connectName,
       });
-      setZaloPersonal(res.data);
-      toast('success', `Đã kết nối tài khoản Zalo Cá Nhân: ${res.data.name} (${res.data.phone})`);
+      setZaloPersonal(res);
+      toast('success', `Đã kết nối tài khoản Zalo Cá Nhân: ${res.name} (${res.phone})`);
     } catch {
       toast('error', 'Kết nối Zalo cá nhân thất bại.');
     } finally {
