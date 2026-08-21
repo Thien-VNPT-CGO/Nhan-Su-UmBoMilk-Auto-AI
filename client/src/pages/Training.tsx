@@ -105,7 +105,51 @@ export default function Training() {
     };
   }, [load]);
 
-  const openEditModal = (r: TrainingRow) => {
+  const [autoDetectRow, setAutoDetectRow] = useState<TrainingRow | null>(null);
+  const [pastedZaloText, setPastedZaloText] = useState('');
+  const [detecting, setDetecting] = useState(false);
+
+  const confirmZaloManual = async (r: TrainingRow) => {
+    try {
+      await api.patch(`/training/${r.id}`, { trangThaiTraining: 'SAP_BAT_DAU' });
+      toast('success', `🎉 Đã xác nhận Zalo cho Sếp ${r.tenUv}! Trạng thái chuyển sang "Sắp bắt đầu training".`);
+      void load();
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Xác nhận thất bại.');
+    }
+  };
+
+  const handleAutoDetectReply = async () => {
+    if (!autoDetectRow || !pastedZaloText.trim()) return;
+    setDetecting(true);
+    try {
+      const res = await api.post<{ processed: boolean; action?: string; newStatus?: string }>(
+        `/candidates/${autoDetectRow.id}/auto-detect-zalo-reply`,
+        { content: pastedZaloText }
+      );
+      if (res.processed) {
+        if (res.action === 'CONFIRMED_ACCEPT') {
+          toast('success', `🤖 AI đã nhận diện thành công: ${autoDetectRow.tenUv} XÁC NHẬN THAM GIA!`);
+        } else if (res.action === 'CONFIRMED_REJECT') {
+          toast('error', `🤖 AI đã nhận diện: ${autoDetectRow.tenUv} TỪ CHỐI tham gia.`);
+        }
+        setAutoDetectRow(null);
+        setPastedZaloText('');
+        void load();
+      } else {
+        toast('error', 'AI chưa tìm thấy từ khóa xác nhận/từ chối rõ ràng trong tin nhắn này.');
+      }
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Xử lý thất bại.');
+    } finally {
+      setDetecting(false);
+    }
+  };
+
+  const openEditModal = async (r: TrainingRow) => {
+    if (r.trangThaiTraining === 'CHUA_THAM_GIA') {
+      await confirmZaloManual(r);
+    }
     setEdit(r);
     setStartDate(r.ngayBatDauTraining ? r.ngayBatDauTraining.slice(0, 10) : dateKey());
     setNewShift(r.caLam || '');
@@ -408,11 +452,25 @@ export default function Training() {
 
                       <td className="table-td">
                         {isPendingConfirm ? (
-                          <div className="flex flex-col gap-0.5">
-                            <span className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold bg-rose-600 text-white border border-rose-700 shadow-2xs animate-pulse">
-                              ⏳ CHỜ UV XÁC NHẬN ZALO
-                            </span>
-                            <span className="text-[10px] text-rose-600 font-semibold italic text-center">🔒 Khóa thao tác đến khi UV xác nhận Zalo</span>
+                          <div className="flex flex-col gap-1.5 items-center min-w-[150px]">
+                            <button
+                              type="button"
+                              onClick={() => confirmZaloManual(r)}
+                              className="w-full inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-700 shadow-2xs transition-all cursor-pointer animate-pulse"
+                              title="Click khi ứng viên đã nhắn 'XÁC NHẬN THAM GIA' trên Zalo để mở khóa & chuyển sang Sắp bắt đầu training"
+                            >
+                              <span>✅ UV Đã Xác Nhận Zalo</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAutoDetectRow(r);
+                                setPastedZaloText('');
+                              }}
+                              className="text-[10px] text-brand-600 hover:text-brand-700 underline font-semibold flex items-center gap-1"
+                            >
+                              <span>⚡ AI Quét tin nhắn phản hồi</span>
+                            </button>
                           </div>
                         ) : r.trangThaiTraining === 'SAP_BAT_DAU' ? (
                           <select
@@ -444,16 +502,14 @@ export default function Training() {
                       <td className="table-td">
                         <div className="flex items-center gap-1">
                           <button
-                            className="btn-primary !px-2.5 !py-1.5 !text-xs disabled:opacity-40 disabled:cursor-not-allowed"
-                            disabled={isPendingConfirm}
+                            className="btn-primary !px-2.5 !py-1.5 !text-xs"
                             onClick={() => openEditModal(r)}
-                            title={isPendingConfirm ? 'Khóa thao tác: Vui lòng chờ ứng viên bấm xác nhận qua Zalo' : 'Cập nhật chi nhánh, ca làm & ngày bắt đầu'}
+                            title="Cập nhật chi nhánh, ca làm & ngày bắt đầu chính thức"
                           >
                             Chốt ca & lịch
                           </button>
                           <button
-                            className="btn-secondary !px-2.5 !py-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
-                            disabled={isPendingConfirm}
+                            className="btn-secondary !px-2.5 !py-1.5"
                             onClick={() => navigate(`/shifts`)}
                           >
                             <CalendarDays size={13} />
@@ -633,7 +689,28 @@ export default function Training() {
           </button>
         </div>
       </Modal>
+
+      <Modal open={!!autoDetectRow} onClose={() => setAutoDetectRow(null)} title={`⚡ AI Quét Nhận Diện Zalo – ${autoDetectRow?.tenUv ?? ''}`}>
+        <div className="space-y-4">
+          <p className="text-xs text-slate-600">
+            Dán nội dung tin nhắn Zalo ứng viên vừa gửi (ví dụ: <i>"Xác nhận tham gia"</i>, <i>"Em đồng ý phỏng vấn"</i>, <i>"Tối nay em bận"</i>,...). AI sẽ tự động phân tích và cập nhật trạng thái hồ sơ!
+          </p>
+          <Field label="Nội dung tin nhắn từ Zalo">
+            <textarea
+              className="input min-h-[90px] text-xs font-sans"
+              placeholder="Dán nội dung tin nhắn của ứng viên vào đây..."
+              value={pastedZaloText}
+              onChange={(e) => setPastedZaloText(e.target.value)}
+            />
+          </Field>
+          <div className="flex justify-end gap-2">
+            <button className="btn-secondary text-xs" onClick={() => setAutoDetectRow(null)}>Hủy</button>
+            <button className="btn-primary text-xs font-bold" onClick={handleAutoDetectReply} disabled={detecting || !pastedZaloText.trim()}>
+              {detecting ? 'AI đang phân tích...' : '🤖 AI Quét & Cập nhật'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
-
 }
