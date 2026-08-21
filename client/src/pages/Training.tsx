@@ -354,16 +354,16 @@ export default function Training() {
             <table className="w-full">
               <thead className="bg-slate-50/80">
                 <tr>
-                  <th className="table-th">Mã UV</th>
-                  <th className="table-th">Tên</th>
-                  <th className="table-th">SĐT</th>
-                  <th className="table-th">Chi nhánh</th>
-                  <th className="table-th">Ca</th>
-                  <th className="table-th">Lịch phỏng vấn & Đánh giá</th>
-                  <th className="table-th">Ngày bắt đầu</th>
-                  <th className="table-th">Số ngày</th>
-                  <th className="table-th">Trạng thái</th>
-                  <th className="table-th">Thao tác</th>
+                  <th className="table-th min-w-[110px]">Mã UV</th>
+                  <th className="table-th min-w-[140px]">Tên</th>
+                  <th className="table-th min-w-[110px]">SĐT</th>
+                  <th className="table-th min-w-[180px]">Chi nhánh</th>
+                  <th className="table-th min-w-[140px]">Ca</th>
+                  <th className="table-th min-w-[230px]">Lịch phỏng vấn & Đánh giá</th>
+                  <th className="table-th min-w-[120px]">Ngày bắt đầu</th>
+                  <th className="table-th min-w-[90px]">Số ngày</th>
+                  <th className="table-th min-w-[240px]">Trạng thái</th>
+                  <th className="table-th min-w-[260px]">Thao tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -415,7 +415,7 @@ export default function Training() {
                           </button>
                         )}
                       </td>
-                      <td className="table-td min-w-[220px]">
+                      <td className="table-td min-w-[230px]">
                         <div className="flex flex-col items-center justify-center gap-1">
                           <div className="flex items-center justify-center gap-1">
                             <span className="text-[11px] font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-lg border border-slate-200">
@@ -578,7 +578,7 @@ export default function Training() {
                           {r.soNgayDaTraining}/7
                         </span>
                       </td>
-                      <td className="table-td">
+                      <td className="table-td min-w-[240px]">
                         {isPendingConfirm ? (
                           <div className="flex flex-col items-center justify-center gap-0.5">
                             <span className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold bg-rose-600 text-white border border-rose-700 shadow-2xs animate-pulse">
@@ -611,7 +611,7 @@ export default function Training() {
                           <select
                             disabled={!isAdmin}
                             className={cn(
-                              'input !py-1.5 !text-xs font-bold rounded-xl shadow-2xs text-center mx-auto transition-all',
+                              'input !py-1.5 !text-xs font-bold rounded-xl shadow-2xs text-center mx-auto transition-all w-full',
                               !isAdmin
                                 ? 'bg-slate-100 text-slate-500 cursor-not-allowed border-slate-300 opacity-80'
                                 : 'bg-emerald-600 text-white border-emerald-700 cursor-pointer hover:bg-emerald-700'
@@ -641,8 +641,7 @@ export default function Training() {
                         )}
                       </td>
 
-                      {/* Cột Thao Tác */}
-                      <td className="table-td min-w-[210px]">
+                      <td className="table-td min-w-[260px]">
                         <div className="flex flex-col items-center justify-center gap-1.5">
                           <div className="flex items-center justify-center gap-1">
                             <button
@@ -670,7 +669,6 @@ export default function Training() {
                             </button>
                           </div>
 
-                          {/* Nút 💬 Mở App Zalo gửi Lịch Training */}
                           {(r.ngayBatDauTraining || r.trangThaiTraining === 'SAP_BAT_DAU' || r.trangThaiTraining === 'BAT_DAU') && (
                             <button
                               type="button"
