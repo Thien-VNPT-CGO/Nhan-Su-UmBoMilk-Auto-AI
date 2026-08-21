@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Award, CheckCircle2, XCircle, AlertTriangle, FileCheck, HelpCircle } from 'lucide-react';
 import { Modal } from './ui';
+import { cn } from '../utils/format';
 
 interface QuestionItem {
   id: string;
@@ -160,6 +161,7 @@ interface InterviewScoreModalProps {
   candidateId: string;
   candidateName: string;
   kinhNghiem?: string;
+  hrDecision?: string | null;
   onSuccess: (decision: 'PASS_PV' | 'PASS_HS' | 'FAIL', note: string, score: number) => void;
 }
 
@@ -169,8 +171,11 @@ export default function InterviewScoreModal({
   candidateId,
   candidateName,
   kinhNghiem,
+  hrDecision,
   onSuccess,
 }: InterviewScoreModalProps) {
+  const isPassPv = hrDecision === 'PASS_PV' || hrDecision === 'PASS_HS';
+
   const hasExperience = Boolean(
     kinhNghiem &&
     kinhNghiem !== 'Chưa có kinh nghiệm' &&
@@ -186,6 +191,7 @@ export default function InterviewScoreModal({
   const maxScore = mode === 'CO_KN' ? 13 : 18;
 
   const handleSelectAnswer = (qId: string, val: number | 'LOAI') => {
+    if (!isPassPv) return;
     setAnswers((prev) => ({ ...prev, [qId]: val }));
   };
 
@@ -218,12 +224,16 @@ export default function InterviewScoreModal({
   const hasAnsweredAny = Object.keys(answers).length > 0;
 
   const handleConfirm = (decision: 'PASS_PV' | 'PASS_HS' | 'FAIL') => {
-    if ((decision === 'PASS_HS' || decision === 'PASS_PV') && !hasAnsweredAny) {
-      alert('⚠️ Vui lòng chọn các câu hỏi trong Bảng tiêu chí chấm điểm phỏng vấn trước khi chốt PASS!');
+    if (decision === 'PASS_HS' && !isPassPv) {
+      alert('⚠️ Bạn vui lòng bấm nút "Chốt ĐẠT PHỎNG VẤN (PASS PV)" trước khi chốt ĐẠT HỒ SƠ!');
       return;
     }
-    if ((decision === 'PASS_HS' || decision === 'PASS_PV') && isLoai) {
-      alert('⚠️ Ứng viên dính điểm LOẠI trong Bảng tiêu chí phỏng vấn. Hệ thống không cho phép chốt PASS!');
+    if (decision === 'PASS_HS' && !hasAnsweredAny) {
+      alert('⚠️ Vui lòng chọn các câu hỏi trong Bảng tiêu chí chấm điểm phỏng vấn trước khi chốt ĐẠT HỒ SƠ!');
+      return;
+    }
+    if (decision === 'PASS_HS' && isLoai) {
+      alert('⚠️ Ứng viên dính điểm LOẠI trong Bảng tiêu chí phỏng vấn. Hệ thống không cho phép chốt PASS HS!');
       return;
     }
     onSuccess(decision, note, totalScore);
@@ -237,6 +247,23 @@ export default function InterviewScoreModal({
       title={`📝 Phiếu Chấm Điểm Phỏng Vấn – ${candidateName}`}
     >
       <div className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
+        {/* Banner Thông Báo Trạng Thái Ràng Buộc */}
+        {!isPassPv ? (
+          <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 text-xs font-bold flex items-center gap-2 shadow-2xs">
+            <AlertTriangle size={20} className="text-amber-600 shrink-0" />
+            <span>
+              🔒 <strong>Ứng viên chưa PASS PV</strong>: Vui lòng bấm nút <strong>Chốt ĐẠT PHỎNG VẤN (PASS PV)</strong> màu xanh lá bên dưới trước. Sau khi ĐẠT PHỎNG VẤN, hệ thống sẽ mở khóa 2 Bảng Tiêu Chí Chấm Điểm & Nút Chốt ĐẠT HỒ SƠ (PASS HS).
+            </span>
+          </div>
+        ) : (
+          <div className="p-2.5 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-900 text-xs font-bold flex items-center gap-2 shadow-2xs">
+            <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
+            <span>
+              🎉 <strong>ĐÃ ĐẠT PHỎNG VẤN</strong>: 2 Bảng Tiêu Chí Chấm Điểm đã được mở khóa! Vui lòng chọn các câu hỏi đánh giá bên dưới để chốt ĐẠT HỒ SƠ (PASS HS).
+            </span>
+          </div>
+        )}
+
         {/* Bộ lọc loại tiêu chí */}
         <div className="flex items-center justify-between bg-slate-100 p-2 rounded-xl border border-slate-200">
           <span className="text-xs font-bold text-slate-700 flex items-center gap-1">
@@ -245,22 +272,28 @@ export default function InterviewScoreModal({
           <div className="flex items-center gap-1.5">
             <button
               type="button"
+              disabled={!isPassPv}
               onClick={() => { setMode('CO_KN'); setAnswers({}); }}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                mode === 'CO_KN'
-                  ? 'bg-brand-600 text-white shadow-2xs'
-                  : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                !isPassPv
+                  ? 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-60'
+                  : mode === 'CO_KN'
+                  ? 'bg-brand-600 text-white shadow-2xs cursor-pointer'
+                  : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200 cursor-pointer'
               }`}
             >
               CÓ KINH NGHIỆM (Max 13đ)
             </button>
             <button
               type="button"
+              disabled={!isPassPv}
               onClick={() => { setMode('KHONG_KN'); setAnswers({}); }}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                mode === 'KHONG_KN'
-                  ? 'bg-brand-600 text-white shadow-2xs'
-                  : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                !isPassPv
+                  ? 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-60'
+                  : mode === 'KHONG_KN'
+                  ? 'bg-brand-600 text-white shadow-2xs cursor-pointer'
+                  : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200 cursor-pointer'
               }`}
             >
               KHÔNG CÓ KN (Max 18đ)
@@ -268,10 +301,10 @@ export default function InterviewScoreModal({
           </div>
         </div>
 
-        {/* Danh sách câu hỏi chấm điểm */}
+        {/* Danh sách câu hỏi chấm điểm (Bị khóa nếu chưa PASS PV) */}
         <div className="space-y-3">
           {questions.map((q) => (
-            <div key={q.id} className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2">
+            <div key={q.id} className={`p-3 rounded-xl border space-y-2 transition-all ${!isPassPv ? 'bg-slate-100/60 border-slate-200 opacity-60' : 'bg-slate-50 border-slate-200/80'}`}>
               <div>
                 <p className="text-xs font-bold text-slate-800">{q.title}</p>
                 {q.subtitle && <p className="text-[11px] text-rose-600 font-semibold mt-0.5">{q.subtitle}</p>}
@@ -285,13 +318,16 @@ export default function InterviewScoreModal({
                     <button
                       key={idx}
                       type="button"
+                      disabled={!isPassPv}
                       onClick={() => handleSelectAnswer(q.id, opt.value)}
-                      className={`text-left p-2 rounded-lg border text-[11px] transition-all flex items-start justify-between gap-1.5 cursor-pointer ${
-                        isSelected
+                      className={`text-left p-2 rounded-lg border text-[11px] transition-all flex items-start justify-between gap-1.5 ${
+                        !isPassPv
+                          ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                          : isSelected
                           ? isOptLoai
-                            ? 'bg-rose-600 text-white border-rose-700 font-bold shadow-2xs'
-                            : 'bg-emerald-600 text-white border-emerald-700 font-bold shadow-2xs'
-                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100/70'
+                            ? 'bg-rose-600 text-white border-rose-700 font-bold shadow-2xs cursor-pointer'
+                            : 'bg-emerald-600 text-white border-emerald-700 font-bold shadow-2xs cursor-pointer'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100/70 cursor-pointer'
                       }`}
                     >
                       <span className="leading-snug">{opt.label}</span>
@@ -380,10 +416,17 @@ export default function InterviewScoreModal({
           </button>
           <button
             type="button"
+            disabled={!isPassPv}
             onClick={() => handleConfirm('PASS_HS')}
-            className="bg-teal-600 hover:bg-teal-700 text-white !py-2 !px-3 text-xs font-bold rounded-xl flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
+            className={cn(
+              'py-2 px-3 text-xs font-bold rounded-xl flex items-center gap-1 transition-all shadow-2xs',
+              !isPassPv
+                ? 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed opacity-50'
+                : 'bg-teal-600 hover:bg-teal-700 text-white cursor-pointer'
+            )}
+            title={!isPassPv ? '🔒 Khóa: Vui lòng chốt PASS PV trước khi chốt ĐẠT HỒ SƠ' : 'Chốt ĐẠT HỒ SƠ cho ứng viên'}
           >
-            <FileCheck size={14} /> Chốt ĐẠT HỒ SƠ (PASS HS)
+            <FileCheck size={14} /> Chốt ĐẠT HỒ SƠ (PASS HS) {!isPassPv && '🔒'}
           </button>
           <button
             type="button"

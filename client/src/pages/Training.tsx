@@ -864,6 +864,7 @@ export default function Training() {
           candidateId={scoreModalCandidate.id}
           candidateName={scoreModalCandidate.tenUv}
           kinhNghiem={scoreModalCandidate.kinhNghiem}
+          hrDecision={scoreModalCandidate.hrDecision}
           onSuccess={handleScoreSuccess}
         />
       )}
