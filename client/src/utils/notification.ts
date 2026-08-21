@@ -41,6 +41,16 @@ export function playNotificationSound() {
   }
 }
 
+let swRegistration: ServiceWorkerRegistration | null = null;
+
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').then((reg) => {
+      swRegistration = reg;
+    }).catch(() => undefined);
+  });
+}
+
 /** Xin quyền thông báo Desktop từ trình duyệt */
 export async function requestNotificationPermission(): Promise<NotificationPermission> {
   if (typeof window === 'undefined' || !('Notification' in window)) {
@@ -52,17 +62,35 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
   return Notification.permission;
 }
 
-/** Bắn thông báo Desktop Web Push góc màn hình */
-export function notifyDesktop(title: string, body: string, onClickUrl?: string) {
+/** Bắn thông báo Desktop Web Push góc màn hình (Floating Toast trên mọi Tab & Ứng dụng) */
+export async function notifyDesktop(title: string, body: string, onClickUrl?: string) {
   playNotificationSound();
   flashTabTitle(title);
 
-  if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-    try {
+  if (typeof window === 'undefined' || !('Notification' in window)) return;
+
+  let perm = Notification.permission;
+  if (perm === 'default') {
+    perm = await Notification.requestPermission();
+  }
+
+  if (perm !== 'granted') return;
+
+  try {
+    if (swRegistration && 'showNotification' in swRegistration) {
+      await swRegistration.showNotification(title, {
+        body,
+        icon: '/favicon.ico',
+        tag: 'umbo-recruitment-notification',
+        requireInteraction: true,
+        data: { url: onClickUrl },
+      });
+    } else {
       const n = new Notification(title, {
         body,
         icon: '/favicon.ico',
         tag: 'umbo-recruitment-notification',
+        requireInteraction: true,
       });
 
       n.onclick = () => {
@@ -72,9 +100,9 @@ export function notifyDesktop(title: string, body: string, onClickUrl?: string) 
         }
         n.close();
       };
-    } catch {
-      /* ignore desktop notification errors */
     }
+  } catch {
+    /* fallback to window Toast if native push restricted */
   }
 }
 
