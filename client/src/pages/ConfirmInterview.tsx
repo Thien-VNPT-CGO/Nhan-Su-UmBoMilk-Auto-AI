@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { CheckCircle2, XCircle, Calendar, MapPin, Clock, Video, HeartHandshake, Sparkles, Building2 } from 'lucide-react';
-import { formatDate, formatDateTime } from '../utils/date';
+import { formatDateTime } from '../utils/date';
 
 interface CandidateInterviewInfo {
   id: string;
@@ -66,17 +66,17 @@ export default function ConfirmInterview() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 text-white">
-        <div className="w-12 h-12 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin mb-4" />
-        <p className="text-sm font-medium text-slate-300">Đang tải thông tin thư mời phỏng vấn...</p>
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 text-white">
+        <div className="w-12 h-12 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mb-4" />
+        <p className="text-sm font-medium text-pink-200">Đang tải thông tin thư mời phỏng vấn...</p>
       </div>
     );
   }
 
   if (error || !candidate) {
     return (
-      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 text-white">
-        <div className="max-w-md w-full bg-slate-800 rounded-3xl p-6 border border-slate-700 text-center space-y-4 shadow-2xl">
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 text-white">
+        <div className="max-w-md w-full bg-slate-900 rounded-3xl p-6 border border-pink-500/30 text-center space-y-4 shadow-2xl">
           <div className="w-16 h-16 bg-rose-500/20 text-rose-400 rounded-2xl flex items-center justify-center mx-auto">
             <XCircle size={32} />
           </div>
@@ -92,11 +92,11 @@ export default function ConfirmInterview() {
     : 'bạn';
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-emerald-950 flex flex-col items-center justify-center p-4 sm:p-6 text-slate-100 font-sans">
-      <div className="max-w-md w-full bg-slate-900/90 backdrop-blur-md rounded-3xl border border-emerald-500/30 shadow-2xl overflow-hidden my-6">
+    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-pink-950 flex flex-col items-center justify-center p-4 sm:p-6 text-slate-100 font-sans">
+      <div className="max-w-md w-full bg-slate-900/90 backdrop-blur-md rounded-3xl border border-pink-500/30 shadow-2xl overflow-hidden my-6">
         
-        {/* Header Banner */}
-        <div className="bg-gradient-to-r from-emerald-600 to-teal-600 p-6 text-center relative overflow-hidden">
+        {/* Header Banner Pink Theme */}
+        <div className="bg-gradient-to-r from-pink-600 via-rose-500 to-pink-500 p-6 text-center relative overflow-hidden">
           <div className="absolute -right-6 -bottom-6 opacity-20 text-white">
             <Sparkles size={120} />
           </div>
@@ -106,7 +106,7 @@ export default function ConfirmInterview() {
           <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
             THƯ MỜI PHỎNG VẤN
           </h1>
-          <p className="text-xs text-emerald-100 mt-1 font-medium">
+          <p className="text-xs text-pink-100 mt-1 font-medium">
             Chào mừng {nameGreeting} gia nhập đội ngũ UMBO MILK!
           </p>
         </div>
@@ -115,11 +115,11 @@ export default function ConfirmInterview() {
         <div className="p-6 space-y-6">
 
           {confirmedStatus === 'ACCEPT' ? (
-            <div className="bg-emerald-950/60 border border-emerald-500/40 rounded-2xl p-5 text-center space-y-3 animate-fade-in">
-              <div className="w-16 h-16 bg-emerald-500 text-slate-950 rounded-full flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/20">
+            <div className="bg-pink-950/60 border border-pink-500/40 rounded-2xl p-5 text-center space-y-3 animate-fade-in">
+              <div className="w-16 h-16 bg-pink-500 text-white rounded-full flex items-center justify-center mx-auto shadow-lg shadow-pink-500/30">
                 <CheckCircle2 size={36} />
               </div>
-              <h3 className="text-lg font-extrabold text-emerald-400">ĐÃ XÁC NHẬN THAM GIA!</h3>
+              <h3 className="text-lg font-extrabold text-pink-400">ĐÃ XÁC NHẬN THAM GIA!</h3>
               <p className="text-xs text-slate-300 leading-relaxed">
                 Cảm ơn <b>{nameGreeting}</b> đã xác nhận! Hệ thống đã ghi nhận lịch phỏng vấn chính thức của bạn và chuyển thông tin tới bộ phận HR.
               </p>
@@ -128,7 +128,7 @@ export default function ConfirmInterview() {
                   href={candidate.ggMeetLink}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center justify-center gap-2 w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm py-3 px-4 rounded-xl transition-all shadow-md mt-2"
+                  className="inline-flex items-center justify-center gap-2 w-full bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-400 hover:to-rose-400 text-white font-black text-sm py-3 px-4 rounded-xl transition-all shadow-md mt-2"
                 >
                   <Video size={18} />
                   <span>VÀO PHÒNG GOOGLE MEET</span>
@@ -150,7 +150,7 @@ export default function ConfirmInterview() {
               {/* Event Details Card */}
               <div className="space-y-3 bg-slate-800/80 rounded-2xl p-4 border border-slate-700/80">
                 <div className="flex items-start gap-3">
-                  <div className="p-2.5 bg-emerald-500/10 text-emerald-400 rounded-xl mt-0.5">
+                  <div className="p-2.5 bg-pink-500/10 text-pink-400 rounded-xl mt-0.5">
                     <Calendar size={18} />
                   </div>
                   <div>
@@ -162,7 +162,7 @@ export default function ConfirmInterview() {
                 </div>
 
                 <div className="flex items-start gap-3 pt-2 border-t border-slate-700/50">
-                  <div className="p-2.5 bg-emerald-500/10 text-emerald-400 rounded-xl mt-0.5">
+                  <div className="p-2.5 bg-pink-500/10 text-pink-400 rounded-xl mt-0.5">
                     <Building2 size={18} />
                   </div>
                   <div>
@@ -174,7 +174,7 @@ export default function ConfirmInterview() {
                 </div>
 
                 <div className="flex items-start gap-3 pt-2 border-t border-slate-700/50">
-                  <div className="p-2.5 bg-emerald-500/10 text-emerald-400 rounded-xl mt-0.5">
+                  <div className="p-2.5 bg-pink-500/10 text-pink-400 rounded-xl mt-0.5">
                     <Clock size={18} />
                   </div>
                   <div>
@@ -186,25 +186,25 @@ export default function ConfirmInterview() {
                 </div>
 
                 <div className="flex items-start gap-3 pt-2 border-t border-slate-700/50">
-                  <div className="p-2.5 bg-emerald-500/10 text-emerald-400 rounded-xl mt-0.5">
+                  <div className="p-2.5 bg-pink-500/10 text-pink-400 rounded-xl mt-0.5">
                     <MapPin size={18} />
                   </div>
                   <div>
                     <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Hình thức phỏng vấn</div>
-                    <div className="text-sm font-semibold text-emerald-300 mt-0.5 flex items-center gap-1.5">
+                    <div className="text-sm font-semibold text-pink-300 mt-0.5 flex items-center gap-1.5">
                       <span>Online qua Google Meet</span>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Action Buttons */}
+              {/* Action Buttons Pink Theme */}
               <div className="space-y-3 pt-2">
                 <button
                   type="button"
                   onClick={() => handleConfirm('ACCEPT')}
                   disabled={submitting}
-                  className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-base py-3.5 px-4 rounded-2xl transition-all shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 active:scale-98"
+                  className="w-full bg-gradient-to-r from-pink-500 via-rose-500 to-pink-500 hover:from-pink-400 hover:to-rose-400 text-white font-black text-base py-3.5 px-4 rounded-2xl transition-all shadow-lg shadow-pink-500/30 flex items-center justify-center gap-2 active:scale-98"
                 >
                   <CheckCircle2 size={20} />
                   <span>{submitting ? 'Đang xác nhận...' : 'XÁC NHẬN THAM GIA PHỎNG VẤN'}</span>
