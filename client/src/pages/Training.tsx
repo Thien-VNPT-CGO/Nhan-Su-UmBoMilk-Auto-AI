@@ -669,14 +669,15 @@ export default function Training() {
                             </button>
                           </div>
 
-                          {(r.ngayBatDauTraining || r.trangThaiTraining === 'SAP_BAT_DAU' || r.trangThaiTraining === 'BAT_DAU') && (
+                          {/* Nút 💬 Mở App Zalo gửi Lịch Training: CHỈ HIỂN THỊ KHI HR ĐÃ HOÀN TẤT BẮM "CHỐT CA & LỊCH" (Trạng thái SAP_BAT_DAU / BAT_DAU) */}
+                          {isPassHs && (r.trangThaiTraining === 'SAP_BAT_DAU' || r.trangThaiTraining === 'BAT_DAU' || r.trangThaiTraining === 'HOAN_THANH') && (
                             <button
                               type="button"
                               onClick={() => handleSendZaloNoticeAndOpenApp(r)}
-                              className="bg-sky-600 hover:bg-sky-700 text-white !py-1 !px-2.5 text-[10px] font-extrabold shadow-md rounded-xl flex items-center gap-1 hover:scale-102 transition-all cursor-pointer"
+                              className="bg-sky-600 hover:bg-sky-700 text-white !py-1.5 !px-3 text-[11px] font-extrabold shadow-md rounded-xl flex items-center gap-1 hover:scale-102 transition-all cursor-pointer whitespace-nowrap"
                               title="Gửi Zalo thông báo Lịch Training & Mở Zalo App/Web chat với ứng viên"
                             >
-                              <MessageCircle size={12} />
+                              <MessageCircle size={13} />
                               <span>💬 Mở App Zalo gửi Lịch Training</span>
                             </button>
                           )}
