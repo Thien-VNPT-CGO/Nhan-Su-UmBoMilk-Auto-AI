@@ -80,20 +80,19 @@ export default function Training() {
   const [ivResend, setIvResend] = useState(true);
 
   const BRANCH_OPTIONS = [
-    '111 Tôn Đản, Quận 4',
-    '232 Nguyễn Thị Minh Khai, Quận 3',
-    'Chi Nhánh Quận 1',
-    'Chi Nhánh Gò Vấp',
-    'Chi Nhánh Bình Thạnh',
+    'CN1: 130 Vạn Kiếp, Phường 3, Quận Bình Thạnh',
+    'CN2: 261 Tô Hiến Thành, Phường 12, Quận 10',
+    'CN3: 120 Hoàng Diệu 2, Phường Linh Chiểu, TP. Thủ Đức',
+    'CN4: 111 Tôn Đản, Phường 15, Quận 4',
   ];
 
   const SHIFT_OPTIONS = [
-    'Ca Sáng: 7g00 - 12g00',
-    'Ca Chiều: 12g00 - 17g00',
-    'Ca Tối: 17g00 - 22g00',
-    'Ca Sáng + Ca Tối',
-    'Ca Sáng + Ca Chiều',
-    'Ca Chiều + Ca Tối',
+    'Ca sáng: 7h00 - 12h00',
+    'Ca chiều: 12h00 - 18h00',
+    'Ca tối: 18h00 - 23h00',
+    'Ca sáng + Ca chiều',
+    'Ca sáng + Ca tối',
+    'Ca chiều + Ca tối',
   ];
 
   const load = useCallback(async () => {
@@ -609,7 +608,7 @@ export default function Training() {
               </select>
               <input
                 className="input text-xs"
-                placeholder="Hoặc nhập ca làm tùy chỉnh (Ví dụ: Ca Sáng + Ca Tối)..."
+                placeholder="Hoặc nhập ca làm tùy chỉnh (Ví dụ: Ca sáng + Ca tối)..."
                 value={newShift}
                 onChange={(e) => setNewShift(e.target.value)}
               />

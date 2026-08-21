@@ -339,7 +339,7 @@ export default function Shifts() {
           <Field label="Chi nhánh làm việc chính thức">
             <input
               className="input text-xs font-medium"
-              placeholder="Nhập chi nhánh chính thức (VD: 111 Tôn Đản, Quận 4)..."
+              placeholder="Nhập chi nhánh chính thức (VD: CN1: 130 Vạn Kiếp, Phường 3, Quận Bình Thạnh)..."
               value={branchDraft}
               onChange={(e) => setBranchDraft(e.target.value)}
             />
@@ -347,7 +347,7 @@ export default function Shifts() {
           <Field label="Ca làm việc chính thức">
             <input
               className="input text-xs font-medium"
-              placeholder="Nhập ca làm chính thức (VD: Ca Sáng: 7g00 - 12g00)..."
+              placeholder="Nhập ca làm chính thức (VD: Ca sáng: 7h00 - 12h00)..."
               value={shiftDraft}
               onChange={(e) => setShiftDraft(e.target.value)}
             />
