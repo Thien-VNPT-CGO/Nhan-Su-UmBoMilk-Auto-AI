@@ -1,10 +1,22 @@
 import { useEffect, useState } from 'react';
-import { Bell, BellOff, Check } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Bell, BellOff, CheckCircle2, Sparkles, X, Clock, CalendarCheck } from 'lucide-react';
 import { getSocket } from '../api/socket';
 import { notifyDesktop, requestNotificationPermission } from '../utils/notification';
 
+interface ToastItem {
+  id: string;
+  title: string;
+  candidateName: string;
+  message: string;
+  type: 'ACCEPT' | 'REJECT' | 'REMIND';
+  url: string;
+}
+
 export function NotificationManager() {
+  const navigate = useNavigate();
   const [permission, setPermission] = useState<NotificationPermission>('default');
+  const [activeToast, setActiveToast] = useState<ToastItem | null>(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
@@ -13,30 +25,57 @@ export function NotificationManager() {
   }, []);
 
   useEffect(() => {
+    if (!activeToast) return;
+    // Tự động đóng Toast sau đúng 8 giây (8000ms)
+    const timer = setTimeout(() => {
+      setActiveToast(null);
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, [activeToast]);
+
+  useEffect(() => {
     const socket = getSocket();
 
     const handleAiConfirmed = (data: { candidateName?: string; action?: string; newStatus?: string }) => {
+      const candidateName = data?.candidateName || 'Ứng viên';
+
       if (data?.action === 'CONFIRMED_ACCEPT') {
-        notifyDesktop(
-          `🎉 Ứng viên ${data.candidateName || 'UV'} đã XÁC NHẬN!`,
-          `Ứng viên vừa bấm xác nhận phỏng vấn qua Zalo. Trạng thái: Sắp bắt đầu training.`,
-          '/training'
-        );
+        const item: ToastItem = {
+          id: String(Date.now()),
+          title: '🎉 AI VỪA TỰ ĐỘNG XÁC NHẬN ỨNG VIÊN!',
+          candidateName,
+          message: 'Đồng ý phỏng vấn từ Zalo cá nhân! Đã cập nhật trạng thái Sắp bắt đầu training.',
+          type: 'ACCEPT',
+          url: '/training',
+        };
+        setActiveToast(item);
+        notifyDesktop(`🎉 Ứng viên ${candidateName} đã XÁC NHẬN!`, item.message, '/training');
       } else if (data?.action === 'CONFIRMED_REJECT') {
-        notifyDesktop(
-          `❌ Ứng viên ${data.candidateName || 'UV'} từ chối phỏng vấn`,
-          `Ứng viên đã báo bận / từ chối phỏng vấn trên Zalo.`,
-          '/training'
-        );
+        const item: ToastItem = {
+          id: String(Date.now()),
+          title: '❌ ỨNG VIÊN PHẢN HỒI TỪ CHỐI',
+          candidateName,
+          message: 'Ứng viên vừa báo bận hoặc từ chối lịch hẹn phỏng vấn trên Zalo.',
+          type: 'REJECT',
+          url: '/training',
+        };
+        setActiveToast(item);
+        notifyDesktop(`❌ Ứng viên ${candidateName} từ chối phỏng vấn`, item.message, '/training');
       }
     };
 
     const handleInterviewRemind = (data: { candidateName?: string; timeStr?: string; ggMeetLink?: string }) => {
-      notifyDesktop(
-        `⏰ NHẮC LỊCH PHỎNG VẤN TRONG 15 PHÚT!`,
-        `Sếp ${data.candidateName || 'UV'} - Thời gian: ${data.timeStr || ''}. Chuẩn bị vào Google Meet!`,
-        '/training'
-      );
+      const candidateName = data?.candidateName || 'Ứng viên';
+      const item: ToastItem = {
+        id: String(Date.now()),
+        title: '⏰ NHẮC LỊCH PHỎNG VẤN TRONG 15 PHÚT!',
+        candidateName,
+        message: `Lịch hẹn phỏng vấn vào ${data?.timeStr || ''}. Vui lòng chuẩn bị phòng Google Meet!`,
+        type: 'REMIND',
+        url: '/training',
+      };
+      setActiveToast(item);
+      notifyDesktop(`⏰ Nhắc lịch phỏng vấn với Sếp ${candidateName}!`, item.message, '/training');
     };
 
     socket.on('zalo:ai_confirmed', handleAiConfirmed);
@@ -52,28 +91,93 @@ export function NotificationManager() {
     const res = await requestNotificationPermission();
     setPermission(res);
     if (res === 'granted') {
-      notifyDesktop('🎉 Đã bật thông báo Desktop thành công!', 'Bạn sẽ nhận được thông báo ngay khi ứng viên xác nhận PV hoặc có nhắc lịch hẹn.');
+      notifyDesktop('🎉 Đã bật thông báo Desktop thành công!', 'Bạn sẽ nhận được thông báo ngay khi ứng viên xác nhận PV.');
     }
   };
 
-  if (permission === 'granted') {
-    return (
-      <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/80" title="Thông báo Desktop máy tính đang hoạt động">
-        <Bell size={13} className="animate-pulse" />
-        <span>Desktop Notify Active</span>
-      </div>
-    );
-  }
+  const handleToastClick = () => {
+    if (activeToast?.url) {
+      navigate(activeToast.url);
+    }
+    setActiveToast(null);
+  };
 
   return (
-    <button
-      type="button"
-      onClick={handleEnableNotifications}
-      className="flex items-center gap-1.5 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 px-3 py-1 rounded-full border border-amber-200 transition-all shadow-2xs"
-      title="Bấm để cho phép trình duyệt gửi thông báo đẩy Desktop khi có ứng viên xác nhận PV"
-    >
-      <BellOff size={14} />
-      <span>Bật thông báo Desktop</span>
-    </button>
+    <>
+      {/* Nút Trạng Thái Thông Báo Trên Header */}
+      {permission === 'granted' ? (
+        <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/80" title="Thông báo Desktop máy tính đang hoạt động">
+          <Bell size={13} className="animate-pulse" />
+          <span>Desktop Notify Active</span>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={handleEnableNotifications}
+          className="flex items-center gap-1.5 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 px-3 py-1 rounded-full border border-amber-200 transition-all shadow-2xs"
+          title="Bấm để cho phép trình duyệt gửi thông báo đẩy Desktop khi có ứng viên xác nhận PV"
+        >
+          <BellOff size={14} />
+          <span>Bật thông báo Desktop</span>
+        </button>
+      )}
+
+      {/* Cửa sổ Floating Toast To Rõ Hiện Đại Góc Màn Hình (Thời gian chờ 8s) */}
+      {activeToast && (
+        <div className="fixed bottom-6 right-6 z-[999999] max-w-md w-full sm:w-[420px] animate-slide-up">
+          <div
+            onClick={handleToastClick}
+            className="relative overflow-hidden bg-slate-900/95 backdrop-blur-xl border-2 border-emerald-400 rounded-3xl p-5 shadow-2xl shadow-emerald-500/30 cursor-pointer hover:border-emerald-300 transition-all group"
+          >
+            {/* Thanh đếm ngược thời gian 8 giây (8s Progress Bar) */}
+            <div className="absolute top-0 left-0 right-0 h-1 bg-slate-800 overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-emerald-400 to-teal-300 animate-shrink-8s" />
+            </div>
+
+            <div className="flex items-start gap-4 pt-1">
+              {/* Icon Badge To Rõ */}
+              <div className="w-13 h-13 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-slate-950 flex items-center justify-center shrink-0 shadow-lg shadow-emerald-500/30 group-hover:scale-105 transition-transform">
+                {activeToast.type === 'ACCEPT' ? (
+                  <CheckCircle2 size={28} className="text-slate-950 stroke-[2.5]" />
+                ) : activeToast.type === 'REMIND' ? (
+                  <Clock size={28} className="text-slate-950 stroke-[2.5]" />
+                ) : (
+                  <CalendarCheck size={28} className="text-slate-950 stroke-[2.5]" />
+                )}
+              </div>
+
+              {/* Nội dung thông báo To Rõ Hiện Đại */}
+              <div className="flex-1 min-w-0 pr-6">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 mb-1">
+                  <Sparkles size={11} /> {activeToast.title}
+                </div>
+                <h4 className="text-base font-black text-white truncate group-hover:text-emerald-300 transition-colors">
+                  Sếp {activeToast.candidateName}
+                </h4>
+                <p className="text-xs text-slate-300 font-medium leading-relaxed mt-1">
+                  {activeToast.message}
+                </p>
+                <div className="text-[10px] text-emerald-400 font-semibold mt-2 flex items-center gap-1">
+                  <span>👉 Bấm vào đây để tới danh sách phỏng vấn (Tự đóng sau 8s)</span>
+                </div>
+              </div>
+
+              {/* Nút Đóng Toast */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveToast(null);
+                }}
+                className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+                title="Đóng thông báo"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

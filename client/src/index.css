@@ -41,6 +41,22 @@
   }
 }
 
+@keyframes shrink8s {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+.animate-shrink-8s {
+  animation: shrink8s 8s linear forwards;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.animate-slide-up {
+  animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 ::-webkit-scrollbar {
   height: 16px;
   width: 10px;
