@@ -393,9 +393,9 @@ export default function Training() {
                       </td>
                       {/* Cột Lịch Phỏng Vấn (Hiển thị đẹp, gọn gàng, CHỈ 1 trạng thái duy nhất sau khi HR chốt) */}
                       <td className="table-td">
-                        <div className="flex flex-col gap-1.5 min-w-[200px]">
+                        <div className="flex flex-col items-center justify-center gap-1.5 min-w-[200px] mx-auto">
                           {r.phongVanAt ? (
-                            <div className="flex items-center justify-between gap-1">
+                            <div className="flex items-center justify-center gap-2">
                               <span className="text-xs font-bold text-slate-800">{formatDateTime(r.phongVanAt)}</span>
                               {isAdmin && (
                                 <button
@@ -441,14 +441,14 @@ export default function Training() {
                               <span>❌ TRƯỢT (FAIL)</span>
                             </div>
                           ) : pvRealtimeStatus === 'CHUA_PV' ? (
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center justify-center gap-1.5">
                               <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-extrabold bg-amber-500 text-white shadow-2xs">
                                 ⏳ Chưa PV
                               </span>
                               <span className="text-[10px] text-slate-400">Tự mở khi xong PV</span>
                             </div>
                           ) : pvRealtimeStatus === 'DANG_PV' ? (
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center justify-center gap-1.5">
                               <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-extrabold bg-blue-600 text-white shadow-2xs animate-pulse">
                                 🎥 Đang PV
                               </span>
@@ -456,7 +456,7 @@ export default function Training() {
                             </div>
                           ) : (
                             /* Đã PV nhưng chưa chốt -> Cho phép HR chọn PASS / FAIL */
-                            <div className="flex items-center gap-1 pt-0.5">
+                            <div className="flex items-center justify-center gap-1 pt-0.5">
                               <button
                                 type="button"
                                 onClick={() => handleUpdateInterviewDecision(r.id, 'PASS')}
@@ -483,7 +483,7 @@ export default function Training() {
                       {/* Cột Ngày Bắt Đầu (Bị khóa cho tới khi PASS) */}
                       <td className="table-td">
                         <button
-                          className="btn-secondary !px-2 !py-0.5 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                          className="btn-secondary !px-2 !py-0.5 text-xs disabled:opacity-40 disabled:cursor-not-allowed mx-auto"
                           disabled={isRestLocked}
                           onClick={() => openEditModal(r)}
                           title={isRestLocked ? 'Khóa thao tác: Vui lòng chờ phỏng vấn kết thúc và HR chốt PASS' : 'Bấm để đổi ngày bắt đầu'}
@@ -502,14 +502,14 @@ export default function Training() {
                       {/* Cột Trạng Thái (Vô hiệu hóa các bước cũ ngoại trừ ADMIN) */}
                       <td className="table-td">
                         {isPendingConfirm ? (
-                          <div className="flex flex-col gap-0.5">
+                          <div className="flex flex-col items-center justify-center gap-0.5">
                             <span className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold bg-rose-600 text-white border border-rose-700 shadow-2xs animate-pulse">
                               ⏳ CHỜ UV XÁC NHẬN ZALO
                             </span>
                             <span className="text-[10px] text-rose-600 font-semibold italic text-center">🔒 Khóa thao tác đến khi UV xác nhận Zalo</span>
                           </div>
                         ) : isRestLocked ? (
-                          <div className="flex flex-col gap-0.5">
+                          <div className="flex flex-col items-center justify-center gap-0.5">
                             <span className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold bg-amber-500 text-white border border-amber-600 shadow-2xs">
                               ⏳ {pvRealtimeStatus === 'CHUA_PV' ? 'CHỜ ĐẾN GIỜ PV' : pvRealtimeStatus === 'DANG_PV' ? 'ĐANG PHỎNG VẤN' : 'CHỜ HR CHỐT PASS'}
                             </span>
@@ -517,7 +517,7 @@ export default function Training() {
                           </div>
                         ) : (
                           <select
-                            className="input !py-1.5 !text-xs font-bold bg-emerald-600 text-white border-emerald-700 rounded-xl shadow-2xs cursor-pointer"
+                            className="input !py-1.5 !text-xs font-bold bg-emerald-600 text-white border-emerald-700 rounded-xl shadow-2xs cursor-pointer text-center mx-auto"
                             value={r.trangThaiTraining ?? 'CHUA_THAM_GIA'}
                             onChange={(e) => setConfirmStatus({ row: r, status: e.target.value })}
                           >
@@ -544,7 +544,7 @@ export default function Training() {
 
                       {/* Cột Thao Tác (Bị khóa cho tới khi PASS) */}
                       <td className="table-td">
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center justify-center gap-1">
                           <button
                             className="btn-primary !px-2.5 !py-1.5 !text-xs disabled:opacity-40 disabled:cursor-not-allowed"
                             disabled={isRestLocked}
