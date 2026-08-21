@@ -107,7 +107,7 @@ export function NotificationManager() {
     <>
       {/* Nút Trạng Thái Thông Báo Trên Header */}
       {permission === 'granted' ? (
-        <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/80" title="Thông báo Desktop máy tính đang hoạt động">
+        <div className="flex items-center gap-1 text-[11px] font-semibold text-pink-600 bg-pink-50 px-2.5 py-1 rounded-full border border-pink-200/80" title="Thông báo Desktop máy tính đang hoạt động">
           <Bell size={13} className="animate-pulse" />
           <span>Desktop Notify Active</span>
         </div>
@@ -123,7 +123,7 @@ export function NotificationManager() {
         </button>
       )}
 
-      {/* Cửa sổ Floating Toast To Rõ Hiện Đại Góc Màn Hình (Dùng React Portal gắn trực tiếp vào document.body) */}
+      {/* Cửa sổ Floating Toast To Rõ Hiện Đại Tông Màu Hồng Góc Màn Hình (Thời gian chờ 8s) */}
       {activeToast && typeof document !== 'undefined' && createPortal(
         <div
           style={{ position: 'fixed', bottom: '32px', right: '32px', zIndex: 99999999, margin: 0, padding: 0 }}
@@ -131,37 +131,37 @@ export function NotificationManager() {
         >
           <div
             onClick={handleToastClick}
-            className="relative overflow-hidden bg-slate-950/95 backdrop-blur-2xl border-2 border-emerald-400 rounded-3xl p-5 shadow-2xl shadow-emerald-500/50 cursor-pointer hover:border-emerald-300 transition-all group"
+            className="relative overflow-hidden bg-slate-950/95 backdrop-blur-2xl border-2 border-pink-500 rounded-3xl p-5 shadow-2xl shadow-pink-500/50 cursor-pointer hover:border-pink-400 transition-all group"
           >
-            {/* Thanh đếm ngược thời gian 8 giây (8s Progress Bar) */}
+            {/* Thanh đếm ngược thời gian 8 giây (8s Progress Bar Pink) */}
             <div className="absolute top-0 left-0 right-0 h-1 bg-slate-800 overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-emerald-400 to-teal-300 animate-shrink-8s" />
+              <div className="h-full bg-gradient-to-r from-pink-500 via-rose-400 to-pink-300 animate-shrink-8s" />
             </div>
 
             <div className="flex items-start gap-4 pt-1">
-              {/* Icon Badge To Rõ */}
-              <div className="w-13 h-13 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-slate-950 flex items-center justify-center shrink-0 shadow-lg shadow-emerald-500/30 group-hover:scale-105 transition-transform">
+              {/* Icon Badge Màu Hồng To Rõ */}
+              <div className="w-13 h-13 rounded-2xl bg-gradient-to-br from-pink-500 to-rose-600 text-white flex items-center justify-center shrink-0 shadow-lg shadow-pink-500/40 group-hover:scale-105 transition-transform">
                 {activeToast.type === 'ACCEPT' ? (
-                  <CheckCircle2 size={28} className="text-slate-950 stroke-[2.5]" />
+                  <CheckCircle2 size={28} className="text-white stroke-[2.5]" />
                 ) : activeToast.type === 'REMIND' ? (
-                  <Clock size={28} className="text-slate-950 stroke-[2.5]" />
+                  <Clock size={28} className="text-white stroke-[2.5]" />
                 ) : (
-                  <CalendarCheck size={28} className="text-slate-950 stroke-[2.5]" />
+                  <CalendarCheck size={28} className="text-white stroke-[2.5]" />
                 )}
               </div>
 
-              {/* Nội dung thông báo To Rõ Hiện Đại */}
+              {/* Nội dung thông báo Tông Hồng To Rõ Hiện Đại */}
               <div className="flex-1 min-w-0 pr-6">
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 mb-1">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-pink-500/20 text-pink-300 border border-pink-500/40 mb-1">
                   <Sparkles size={11} /> {activeToast.title}
                 </div>
-                <h4 className="text-base font-black text-white truncate group-hover:text-emerald-300 transition-colors">
+                <h4 className="text-base font-black text-white truncate group-hover:text-pink-300 transition-colors">
                   Sếp {activeToast.candidateName}
                 </h4>
                 <p className="text-xs text-slate-300 font-medium leading-relaxed mt-1">
                   {activeToast.message}
                 </p>
-                <div className="text-[10px] text-emerald-400 font-semibold mt-2 flex items-center gap-1">
+                <div className="text-[10px] text-pink-400 font-semibold mt-2 flex items-center gap-1">
                   <span>👉 Bấm vào đây để tới danh sách phỏng vấn (Tự đóng sau 8s)</span>
                 </div>
               </div>
