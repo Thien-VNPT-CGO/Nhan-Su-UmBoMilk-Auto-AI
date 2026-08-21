@@ -341,4 +341,23 @@ router.post('/:id/training/start', requireWrite(), async (req: AuthedRequest, re
   }
 });
 
+const autoDetectSchema = z.object({
+  content: z.string().min(1),
+});
+
+router.post('/:id/auto-detect-zalo-reply', requireWrite(), async (req: AuthedRequest, res, next) => {
+  try {
+    const parsed = autoDetectSchema.safeParse(req.body);
+    if (!parsed.success) throw ApiError.badRequest('INVALID_INPUT', 'Dữ liệu không hợp lệ.');
+    const result = await candidateService.processZaloAutoConfirmation(
+      req.params.id,
+      parsed.data.content,
+      req.user!.username,
+    );
+    res.json({ success: true, data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
 export default router;

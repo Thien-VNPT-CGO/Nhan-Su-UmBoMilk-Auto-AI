@@ -690,6 +690,77 @@ export class CandidateService {
     ]);
     return { today, scored, pendingDecision, passToday, failToday, training, done, needReview };
   }
+
+  /** AI Tự động nhận diện nội dung phản hồi Zalo của ứng viên để chuyển trạng thái xác nhận. */
+  async processZaloAutoConfirmation(id: string, text: string, user = 'AI_AUTO'): Promise<{ processed: boolean; action?: string; newStatus?: string }> {
+    const candidate = await prisma.candidate.findUnique({ where: { id } });
+    if (!candidate) return { processed: false };
+
+    const normalized = text
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+
+    const acceptKeywords = ['xac nhan tham gia', 'tham gia', 'dong y', 'co nha', 'se den', 'den phong van', 'xac nhan', 'em den', 'chac chan den', 'ok sep', 'dong y tham gia'];
+    const rejectKeywords = ['tu choi', 'khong tham gia', 'ban roi', 'huy lich', 'khong den', 'khong di duoc'];
+
+    const isAccept = acceptKeywords.some((kw) => normalized.includes(kw));
+    const isReject = rejectKeywords.some((kw) => normalized.includes(kw));
+
+    if (isAccept) {
+      const newVersion = candidate.dataVersion + 1;
+      await prisma.candidate.update({
+        where: { id },
+        data: {
+          trangThaiTraining: TRAINING_STATUS.SAP_BAT_DAU,
+          dataVersion: newVersion,
+          updatedBy: user,
+        },
+      });
+
+      await audit({
+        user,
+        action: 'AI_AUTO_CONFIRM_ACCEPT',
+        entity: 'candidate',
+        entityId: id,
+        oldValue: candidate.trangThaiTraining,
+        newValue: TRAINING_STATUS.SAP_BAT_DAU,
+        version: newVersion,
+      });
+
+      emit('training:updated', { candidateId: id });
+      emit('candidate:decision', { candidateId: id, decision: candidate.hrDecision, user });
+      return { processed: true, action: 'CONFIRMED_ACCEPT', newStatus: 'SAP_BAT_DAU' };
+    }
+
+    if (isReject) {
+      const newVersion = candidate.dataVersion + 1;
+      await prisma.candidate.update({
+        where: { id },
+        data: {
+          trangThaiTraining: TRAINING_STATUS.LOAI,
+          dataVersion: newVersion,
+          updatedBy: user,
+        },
+      });
+
+      await audit({
+        user,
+        action: 'AI_AUTO_CONFIRM_REJECT',
+        entity: 'candidate',
+        entityId: id,
+        oldValue: candidate.trangThaiTraining,
+        newValue: TRAINING_STATUS.LOAI,
+        version: newVersion,
+      });
+
+      emit('training:updated', { candidateId: id });
+      emit('candidate:decision', { candidateId: id, decision: candidate.hrDecision, user });
+      return { processed: true, action: 'CONFIRMED_REJECT', newStatus: 'LOAI' };
+    }
+
+    return { processed: false };
+  }
 }
 
 /** Xóa 1 ứng viên kèm đầy đủ dọn dẹp: dòng phản hồi form, tombstone, DELETE sync về Google Sheet. */
