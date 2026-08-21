@@ -705,214 +705,121 @@ export default function Settings() {
 
           {tab === 'zalo' && (
             <div className="space-y-6">
-              {/* Card Lựa chọn Chế độ Gửi Zalo */}
-              <div className="rounded-xl border border-brand-200 bg-brand-50/40 p-4">
-                <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
-                  <div>
-                    <div className="font-bold text-slate-800 text-base dark:text-slate-100 flex items-center gap-2">
-                      <MessageCircle className="text-brand-600" size={20} />
-                      <span>Chế độ Gửi tin Zalo Tự động</span>
+              {/* Header Banner Zalo Cá Nhân */}
+              <div className="rounded-2xl border border-brand-200 bg-gradient-to-r from-brand-50/80 via-white to-brand-50/40 p-5 shadow-xs">
+                <div className="flex items-center justify-between flex-wrap gap-4">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-12 h-12 rounded-2xl bg-brand-600 text-white flex items-center justify-center shadow-md">
+                      <MessageCircle size={24} />
                     </div>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Khuyên dùng <b>Zalo Cá Nhân</b>: Gửi tin nhắn thẳng vào SĐT ứng viên ngay khi nộp Form, không cần Zalo User ID 19 số.
-                    </p>
+                    <div>
+                      <h2 className="font-extrabold text-slate-800 text-lg dark:text-slate-100 flex items-center gap-2">
+                        <span>Cấu hình Zalo Cá Nhân Tự Động</span>
+                        <Badge className="bg-emerald-100 text-emerald-800 font-bold border border-emerald-200 text-[11px]">
+                          Tự động qua SĐT
+                        </Badge>
+                      </h2>
+                      <p className="text-xs text-slate-500 mt-1 max-w-2xl leading-relaxed">
+                        Hệ thống tự động gửi tin nhắn đến ứng viên trực tiếp qua Số Điện Thoại (`sdtZalo`) ngay khi ứng viên vừa nộp Form hoặc khi HR hẹn phỏng vấn. Bỏ qua hoàn toàn Zalo OA và mã Zalo User ID 19 số!
+                      </p>
+                    </div>
                   </div>
-                  <Badge className="bg-emerald-100 text-emerald-800 font-bold border border-emerald-200">
-                    Ưu tiên Zalo Cá Nhân
-                  </Badge>
-                </div>
-
-                <div className="grid sm:grid-cols-3 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      patch(['zalo', 'mode'], 'PERSONAL');
-                      toast('success', 'Đã chọn chế độ Zalo Cá Nhân (Gửi qua SĐT).');
-                    }}
-                    className={cn(
-                      'p-3.5 rounded-xl border text-left transition-all',
-                      (s.zalo as unknown as { mode?: string }).mode === 'PERSONAL' || !(s.zalo as unknown as { mode?: string }).mode
-                        ? 'border-brand-500 bg-white ring-2 ring-brand-500/20 dark:bg-slate-800'
-                        : 'border-slate-200 bg-slate-50/50 hover:bg-white dark:border-slate-700'
-                    )}
-                  >
-                    <div className="font-bold text-sm text-slate-800 dark:text-slate-100 flex items-center justify-between">
-                      <span>Zalo Cá Nhân</span>
-                      <span className="text-xs font-bold text-emerald-600">Khuyên dùng</span>
-                    </div>
-                    <div className="text-xs text-slate-500 mt-1">
-                      Gửi thẳng qua SĐT (`sdtZalo`), không cần OA token hay Zalo User ID.
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      patch(['zalo', 'mode'], 'OA');
-                      toast('success', 'Đã chọn chế độ Zalo OA.');
-                    }}
-                    className={cn(
-                      'p-3.5 rounded-xl border text-left transition-all',
-                      (s.zalo as unknown as { mode?: string }).mode === 'OA'
-                        ? 'border-brand-500 bg-white ring-2 ring-brand-500/20 dark:bg-slate-800'
-                        : 'border-slate-200 bg-slate-50/50 hover:bg-white dark:border-slate-700'
-                    )}
-                  >
-                    <div className="font-bold text-sm text-slate-800 dark:text-slate-100">
-                      Zalo OA (Doanh nghiệp)
-                    </div>
-                    <div className="text-xs text-slate-500 mt-1">
-                      Gửi qua Zalo OA Official Account API (Yêu cầu App ID & Zalo User ID 19 số).
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      patch(['zalo', 'mode'], 'MOCK');
-                      toast('success', 'Đã chọn chế độ Giả lập (Mock).');
-                    }}
-                    className={cn(
-                      'p-3.5 rounded-xl border text-left transition-all',
-                      (s.zalo as unknown as { mode?: string }).mode === 'MOCK'
-                        ? 'border-brand-500 bg-white ring-2 ring-brand-500/20 dark:bg-slate-800'
-                        : 'border-slate-200 bg-slate-50/50 hover:bg-white dark:border-slate-700'
-                    )}
-                  >
-                    <div className="font-bold text-sm text-slate-800 dark:text-slate-100">
-                      Giả lập (Mock)
-                    </div>
-                    <div className="text-xs text-slate-500 mt-1">
-                      Lưu vết tin nhắn vào DB để test giao diện không gửi tin nhắn thật.
-                    </div>
-                  </button>
                 </div>
               </div>
 
-              {/* Card Quản lý Zalo Cá Nhân */}
-              <div className="card p-5 space-y-4">
-                <div className="flex items-center justify-between flex-wrap gap-3 border-b border-slate-100 pb-3">
-                  <div className="flex items-center gap-3">
-                    <div className={cn('rounded-xl p-2.5', zaloPersonal?.connected ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600')}>
-                      <MessageCircle size={22} />
+              {/* Card Trạng thái & Quản lý Kết nối Zalo Cá Nhân */}
+              <div className="card p-6 space-y-5">
+                <div className="flex items-center justify-between flex-wrap gap-3 border-b border-slate-100 pb-4">
+                  <div className="flex items-center gap-3.5">
+                    <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center text-lg font-bold shadow-xs', zaloPersonal?.connected ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')}>
+                      {zaloPersonal?.connected ? '🟢' : '🔴'}
                     </div>
                     <div>
-                      <div className="font-bold text-slate-800 text-base dark:text-slate-100">
-                        {zaloPersonal?.connected ? `🟢 Đã kết nối Zalo Cá Nhân (${zaloPersonal.name ?? 'Zalo HR'})` : '🔴 Chưa kết nối Zalo Cá Nhân'}
+                      <div className="font-extrabold text-slate-800 text-base dark:text-slate-100">
+                        {zaloPersonal?.connected ? `Đã kết nối Zalo Cá Nhân: ${zaloPersonal.name ?? 'Zalo HR'}` : 'Chưa kết nối tài khoản Zalo Cá Nhân'}
                       </div>
-                      <div className="text-xs text-slate-500">
-                        {zaloPersonal?.phone ? `SĐT kết nối: ${zaloPersonal.phone}` : 'Quét mã QR bằng ứng dụng Zalo trên điện thoại hoặc kết nối bên dưới để tự động gửi tin nhắn theo SĐT.'}
+                      <div className="text-xs text-slate-500 font-medium">
+                        {zaloPersonal?.phone ? `SĐT tài khoản: ${zaloPersonal.phone}` : 'Quét mã QR bằng App Zalo hoặc nhập nhanh thông tin SĐT bên dưới để kích hoạt tự động gửi tin.'}
                       </div>
                     </div>
                   </div>
 
                   {zaloPersonal?.connected && (
-                    <button type="button" className="btn-danger" onClick={handleLogoutPersonal}>
+                    <button type="button" className="btn-danger !px-4 !py-2" onClick={handleLogoutPersonal}>
                       Đăng xuất Zalo Cá Nhân
                     </button>
                   )}
                 </div>
 
                 {!zaloPersonal?.connected ? (
-                  <div className="grid md:grid-cols-2 gap-5 pt-2">
-                    {/* Box 1: Mã QR Đăng Nhập */}
-                    <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/70 text-center space-y-3 dark:bg-slate-800/40">
-                      <div className="font-bold text-sm text-slate-800 dark:text-slate-100">Quét mã QR bằng App Zalo</div>
-                      <p className="text-xs text-slate-500">
-                        Mở Zalo trên điện thoại → chọn biểu tượng Quét mã QR → quét mã bên dưới để đăng nhập tự động.
+                  <div className="grid md:grid-cols-2 gap-6 pt-2">
+                    {/* Option 1: Mã QR Đăng Nhập */}
+                    <div className="rounded-2xl border border-slate-200 p-5 bg-slate-50/70 text-center space-y-4 dark:bg-slate-800/40">
+                      <div className="font-extrabold text-sm text-slate-800 dark:text-slate-100 flex items-center justify-center gap-1.5">
+                        <span>📱 Quét mã QR bằng ứng dụng Zalo</span>
+                      </div>
+                      <p className="text-xs text-slate-500 leading-relaxed">
+                        Mở Zalo trên điện thoại → chọn biểu tượng <b>Quét mã QR</b> → quét mã bên dưới để đăng nhập tự động.
                       </p>
                       {zaloPersonal?.qrCode ? (
-                        <div className="flex flex-col items-center justify-center p-2 bg-white rounded-xl shadow-sm border border-slate-100 max-w-[220px] mx-auto">
-                          <img src={zaloPersonal.qrCode} alt="Zalo Personal QR Login" className="w-48 h-48 rounded-lg" />
-                          <span className="text-[11px] text-slate-400 mt-2">Mã QR có hiệu lực 5 phút</span>
+                        <div className="flex flex-col items-center justify-center p-3 bg-white rounded-2xl shadow-sm border border-slate-200 max-w-[230px] mx-auto">
+                          <img src={zaloPersonal.qrCode} alt="Zalo Personal QR Login" className="w-48 h-48 rounded-xl" />
+                          <span className="text-[11px] text-slate-400 mt-2 font-medium">Mã QR có hiệu lực trong 5 phút</span>
                         </div>
                       ) : (
-                        <button type="button" className="btn-primary mx-auto" onClick={handleGenerateQr} disabled={qrLoading}>
+                        <button type="button" className="btn-primary mx-auto !py-2.5 !px-5" onClick={handleGenerateQr} disabled={qrLoading}>
                           <RefreshCw size={15} className={qrLoading ? 'animate-spin' : ''} />
                           {qrLoading ? 'Đang tạo QR...' : 'Tạo mã QR Đăng Nhập Zalo'}
                         </button>
                       )}
                     </div>
 
-                    {/* Box 2: Kích hoạt nhanh SĐT Zalo */}
-                    <div className="rounded-xl border border-slate-200 p-4 space-y-3 bg-white dark:bg-slate-800">
-                      <div className="font-bold text-sm text-slate-800 dark:text-slate-100">Kích hoạt Nhanh tài khoản Zalo Cá Nhân</div>
-                      <p className="text-xs text-slate-500">
-                        Nhập SĐT Zalo cá nhân của bạn dùng để gửi tin nhắn thông báo tự động cho ứng viên.
+                    {/* Option 2: Kích hoạt Nhanh bằng SĐT Zalo */}
+                    <div className="rounded-2xl border border-slate-200 p-5 space-y-4 bg-white dark:bg-slate-800 shadow-xs">
+                      <div className="font-extrabold text-sm text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                        <span>⚡ Kích hoạt Nhanh bằng SĐT Zalo Cá Nhân</span>
+                      </div>
+                      <p className="text-xs text-slate-500 leading-relaxed">
+                        Nhập SĐT Zalo cá nhân của bạn để cài đặt làm số Zalo tự động gửi tin nhắn chào mừng và thư mời phỏng vấn cho ứng viên.
                       </p>
                       <div>
-                        <label className="label">SĐT Zalo Cá Nhân</label>
-                        <input className="input" value={connectPhone} onChange={(e) => setConnectPhone(e.target.value)} placeholder="0941615312" />
+                        <label className="label font-bold text-xs">Số Điện Thoại Zalo Cá Nhân</label>
+                        <input className="input font-semibold" value={connectPhone} onChange={(e) => setConnectPhone(e.target.value)} placeholder="0941615312" />
                       </div>
                       <div>
-                        <label className="label">Tên hiển thị Zalo</label>
-                        <input className="input" value={connectName} onChange={(e) => setConnectName(e.target.value)} placeholder="Sếp Thiên IT" />
+                        <label className="label font-bold text-xs">Tên Hiển Thị Zalo (Tên HR / Chi nhánh)</label>
+                        <input className="input font-semibold" value={connectName} onChange={(e) => setConnectName(e.target.value)} placeholder="Sếp Thiên IT" />
                       </div>
-                      <button type="button" className="btn-success w-full" onClick={handleConnectPersonal} disabled={connectingPersonal}>
+                      <button type="button" className="btn-success w-full !py-2.5 font-bold" onClick={handleConnectPersonal} disabled={connectingPersonal}>
                         {connectingPersonal ? 'Đang kết nối...' : 'Xác nhận Kết nối Zalo Cá Nhân'}
                       </button>
                     </div>
                   </div>
                 ) : (
-                  <div className="rounded-xl bg-emerald-50 p-4 text-xs text-emerald-800 border border-emerald-200 flex items-center justify-between">
-                    <div>
-                      <b>✓ Hệ thống đã sẵn sàng gửi tin tự động qua Zalo cá nhân!</b> Khi ứng viên vừa nộp Form hoặc khi HR duyệt ĐẠT / hẹn phỏng vấn, tin nhắn sẽ tự động gửi trực tiếp tới SĐT ứng viên.
+                  <div className="rounded-2xl bg-emerald-50/90 p-5 text-xs text-emerald-900 border border-emerald-200 flex items-center justify-between flex-wrap gap-3">
+                    <div className="space-y-1">
+                      <div className="font-bold text-sm text-emerald-800">
+                        ✓ Tài khoản Zalo Cá Nhân [{zaloPersonal.name}] đã sẵn sàng 100%!
+                      </div>
+                      <div className="text-slate-600 text-[11px]">
+                        Khi ứng viên nộp Form hoặc khi HR bấm hẹn phỏng vấn, hệ thống sẽ tự động gửi tin nhắn trực tiếp tới SĐT ứng viên.
+                      </div>
                     </div>
-                    <Badge className="bg-emerald-200 text-emerald-900 font-extrabold shrink-0">Sẵn sàng 100%</Badge>
+                    <Badge className="bg-emerald-200 text-emerald-900 font-extrabold px-3 py-1 text-xs">
+                      Hoạt động 24/7
+                    </Badge>
                   </div>
                 )}
               </div>
 
-              {/* Zalo OA Accordion */}
-              <details className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 dark:bg-slate-800/40">
-                <summary className="cursor-pointer font-bold text-slate-700 text-sm flex items-center justify-between">
-                  <span>Cấu hình Zalo OA (Official Account API) - Không bắt buộc</span>
-                  <span className="text-xs text-slate-400 font-normal">Mở rộng</span>
-                </summary>
-                <div className="space-y-4 pt-4">
-                  <div className="flex items-center justify-between rounded-xl bg-white p-4 flex-wrap gap-3 dark:bg-slate-800">
-                    <div className="flex items-center gap-3">
-                      <div className={cn('rounded-xl p-2.5', s.zalo.accessToken ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400')}>
-                        <MessageCircle size={20} />
-                      </div>
-                      <div>
-                        <div className="font-bold text-slate-800 text-sm dark:text-slate-100">
-                          {s.zalo.accessToken ? 'Đã kết nối Zalo OA' : 'Chưa kết nối Zalo OA'}
-                        </div>
-                        <div className="text-xs text-slate-500 dark:text-slate-400">
-                          {s.zalo.oaId ? `OA ID: ${s.zalo.oaId}` : 'Chưa có OA ID — sẽ tự lấy sau khi kết nối.'}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex gap-2 flex-wrap">
-                      <button type="button" className="btn-primary" onClick={connectZalo}>
-                        <MessageCircle size={15} /> Kết nối Zalo OA
-                      </button>
-                      {s.zalo.accessToken && (
-                        <button type="button" className="btn-secondary" onClick={checkZalo} disabled={zaloChecking}>
-                          <RefreshCw size={15} /> {zaloChecking ? 'Đang kiểm tra…' : zaloOk === null ? 'Kiểm tra token' : zaloOk ? 'Token OK' : 'Token lỗi — kết nối lại'}
-                        </button>
-                      )}
-                      <button type="button" className="btn-danger" onClick={resetZalo}>
-                        Reset dữ liệu Zalo OA
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="label">Zalo OA ID</label>
-                    <input className="input" value={s.zalo.oaId} onChange={(e) => patch(['zalo', 'oaId'], e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="label">Access Token</label>
-                    <input type="password" className="input" value={s.zalo.accessToken} onChange={(e) => patch(['zalo', 'accessToken'], e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="label">Refresh Token</label>
-                    <input type="password" className="input" value={s.zalo.refreshToken} onChange={(e) => patch(['zalo', 'refreshToken'], e.target.value)} />
-                  </div>
+              {/* Hướng dẫn an toàn & Anti-spam */}
+              <div className="rounded-xl bg-slate-50 p-4 text-xs text-slate-600 space-y-2 dark:bg-slate-800/60 dark:text-slate-300">
+                <div className="font-bold text-slate-700 text-sm dark:text-slate-100 flex items-center gap-1.5">
+                  💡 Lưu ý an toàn khi sử dụng Zalo Cá Nhân:
                 </div>
-              </details>
+                <div>• System tự động đặt lịch giãn cách 3–5 giây giữa các tin nhắn tự động gửi đi để bảo vệ tài khoản Zalo cá nhân.</div>
+                <div>• Tin nhắn được gửi trực tiếp theo SĐT của ứng viên (`sdtZalo`), ứng viên sẽ nhận được tin nhắn trực tiếp trong ứng dụng Zalo trên điện thoại.</div>
+              </div>
             </div>
           )}
 
