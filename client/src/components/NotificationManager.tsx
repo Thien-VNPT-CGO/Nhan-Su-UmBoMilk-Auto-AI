@@ -123,7 +123,7 @@ export function NotificationManager() {
         </button>
       )}
 
-      {/* Cửa sổ Floating Toast To Rõ Hiện Đại Tông Màu Hồng Góc Màn Hình (Thời gian chờ 8s) */}
+      {/* Cửa sổ Floating Toast Nền Hồng Chữ Trắng Góc Màn Hình (Thời gian chờ 8s) */}
       {activeToast && typeof document !== 'undefined' && createPortal(
         <div
           style={{ position: 'fixed', bottom: '32px', right: '32px', zIndex: 99999999, margin: 0, padding: 0 }}
@@ -131,37 +131,37 @@ export function NotificationManager() {
         >
           <div
             onClick={handleToastClick}
-            className="relative overflow-hidden bg-slate-950/95 backdrop-blur-2xl border-2 border-pink-500 rounded-3xl p-5 shadow-2xl shadow-pink-500/50 cursor-pointer hover:border-pink-400 transition-all group"
+            className="relative overflow-hidden bg-gradient-to-r from-pink-600 via-rose-600 to-pink-500 text-white rounded-3xl p-5 shadow-2xl shadow-pink-500/50 border-2 border-pink-300/80 cursor-pointer hover:scale-[1.01] transition-all group"
           >
-            {/* Thanh đếm ngược thời gian 8 giây (8s Progress Bar Pink) */}
-            <div className="absolute top-0 left-0 right-0 h-1 bg-slate-800 overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-pink-500 via-rose-400 to-pink-300 animate-shrink-8s" />
+            {/* Thanh đếm ngược thời gian 8 giây (8s Progress Bar Màu Trắng) */}
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-black/20 overflow-hidden">
+              <div className="h-full bg-white animate-shrink-8s" />
             </div>
 
             <div className="flex items-start gap-4 pt-1">
-              {/* Icon Badge Màu Hồng To Rõ */}
-              <div className="w-13 h-13 rounded-2xl bg-gradient-to-br from-pink-500 to-rose-600 text-white flex items-center justify-center shrink-0 shadow-lg shadow-pink-500/40 group-hover:scale-105 transition-transform">
+              {/* Icon Badge Nền Trắng Icon Hồng */}
+              <div className="w-13 h-13 rounded-2xl bg-white text-pink-600 flex items-center justify-center shrink-0 shadow-lg shadow-black/20 group-hover:scale-105 transition-transform">
                 {activeToast.type === 'ACCEPT' ? (
-                  <CheckCircle2 size={28} className="text-white stroke-[2.5]" />
+                  <CheckCircle2 size={30} className="text-pink-600 stroke-[2.5]" />
                 ) : activeToast.type === 'REMIND' ? (
-                  <Clock size={28} className="text-white stroke-[2.5]" />
+                  <Clock size={30} className="text-pink-600 stroke-[2.5]" />
                 ) : (
-                  <CalendarCheck size={28} className="text-white stroke-[2.5]" />
+                  <CalendarCheck size={30} className="text-pink-600 stroke-[2.5]" />
                 )}
               </div>
 
-              {/* Nội dung thông báo Tông Hồng To Rõ Hiện Đại */}
+              {/* Nội dung thông báo Nền Hồng Chữ Trắng To Rõ */}
               <div className="flex-1 min-w-0 pr-6">
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-pink-500/20 text-pink-300 border border-pink-500/40 mb-1">
-                  <Sparkles size={11} /> {activeToast.title}
+                <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider bg-white/25 text-white border border-white/40 mb-1 shadow-xs">
+                  <Sparkles size={12} /> {activeToast.title}
                 </div>
-                <h4 className="text-base font-black text-white truncate group-hover:text-pink-300 transition-colors">
+                <h4 className="text-lg font-black text-white truncate tracking-tight drop-shadow-xs">
                   Sếp {activeToast.candidateName}
                 </h4>
-                <p className="text-xs text-slate-300 font-medium leading-relaxed mt-1">
+                <p className="text-xs text-pink-50 font-semibold leading-relaxed mt-1">
                   {activeToast.message}
                 </p>
-                <div className="text-[10px] text-pink-400 font-semibold mt-2 flex items-center gap-1">
+                <div className="text-[11px] text-white font-bold mt-2.5 inline-flex items-center gap-1 bg-black/20 px-2.5 py-1 rounded-xl border border-white/20">
                   <span>👉 Bấm vào đây để tới danh sách phỏng vấn (Tự đóng sau 8s)</span>
                 </div>
               </div>
@@ -173,10 +173,10 @@ export function NotificationManager() {
                   e.stopPropagation();
                   setActiveToast(null);
                 }}
-                className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+                className="absolute top-4 right-4 text-white/80 hover:text-white p-1.5 rounded-xl hover:bg-white/20 transition-colors"
                 title="Đóng thông báo"
               >
-                <X size={16} />
+                <X size={18} />
               </button>
             </div>
           </div>
