@@ -351,6 +351,8 @@ export default function CandidateDrawer({
       ? (c.tenUv.trim().toLowerCase().startsWith('sếp') ? c.tenUv.trim() : `Sếp ${c.tenUv.trim()}`)
       : 'bạn';
 
+    const confirmUrl = `${window.location.origin}/confirm-pv/${c.id}`;
+
     const inviteContent = [
       '🐮 [UMBO MILK] – THƯ MỜI PHỎNG VẤN 📋',
       '',
@@ -364,8 +366,10 @@ export default function CandidateDrawer({
       `• 🏢 Chi nhánh ứng tuyển: ${c.chiNhanh || ''}`,
       `• ⏱️ Ca làm việc đăng ký: ${c.caLam || ''}`,
       '',
-      '👉 VUI LÒNG NHẮN LẠI CỤM TỪ "XÁC NHẬN THAM GIA" (hoặc "THAM GIA") vào Zalo này để hệ thống ghi nhận lịch hẹn của bạn nhé!',
-      '*(Trường hợp bận không tham gia được, bạn nhắn "TỪ CHỐI" giúp UMBO MILK nhé)*',
+      '👉 VUI LÒNG BẤM LINK DƯỚI ĐÂY ĐỂ XÁC NHẬN THAM GIA PHỎNG VẤN 1-CLICK:',
+      `🔗 ${confirmUrl}`,
+      '',
+      '*(Hoặc nhắn lại "XÁC NHẬN THAM GIA" vào Zalo này để hệ thống tự động ghi nhận)*',
       '',
       'UMBO MILK rất mong được gặp bạn! ✨',
     ].join('\n');

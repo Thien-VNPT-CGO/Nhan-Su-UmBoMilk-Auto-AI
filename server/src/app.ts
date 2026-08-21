@@ -31,6 +31,7 @@ import reportRoutes from './routes/reports';
 import elearningRoutes from './routes/elearning';
 import notificationRoutes from './routes/notifications';
 import backupRoutes from './routes/backup';
+import publicRoutes from './routes/public';
 
 export function createApp() {
   const app = express();
@@ -82,6 +83,7 @@ export function createApp() {
   app.use('/api/elearning', apiLimiter, elearningRoutes);
   app.use('/api/notifications', apiLimiter, notificationRoutes);
   app.use('/api/backup', apiLimiter, backupRoutes);
+  app.use('/api/public', apiLimiter, publicRoutes);
   app.use('/api/webhooks', webhookRoutes);
 
   // ===== Serve frontend (client/dist) - 1 URL duy nhất cho production =====
