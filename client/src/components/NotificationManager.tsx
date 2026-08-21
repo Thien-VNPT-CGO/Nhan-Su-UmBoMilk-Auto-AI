@@ -125,10 +125,13 @@ export function NotificationManager() {
 
       {/* Cửa sổ Floating Toast To Rõ Hiện Đại Góc Màn Hình (Dùng React Portal gắn trực tiếp vào document.body) */}
       {activeToast && typeof document !== 'undefined' && createPortal(
-        <div className="fixed bottom-6 right-6 z-[9999999] max-w-md w-full sm:w-[420px] animate-slide-up pointer-events-auto">
+        <div
+          style={{ position: 'fixed', bottom: '32px', right: '32px', zIndex: 99999999, margin: 0, padding: 0 }}
+          className="max-w-md w-[calc(100vw-64px)] sm:w-[420px] animate-slide-up pointer-events-auto shadow-2xl"
+        >
           <div
             onClick={handleToastClick}
-            className="relative overflow-hidden bg-slate-900/95 backdrop-blur-xl border-2 border-emerald-400 rounded-3xl p-5 shadow-2xl shadow-emerald-500/40 cursor-pointer hover:border-emerald-300 transition-all group"
+            className="relative overflow-hidden bg-slate-950/95 backdrop-blur-2xl border-2 border-emerald-400 rounded-3xl p-5 shadow-2xl shadow-emerald-500/50 cursor-pointer hover:border-emerald-300 transition-all group"
           >
             {/* Thanh đếm ngược thời gian 8 giây (8s Progress Bar) */}
             <div className="absolute top-0 left-0 right-0 h-1 bg-slate-800 overflow-hidden">
