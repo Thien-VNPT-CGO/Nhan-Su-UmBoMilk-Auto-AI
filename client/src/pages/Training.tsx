@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GraduationCap, CalendarDays, Send, RefreshCw, Briefcase, Video } from 'lucide-react';
+import { GraduationCap, CalendarDays, Send, RefreshCw, Briefcase, Video, CheckCircle2, XCircle } from 'lucide-react';
 import { api, ApiError } from '../api/client';
 import { Badge, Skeleton, EmptyState, Modal, Field, ConfirmDialog } from '../components/ui';
 import { useToast } from '../stores/Toast';
@@ -21,7 +21,21 @@ interface TrainingRow {
   phongVanAt: string | null;
   ggMeetLink: string | null;
   interviewStatus: string | null;
+  hrDecision: string | null;
   dataVersion: number;
+}
+
+function getInterviewStatus(phongVanAtStr: string | null): 'CHUA_PV' | 'DANG_PV' | 'DA_PV' {
+  if (!phongVanAtStr) return 'CHUA_PV';
+  const pvTime = new Date(phongVanAtStr).getTime();
+  if (isNaN(pvTime)) return 'CHUA_PV';
+
+  const now = Date.now();
+  const pvEndTime = pvTime + 30 * 60 * 1000; // 30 phút thời lượng phỏng vấn
+
+  if (now < pvTime) return 'CHUA_PV';
+  if (now >= pvTime && now <= pvEndTime) return 'DANG_PV';
+  return 'DA_PV';
 }
 
 const INTERVIEW_STATUS_LABEL: Record<string, { label: string; cls: string }> = {
@@ -188,6 +202,23 @@ export default function Training() {
     }
   };
 
+  const handleUpdateInterviewDecision = async (id: string, decision: 'PASS' | 'FAIL') => {
+    try {
+      if (decision === 'PASS') {
+        await api.patch(`/candidates/${id}/interview`, { hrDecision: 'PASS', interviewStatus: 'QUA_PV' });
+        await api.patch(`/training/${id}`, { trangThaiTraining: 'BAT_DAU' });
+        toast('success', '🎉 Đã cập nhật ứng viên PASS phỏng vấn! Đã mở khóa các thao tác chốt ca.');
+      } else {
+        await api.patch(`/candidates/${id}/interview`, { hrDecision: 'FAIL', interviewStatus: 'TRUOT_PV' });
+        await api.patch(`/training/${id}`, { trangThaiTraining: 'LOAI' });
+        toast('error', '❌ Đã cập nhật ứng viên FAIL (Trượt phỏng vấn).');
+      }
+      void load();
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Cập nhật kết quả phỏng vấn thất bại.');
+    }
+  };
+
   const [bookedInterviews, setBookedInterviews] = useState<{ id: string; tenUv: string; phongVanAt: string }[]>([]);
 
   const openInterviewEdit = (r: TrainingRow) => {
@@ -310,6 +341,9 @@ export default function Training() {
               <tbody className="divide-y divide-slate-50">
                 {visible.map((r) => {
                   const isPendingConfirm = r.trangThaiTraining === 'CHUA_THAM_GIA';
+                  const pvRealtimeStatus = getInterviewStatus(r.phongVanAt);
+                  const isInterviewPassed = r.hrDecision === 'PASS' && r.trangThaiTraining !== 'CHUA_THAM_GIA' && r.trangThaiTraining !== 'LOAI';
+                  const isRestLocked = isPendingConfirm || pvRealtimeStatus !== 'DA_PV' || !isInterviewPassed;
                   return (
                     <tr key={r.id} className={cn('hover:bg-brand-50/40 transition-colors', isPendingConfirm && 'bg-rose-50/30')}>
                       <td className="table-td font-mono text-xs font-bold text-brand-600">{r.id}</td>
@@ -353,13 +387,14 @@ export default function Training() {
                           </button>
                         )}
                       </td>
+                      {/* Cột Lịch Phỏng Vấn (Vòng đời Realtime + Google Meet + Nút PASS/FAIL) */}
                       <td className="table-td">
-                        <div className="flex flex-col gap-1">
+                        <div className="flex flex-col gap-1.5 min-w-[200px]">
                           {r.phongVanAt ? (
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-xs font-semibold text-emerald-700">{formatDateTime(r.phongVanAt)}</span>
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-xs font-bold text-slate-800">{formatDateTime(r.phongVanAt)}</span>
                               <button
-                                className="text-[10px] text-slate-400 hover:text-slate-600 underline disabled:opacity-40 disabled:cursor-not-allowed"
+                                className="text-[10px] text-slate-400 hover:text-slate-600 underline disabled:opacity-40"
                                 disabled={isPendingConfirm}
                                 onClick={() => openInterviewEdit(r)}
                               >
@@ -370,50 +405,102 @@ export default function Training() {
                             <span className="text-xs text-slate-400">Chưa hẹn</span>
                           )}
 
-                          {/* Bộ 4 nút Kết quả phỏng vấn */}
-                          <div className="flex flex-wrap gap-1 mt-0.5">
-                            {[
-                              { key: 'DA_PV', label: 'Đã PV', activeCls: 'bg-sky-600 text-white font-bold' },
-                              { key: 'QUA_PV', label: 'Qua PV', activeCls: 'bg-emerald-600 text-white font-bold' },
-                              { key: 'TRUOT_PV', label: 'Trượt PV', activeCls: 'bg-rose-600 text-white font-bold' },
-                              { key: 'VANG', label: 'Vắng', activeCls: 'bg-rose-600 text-white font-bold' },
-                            ].map((st) => {
-                              const isCurrent = r.interviewStatus === st.key;
-                              return (
-                                <button
-                                  key={st.key}
-                                  type="button"
-                                  disabled={isPendingConfirm}
-                                  className={cn(
-                                    'px-2 py-0.5 rounded text-[10px] transition-all border',
-                                    isCurrent
-                                      ? st.activeCls + ' border-transparent shadow-2xs'
-                                      : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-600',
-                                    isPendingConfirm && 'opacity-40 cursor-not-allowed pointer-events-none'
-                                  )}
-                                  onClick={() => updateInterviewResult(r.id, st.key)}
-                                >
-                                  {st.label}
-                                </button>
-                              );
-                            })}
-                          </div>
+                          {/* Link Google Meet Trực Tiếp */}
+                          {r.ggMeetLink && (
+                            <a
+                              href={r.ggMeetLink}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center justify-center gap-1.5 text-[11px] font-bold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-xl border border-blue-200 shadow-2xs transition-all"
+                              title="Click để vào phòng phỏng vấn Google Meet"
+                            >
+                              <Video size={13} />
+                              <span>🔗 Vào Google Meet</span>
+                            </a>
+                          )}
+
+                          {/* Trạng thái Realtime tự động */}
+                          {isPendingConfirm ? (
+                            <span className="text-[10px] font-semibold text-rose-600 italic">⏳ CHỜ UV XÁC NHẬN ZALO</span>
+                          ) : pvRealtimeStatus === 'CHUA_PV' ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-extrabold bg-amber-500 text-white shadow-2xs">
+                                ⏳ Chưa PV
+                              </span>
+                              <span className="text-[10px] text-slate-400">Tự mở khi xong PV</span>
+                            </div>
+                          ) : pvRealtimeStatus === 'DANG_PV' ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-extrabold bg-blue-600 text-white shadow-2xs animate-pulse">
+                                🎥 Đang PV
+                              </span>
+                              <span className="text-[10px] text-blue-600 font-semibold">Đang phỏng vấn</span>
+                            </div>
+                          ) : (
+                            <div className="space-y-1.5 pt-0.5">
+                              <div className="flex items-center gap-1.5">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-extrabold bg-emerald-600 text-white shadow-2xs">
+                                  ✓ Đã PV
+                                </span>
+                                {isInterviewPassed && (
+                                  <span className="text-[10px] font-bold text-emerald-600">✓ Đã Đạt (PASS)</span>
+                                )}
+                                {r.trangThaiTraining === 'LOAI' && (
+                                  <span className="text-[10px] font-bold text-rose-600">✕ Đã Loại (FAIL)</span>
+                                )}
+                              </div>
+
+                              {/* 2 Nút Lựa Chọn Cập Nhật PASS / FAIL cho HR */}
+                              {r.trangThaiTraining !== 'LOAI' && (
+                                <div className="flex items-center gap-1 pt-0.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdateInterviewDecision(r.id, 'PASS')}
+                                    className={cn(
+                                      'btn-success !py-1 !px-2.5 !text-[11px] font-extrabold shadow-2xs flex items-center gap-1',
+                                      isInterviewPassed ? 'opacity-50 cursor-default' : 'hover:scale-102'
+                                    )}
+                                    title="Đánh dấu Ứng viên ĐẠT phỏng vấn để mở khóa thao tác Chốt ca & lịch"
+                                  >
+                                    <CheckCircle2 size={13} />
+                                    <span>✅ PASS</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdateInterviewDecision(r.id, 'FAIL')}
+                                    className="btn-danger !py-1 !px-2.5 !text-[11px] font-extrabold shadow-2xs flex items-center gap-1 hover:scale-102"
+                                    title="Đánh dấu Ứng viên TRƯỢT phỏng vấn"
+                                  >
+                                    <XCircle size={13} />
+                                    <span>❌ FAIL</span>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </td>
 
+                      {/* Cột Ngày Bắt Đầu (Bị khóa cho tới khi PASS) */}
                       <td className="table-td">
                         <button
                           className="btn-secondary !px-2 !py-0.5 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
-                          disabled={isPendingConfirm}
+                          disabled={isRestLocked}
                           onClick={() => openEditModal(r)}
+                          title={isRestLocked ? 'Khóa thao tác: Vui lòng chờ phỏng vấn kết thúc và HR chốt PASS' : 'Bấm để đổi ngày bắt đầu'}
                         >
                           {formatDate(r.ngayBatDauTraining) || 'Chưa đặt'}
                         </button>
                       </td>
+
+                      {/* Cột Số Ngày (Bị khóa cho tới khi PASS) */}
                       <td className="table-td">
-                        <span className="font-bold text-brand-700">{r.soNgayDaTraining}/7</span>
+                        <span className={cn('font-bold', isRestLocked ? 'text-slate-400 opacity-50' : 'text-brand-700')}>
+                          {r.soNgayDaTraining}/7
+                        </span>
                       </td>
 
+                      {/* Cột Trạng Thái */}
                       <td className="table-td">
                         {isPendingConfirm ? (
                           <div className="flex flex-col gap-0.5">
@@ -422,10 +509,17 @@ export default function Training() {
                             </span>
                             <span className="text-[10px] text-rose-600 font-semibold italic text-center">🔒 Khóa thao tác đến khi UV xác nhận Zalo</span>
                           </div>
-                        ) : r.trangThaiTraining === 'SAP_BAT_DAU' ? (
+                        ) : isRestLocked ? (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold bg-amber-500 text-white border border-amber-600 shadow-2xs">
+                              ⏳ {pvRealtimeStatus === 'CHUA_PV' ? 'CHỜ ĐẾN GIỜ PV' : pvRealtimeStatus === 'DANG_PV' ? 'ĐANG PHỎNG VẤN' : 'CHỜ HR CHỐT PASS'}
+                            </span>
+                            <span className="text-[10px] text-amber-600 font-semibold italic text-center">🔒 Khóa cho tới khi HR chốt PASS</span>
+                          </div>
+                        ) : (
                           <select
                             className="input !py-1.5 !text-xs font-bold bg-emerald-600 text-white border-emerald-700 rounded-xl shadow-2xs cursor-pointer"
-                            value={r.trangThaiTraining}
+                            value={r.trangThaiTraining ?? 'CHUA_THAM_GIA'}
                             onChange={(e) => setConfirmStatus({ row: r, status: e.target.value })}
                           >
                             {STATUS_OPTIONS.map((st) => (
@@ -434,35 +528,25 @@ export default function Training() {
                               </option>
                             ))}
                           </select>
-                        ) : (
-                          <select
-                            className="input !py-1 !text-xs"
-                            value={r.trangThaiTraining ?? 'CHUA_THAM_GIA'}
-                            onChange={(e) => setConfirmStatus({ row: r, status: e.target.value })}
-                          >
-                            {STATUS_OPTIONS.map((st) => (
-                              <option key={st} value={st}>
-                                {trainingStatusLabel[st]?.label ?? st}
-                              </option>
-                            ))}
-                          </select>
                         )}
                       </td>
 
+                      {/* Cột Thao Tác (Bị khóa cho tới khi PASS) */}
                       <td className="table-td">
                         <div className="flex items-center gap-1">
                           <button
                             className="btn-primary !px-2.5 !py-1.5 !text-xs disabled:opacity-40 disabled:cursor-not-allowed"
-                            disabled={isPendingConfirm}
+                            disabled={isRestLocked}
                             onClick={() => openEditModal(r)}
-                            title={isPendingConfirm ? 'Khóa thao tác: Vui lòng chờ ứng viên bấm xác nhận qua Zalo' : 'Cập nhật chi nhánh, ca làm & ngày bắt đầu'}
+                            title={isRestLocked ? 'Khóa thao tác: Vui lòng chờ phỏng vấn kết thúc và HR chốt PASS' : 'Cập nhật chi nhánh, ca làm & ngày bắt đầu'}
                           >
                             Chốt ca & lịch
                           </button>
                           <button
                             className="btn-secondary !px-2.5 !py-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
-                            disabled={isPendingConfirm}
+                            disabled={isRestLocked}
                             onClick={() => navigate(`/shifts`)}
+                            title={isRestLocked ? 'Khóa thao tác: Vui lòng chờ phỏng vấn kết thúc và HR chốt PASS' : 'Xem lịch làm việc'}
                           >
                             <CalendarDays size={13} />
                           </button>

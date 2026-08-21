@@ -57,7 +57,7 @@ export class TrainingService {
 
   async list() {
     const rows = await prisma.candidate.findMany({
-      where: { hrDecision: 'PASS', trangThaiTraining: { not: TRAINING_STATUS.NHAN_VIEN_CHINH_THUC } },
+      where: { trangThaiTraining: { not: TRAINING_STATUS.NHAN_VIEN_CHINH_THUC } },
       include: {
         attendanceEvents: { where: { valid: true }, select: { date: true } },
       },
@@ -75,6 +75,7 @@ export class TrainingService {
       phongVanAt: c.phongVanAt,
       ggMeetLink: c.ggMeetLink,
       interviewStatus: c.interviewStatus,
+      hrDecision: c.hrDecision,
       dataVersion: c.dataVersion,
       ngayHomNay: dateKey(),
     }));
