@@ -98,12 +98,23 @@ export default function Training() {
   useEffect(() => {
     const socket = getSocket();
     const refresh = debounce(() => void load(), 500);
-    ['training:updated', 'shift:updated', 'attendance:checked', 'candidate:decision'].forEach((ev) => socket.on(ev, refresh));
+
+    const handleAiConfirmed = (data: { candidateName?: string; action?: string }) => {
+      if (data?.action === 'CONFIRMED_ACCEPT') {
+        toast('success', `🎉 AI vừa tự động xác nhận ứng viên ${data.candidateName ?? ''} đồng ý phỏng vấn từ Zalo cá nhân!`);
+      }
+      refresh();
+    };
+
+    ['training:updated', 'shift:updated', 'attendance:checked', 'candidate:decision', 'zalo:incoming'].forEach((ev) => socket.on(ev, refresh));
+    socket.on('zalo:ai_confirmed', handleAiConfirmed);
+
     return () => {
-      ['training:updated', 'shift:updated', 'attendance:checked', 'candidate:decision'].forEach((ev) => socket.off(ev, refresh));
+      ['training:updated', 'shift:updated', 'attendance:checked', 'candidate:decision', 'zalo:incoming'].forEach((ev) => socket.off(ev, refresh));
+      socket.off('zalo:ai_confirmed', handleAiConfirmed);
       refresh.cancel();
     };
-  }, [load]);
+  }, [load, toast]);
 
   const [autoDetectRow, setAutoDetectRow] = useState<TrainingRow | null>(null);
   const [pastedZaloText, setPastedZaloText] = useState('');

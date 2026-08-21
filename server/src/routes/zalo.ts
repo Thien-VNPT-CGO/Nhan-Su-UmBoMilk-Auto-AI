@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireAuth, requireWrite, requireRole, AuthedRequest } from '../middleware/auth';
 import { zaloService } from '../services/ZaloService';
 import { zaloPersonalService } from '../services/ZaloPersonalService';
+import { zaloPersonalListenerService } from '../services/ZaloPersonalListenerService';
 import { saveSettings } from '../services/SettingsService';
 import { prisma } from '../lib/prisma';
 import { env } from '../config/env';
@@ -242,6 +243,26 @@ router.post('/personal/logout', requireAuth, requireWrite(), async (_req, res, n
   try {
     const status = await zaloPersonalService.logout();
     res.json({ success: true, data: status });
+  } catch (e) {
+    next(e);
+  }
+});
+
+const incomingMessageSchema = z.object({
+  phone: z.string().min(1, 'Số điện thoại không được để trống.'),
+  content: z.string().min(1, 'Nội dung tin nhắn không được để trống.'),
+  senderName: z.string().optional(),
+  timestamp: z.string().optional(),
+});
+
+/** Endpoint tiếp nhận tin nhắn đến từ Zalo Cá Nhân HR (Tự động chạy AI nhận diện & khớp ứng viên). */
+router.post('/personal/incoming', async (req, res, next) => {
+  try {
+    const parsed = incomingMessageSchema.safeParse(req.body);
+    if (!parsed.success) throw ApiError.badRequest('INVALID_INPUT', 'Dữ liệu tin nhắn Zalo không hợp lệ.');
+
+    const result = await zaloPersonalListenerService.handleIncomingPersonalMessage(parsed.data);
+    res.json({ success: true, data: result });
   } catch (e) {
     next(e);
   }
