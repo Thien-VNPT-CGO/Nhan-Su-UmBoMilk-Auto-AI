@@ -11,7 +11,8 @@ import { getSocket } from '../api/socket';
 import { Drawer, Tabs, Badge, Spinner, ConfirmDialog, Field, Skeleton, Modal } from './ui';
 import { useToast } from '../stores/Toast';
 import { cn, trainingStatusLabel, syncStatusStyle, decisionLabel } from '../utils/format';
-import { formatDateTime, formatDate } from '../utils/date';
+import { formatDateTime, formatDate, toLocalDatetimeInput } from '../utils/date';
+
 
 interface CandidateDetail {
   id: string;
@@ -297,7 +298,7 @@ export default function CandidateDrawer({
     void loadBookedInterviews();
     setInterviewEditMode(true);
     setInterviewResend(false);
-    setPhongVanAt(c?.phongVanAt ? c.phongVanAt.slice(0, 16) : '');
+    setPhongVanAt(c?.phongVanAt ? toLocalDatetimeInput(c.phongVanAt) : '');
     setGgMeetLink(c?.ggMeetLink ?? '');
     setInterviewOpen(true);
   };
@@ -394,9 +395,19 @@ export default function CandidateDrawer({
     { label: 'Kênh biết tin', key: 'p_kenhBietTin' },
   ];
 
-  const selectedTimestamp = phongVanAt ? new Date(phongVanAt).getTime() : 0;
+  const selectedTimestamp = useMemo(() => {
+    if (!phongVanAt) return 0;
+    let str = phongVanAt.trim();
+    if (!str) return 0;
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(str)) {
+      str += ':00+07:00';
+    }
+    const d = new Date(str);
+    return Number.isNaN(d.getTime()) ? 0 : d.getTime();
+  }, [phongVanAt]);
+
   const timeConflict = useMemo(() => {
-    if (!selectedTimestamp || Number.isNaN(selectedTimestamp)) return null;
+    if (!selectedTimestamp) return null;
     return bookedInterviews.find((b) => {
       if (b.id === c?.id) return false;
       if (!b.phongVanAt) return false;
@@ -407,7 +418,7 @@ export default function CandidateDrawer({
 
   const availableSlots = useMemo(() => {
     let datePrefix = phongVanAt ? phongVanAt.slice(0, 10) : '';
-    if (!datePrefix) {
+    if (!datePrefix || !/^\d{4}-\d{2}-\d{2}$/.test(datePrefix)) {
       const d = new Date();
       const pad = (n: number) => String(n).padStart(2, '0');
       datePrefix = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -421,7 +432,7 @@ export default function CandidateDrawer({
 
     return standardHours.map((timeStr) => {
       const slotIso = `${datePrefix}T${timeStr}`;
-      const slotTime = new Date(slotIso).getTime();
+      const slotTime = new Date(`${slotIso}:00+07:00`).getTime();
 
       const conflictUser = bookedInterviews.find((b) => {
         if (b.id === c?.id) return false;

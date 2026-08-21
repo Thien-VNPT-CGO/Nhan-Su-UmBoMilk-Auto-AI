@@ -394,6 +394,31 @@ export class CandidateService {
     return final;
   }
 
+  private async checkInterviewConflict(candidateId: string, phongVanAt: Date): Promise<void> {
+    const targetMs = phongVanAt.getTime();
+    const windowStart = new Date(targetMs - 59 * 60 * 1000);
+    const windowEnd = new Date(targetMs + 59 * 60 * 1000);
+
+    const conflict = await prisma.candidate.findFirst({
+      where: {
+        id: { not: candidateId },
+        phongVanAt: {
+          not: null,
+          gte: windowStart,
+          lte: windowEnd,
+        },
+      },
+      select: { id: true, tenUv: true, phongVanAt: true },
+    });
+
+    if (conflict && conflict.phongVanAt) {
+      throw ApiError.conflict(
+        'INTERVIEW_TIME_CONFLICT',
+        `Khung giờ này quá gần lịch phỏng vấn đã hẹn của Sếp ${conflict.tenUv} (${formatDateTime(conflict.phongVanAt)}). Lịch phỏng vấn giữa các ứng viên phải cách nhau ít nhất 1 tiếng.`,
+      );
+    }
+  }
+
   async makeDecision(
     id: string,
     user: string,
@@ -411,6 +436,7 @@ export class CandidateService {
       if (!interview?.phongVanAt) {
         throw ApiError.badRequest('INTERVIEW_REQUIRED', 'Chấm PASS cần nhập thời gian phỏng vấn.');
       }
+      await this.checkInterviewConflict(id, interview.phongVanAt);
       phongVanAt = interview.phongVanAt;
       let link = (interview.ggMeetLink ?? '').trim();
       if (!link) {
@@ -499,6 +525,10 @@ export class CandidateService {
   ): Promise<Candidate> {
     const candidate = await prisma.candidate.findUnique({ where: { id } });
     if (!candidate) throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy ứng viên.');
+
+    if (patch.phongVanAt) {
+      await this.checkInterviewConflict(id, patch.phongVanAt);
+    }
 
     const data: Prisma.CandidateUpdateInput = {
       dataVersion: candidate.dataVersion + 1,
