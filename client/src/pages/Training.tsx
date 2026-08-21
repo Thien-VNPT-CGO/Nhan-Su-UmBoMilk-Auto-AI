@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GraduationCap, CalendarDays, Send, RefreshCw, Briefcase, Video, CheckCircle2, XCircle, FileCheck, FileText, MessageCircle } from 'lucide-react';
+import { GraduationCap, CalendarDays, Calendar, Send, RefreshCw, Briefcase, Video, CheckCircle2, XCircle, FileCheck, FileText, MessageCircle } from 'lucide-react';
 import { api, ApiError } from '../api/client';
 import { Badge, Skeleton, EmptyState, Modal, Field, ConfirmDialog } from '../components/ui';
 import InterviewScoreModal from '../components/InterviewScoreModal';
@@ -546,20 +546,23 @@ export default function Training() {
                           )}
                         </div>
                       </td>
-                      <td className="table-td">
+                      <td className="table-td text-center min-w-[120px]">
                         {isHsLocked && !r.ngayBatDauTraining ? (
                           <span className="text-xs text-slate-400 font-medium italic opacity-60">Chưa mở</span>
                         ) : (
                           <button
                             className={cn(
-                              'btn-secondary !px-2 !py-0.5 text-xs disabled:opacity-40 disabled:cursor-not-allowed mx-auto font-bold',
-                              !r.ngayBatDauTraining && 'text-amber-600 bg-amber-50 border-amber-200'
+                              'px-2.5 py-1 text-xs font-bold rounded-lg border transition-all mx-auto flex items-center justify-center gap-1 shadow-2xs cursor-pointer',
+                              r.ngayBatDauTraining
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100'
+                                : 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100'
                             )}
                             disabled={isHsLocked}
                             onClick={() => openEditModal(r)}
                             title={isHsLocked ? 'Khóa thao tác: Vui lòng hoàn tất PASS HS để mở khóa' : 'Bấm để chốt/đổi ngày bắt đầu đi làm'}
                           >
-                            {formatDate(r.ngayBatDauTraining) || 'Chưa chốt'}
+                            <Calendar size={13} />
+                            <span>{formatDate(r.ngayBatDauTraining) || (r.ngayBatDauTraining ? String(r.ngayBatDauTraining) : 'Chưa chốt')}</span>
                           </button>
                         )}
                       </td>

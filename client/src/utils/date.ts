@@ -15,8 +15,17 @@ export function formatDateTime(date?: string | number | Date | null): string {
 
 export function formatDate(date?: string | number | Date | null): string {
   if (!date) return '';
+  if (typeof date === 'string') {
+    const trimmed = date.trim();
+    if (!trimmed) return '';
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(trimmed)) return trimmed;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      const [y, m, d] = trimmed.split('-');
+      return `${d}/${m}/${y}`;
+    }
+  }
   const d = new Date(date);
-  if (Number.isNaN(d.getTime())) return '';
+  if (Number.isNaN(d.getTime())) return typeof date === 'string' ? date : '';
   const parts = new Intl.DateTimeFormat('en-GB', {
     timeZone: TZ, day: '2-digit', month: '2-digit', year: 'numeric',
   }).formatToParts(d);
