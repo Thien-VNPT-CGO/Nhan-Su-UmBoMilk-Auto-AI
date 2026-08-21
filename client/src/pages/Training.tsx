@@ -348,6 +348,7 @@ export default function Training() {
                   const pvRealtimeStatus = getInterviewStatus(r.phongVanAt);
                   const isInterviewPassed = r.hrDecision === 'PASS' && r.trangThaiTraining !== 'CHUA_THAM_GIA' && r.trangThaiTraining !== 'LOAI';
                   const isRestLocked = isPendingConfirm || pvRealtimeStatus !== 'DA_PV' || !isInterviewPassed;
+                  const isInterviewDone = r.hrDecision === 'PASS' || r.hrDecision === 'FAIL' || r.trangThaiTraining === 'LOAI' || r.interviewStatus === 'QUA_PV' || r.interviewStatus === 'TRUOT_PV';
                   return (
                     <tr key={r.id} className={cn('hover:bg-brand-50/40 transition-colors', isPendingConfirm && 'bg-rose-50/30')}>
                       <td className="table-td font-mono text-xs font-bold text-brand-600">{r.id}</td>
@@ -411,18 +412,28 @@ export default function Training() {
                             <span className="text-xs text-slate-400">Chưa hẹn</span>
                           )}
 
-                          {/* Link Google Meet Trực Tiếp */}
+                          {/* Link Google Meet Trực Tiếp (Vô hiệu hóa sau khi có kết quả PV PASS/FAIL) */}
                           {r.ggMeetLink && (
-                            <a
-                              href={r.ggMeetLink}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center justify-center gap-1.5 text-[11px] font-bold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-xl border border-blue-200 shadow-2xs transition-all"
-                              title="Click để vào phòng phỏng vấn Google Meet"
-                            >
-                              <Video size={13} />
-                              <span>🔗 Vào Google Meet</span>
-                            </a>
+                            isInterviewDone ? (
+                              <span
+                                className="inline-flex items-center justify-center gap-1.5 text-[11px] font-semibold text-slate-400 bg-slate-100 px-2.5 py-1 rounded-xl border border-slate-200 opacity-60 cursor-not-allowed pointer-events-none"
+                                title="Phỏng vấn đã kết thúc - Link Google Meet đã bị vô hiệu hóa"
+                              >
+                                <Video size={13} />
+                                <span>🔗 Google Meet (Đã kết thúc)</span>
+                              </span>
+                            ) : (
+                              <a
+                                href={r.ggMeetLink}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center justify-center gap-1.5 text-[11px] font-bold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-xl border border-blue-200 shadow-2xs transition-all"
+                                title="Click để vào phòng phỏng vấn Google Meet"
+                              >
+                                <Video size={13} />
+                                <span>🔗 Vào Google Meet</span>
+                              </a>
+                            )
                           )}
 
                           {/* Hiển Thị Trạng Thái / Nút Bấm Đơn Nhất */}

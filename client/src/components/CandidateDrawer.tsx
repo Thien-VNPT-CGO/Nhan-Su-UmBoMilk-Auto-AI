@@ -676,7 +676,11 @@ export default function CandidateDrawer({
                     </div>
                     <div className="flex items-center gap-2">
                       <Video size={14} className="text-emerald-600" />
-                      <a className="text-emerald-700 underline break-all" href={c.ggMeetLink ?? '#'} target="_blank" rel="noreferrer">{c.ggMeetLink}</a>
+                      {c.hrDecision === 'PASS' || c.hrDecision === 'FAIL' ? (
+                        <span className="text-slate-400 text-xs italic opacity-80 cursor-not-allowed">(Link Google Meet đã vô hiệu hóa sau PV)</span>
+                      ) : (
+                        <a className="text-emerald-700 underline break-all" href={c.ggMeetLink ?? '#'} target="_blank" rel="noreferrer">{c.ggMeetLink}</a>
+                      )}
                     </div>
                     <div className="flex flex-wrap gap-2 pt-1.5">
                       <button
