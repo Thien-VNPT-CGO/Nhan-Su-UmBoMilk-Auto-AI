@@ -63,22 +63,28 @@ export class TrainingService {
       },
       orderBy: [{ ngayBatDauTraining: 'asc' }, { thoiGian: 'desc' }],
     });
-    return rows.map((c) => ({
-      id: c.id,
-      tenUv: c.tenUv,
-      chiNhanh: c.chiNhanh,
-      caLam: c.caLam,
-      sdtZalo: c.sdtZalo,
-      ngayBatDauTraining: c.ngayBatDauTraining,
-      trangThaiTraining: c.trangThaiTraining,
-      soNgayDaTraining: new Set(c.attendanceEvents.map((a) => a.date)).size,
-      phongVanAt: c.phongVanAt,
-      ggMeetLink: c.ggMeetLink,
-      interviewStatus: c.interviewStatus,
-      hrDecision: c.hrDecision,
-      dataVersion: c.dataVersion,
-      ngayHomNay: dateKey(),
-    }));
+    const now = new Date();
+    return rows.map((c) => {
+      const isFutureInterview = c.phongVanAt && new Date(c.phongVanAt) > now;
+      const effectiveHrDecision = (isFutureInterview && c.hrDecision !== 'PASS_HS') ? null : c.hrDecision;
+      const effectiveInterviewStatus = (isFutureInterview && c.hrDecision !== 'PASS_HS') ? 'CHUA_PV' : c.interviewStatus;
+      return {
+        id: c.id,
+        tenUv: c.tenUv,
+        chiNhanh: c.chiNhanh,
+        caLam: c.caLam,
+        sdtZalo: c.sdtZalo,
+        ngayBatDauTraining: c.ngayBatDauTraining,
+        trangThaiTraining: c.trangThaiTraining,
+        soNgayDaTraining: new Set(c.attendanceEvents.map((a) => a.date)).size,
+        phongVanAt: c.phongVanAt,
+        ggMeetLink: c.ggMeetLink,
+        interviewStatus: effectiveInterviewStatus,
+        hrDecision: effectiveHrDecision,
+        dataVersion: c.dataVersion,
+        ngayHomNay: dateKey(),
+      };
+    });
   }
 
   async confirmAsEmployee(candidateId: string, user: string): Promise<void> {

@@ -351,7 +351,7 @@ export default function Training() {
                   const isPassDecision = r.hrDecision === 'PASS' || r.hrDecision === 'PASS_PV' || r.hrDecision === 'PASS_HS';
                   const isInterviewPassed = isPassDecision && r.trangThaiTraining !== 'CHUA_THAM_GIA' && r.trangThaiTraining !== 'LOAI';
                   const isRestLocked = isPendingConfirm || (!isPassDecision && pvRealtimeStatus !== 'DA_PV') || !isInterviewPassed;
-                  const isInterviewDone = isPassDecision || r.hrDecision === 'FAIL' || r.trangThaiTraining === 'LOAI' || r.interviewStatus === 'QUA_PV' || r.interviewStatus === 'TRUOT_PV';
+                  const isInterviewDone = (isPassDecision || r.hrDecision === 'FAIL' || r.trangThaiTraining === 'LOAI' || r.interviewStatus === 'QUA_PV' || r.interviewStatus === 'TRUOT_PV') && pvRealtimeStatus === 'DA_PV';
                   return (
                     <tr key={r.id} className={cn('hover:bg-brand-50/40 transition-colors', isPendingConfirm && 'bg-rose-50/30')}>
                       <td className="table-td font-mono text-xs font-bold text-brand-600">{r.id}</td>
@@ -448,7 +448,7 @@ export default function Training() {
                               <FileCheck size={15} />
                               <span>📄 ĐẠT HỒ SƠ</span>
                             </div>
-                          ) : r.hrDecision === 'PASS_PV' || r.hrDecision === 'PASS' ? (
+                          ) : (r.hrDecision === 'PASS_PV' || r.hrDecision === 'PASS') && pvRealtimeStatus !== 'CHUA_PV' ? (
                             /* Đã PASS_PV -> Hiển thị thẻ ✅ ĐẠT PHỎNG VẤN */
                             <div className="inline-flex items-center justify-center gap-1 px-3 py-1 rounded-xl text-xs font-black bg-emerald-600 text-white shadow-2xs">
                               <CheckCircle2 size={15} />
