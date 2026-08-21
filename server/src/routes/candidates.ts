@@ -281,6 +281,7 @@ const interviewPatchSchema = z.object({
   phongVanAt: z.string().optional(),
   ggMeetLink: z.string().optional(),
   interviewStatus: z.enum(['CHUA_PV', 'DA_PV', 'QUA_PV', 'TRUOT_PV', 'VANG']).optional(),
+  hrDecision: z.string().optional(),
   resend: z.boolean().optional(),
 });
 
@@ -289,7 +290,7 @@ router.patch('/:id/interview', requireWrite(), async (req: AuthedRequest, res, n
   try {
     const parsed = interviewPatchSchema.safeParse(req.body);
     if (!parsed.success) throw ApiError.badRequest('INVALID_INPUT', 'Dữ liệu không hợp lệ.');
-    const { phongVanAt, ggMeetLink, interviewStatus, resend } = parsed.data;
+    const { phongVanAt, ggMeetLink, interviewStatus, hrDecision, resend } = parsed.data;
 
     let phongVanAtDate: Date | undefined;
     if (phongVanAt) {
@@ -306,6 +307,7 @@ router.patch('/:id/interview', requireWrite(), async (req: AuthedRequest, res, n
       phongVanAt: phongVanAtDate,
       ggMeetLink,
       interviewStatus,
+      hrDecision,
     });
 
     let zalo: { ok: boolean; provider: string; messageId?: string } | null = null;

@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GraduationCap, CalendarDays, Send, RefreshCw, Briefcase, Video, CheckCircle2, XCircle } from 'lucide-react';
+import { GraduationCap, CalendarDays, Send, RefreshCw, Briefcase, Video, CheckCircle2, XCircle, FileCheck } from 'lucide-react';
 import { api, ApiError } from '../api/client';
 import { Badge, Skeleton, EmptyState, Modal, Field, ConfirmDialog } from '../components/ui';
 import { useToast } from '../stores/Toast';
@@ -71,9 +71,9 @@ export default function Training() {
   const [edit, setEdit] = useState<TrainingRow | null>(null);
   const [confirmStatus, setConfirmStatus] = useState<{ row: TrainingRow; status: string } | null>(null);
   const [confirmEmployee, setConfirmEmployee] = useState<TrainingRow | null>(null);
-  const [startDate, setStartDate] = useState(dateKey());
-  const [newShift, setNewShift] = useState('');
   const [newBranch, setNewBranch] = useState('');
+  const [newShift, setNewShift] = useState('');
+  const [startDate, setStartDate] = useState('');
   const [interviewEdit, setInterviewEdit] = useState<TrainingRow | null>(null);
   const [ivPhongVanAt, setIvPhongVanAt] = useState('');
   const [ivGgMeetLink, setIvGgMeetLink] = useState('');
@@ -110,42 +110,44 @@ export default function Training() {
 
   useEffect(() => {
     const socket = getSocket();
-    const refresh = debounce(() => void load(), 500);
+    const refreshData = debounce(() => {
+      void load();
+    }, 500);
 
-    const handleAiConfirmed = (_data: { candidateName?: string; action?: string }) => {
-      refresh();
-    };
-
-    ['training:updated', 'shift:updated', 'attendance:checked', 'candidate:decision', 'zalo:incoming'].forEach((ev) => socket.on(ev, refresh));
-    socket.on('zalo:ai_confirmed', handleAiConfirmed);
+    socket.on('training:updated', refreshData);
+    socket.on('candidate:new', refreshData);
+    socket.on('candidate:updated', refreshData);
+    socket.on('candidate:decision', refreshData);
 
     return () => {
-      ['training:updated', 'shift:updated', 'attendance:checked', 'candidate:decision', 'zalo:incoming'].forEach((ev) => socket.off(ev, refresh));
-      socket.off('zalo:ai_confirmed', handleAiConfirmed);
-      refresh.cancel();
+      socket.off('training:updated', refreshData);
+      socket.off('candidate:new', refreshData);
+      socket.off('candidate:updated', refreshData);
+      socket.off('candidate:decision', refreshData);
     };
-  }, [load, toast]);
+  }, [load]);
 
   const openEditModal = (r: TrainingRow) => {
     setEdit(r);
-    setStartDate(r.ngayBatDauTraining ? r.ngayBatDauTraining.slice(0, 10) : dateKey());
-    setNewShift(r.caLam || '');
-    setNewBranch(r.chiNhanh || '');
+    setNewBranch(r.chiNhanh ?? '');
+    setNewShift(r.caLam ?? '');
+    setStartDate(r.ngayBatDauTraining ?? formatDate(new Date()));
   };
 
   const saveTrainingInfo = async () => {
     if (!edit) return;
     try {
       await api.patch(`/training/${edit.id}`, {
-        ngayBatDau: `${startDate}T00:00:00`,
-        caLam: newShift.trim() || undefined,
-        chiNhanh: newBranch.trim() || undefined,
+        chiNhanh: newBranch,
+        caLam: newShift,
+        ngayBatDauTraining: startDate,
+        trangThaiTraining: 'SAP_BAT_DAU',
       });
-      toast('success', 'Đã cập nhật Ngày bắt đầu, Ca làm & Chi nhánh chính thức!');
+      toast('success', 'Đã cập nhật thông tin đào tạo & phân ca thành công!');
       setEdit(null);
       void load();
     } catch (e) {
-      toast('error', e instanceof ApiError ? e.message : 'Thất bại.');
+      toast('error', e instanceof ApiError ? e.message : 'Thao tác thất bại.');
     }
   };
 
@@ -201,12 +203,16 @@ export default function Training() {
     }
   };
 
-  const handleUpdateInterviewDecision = async (id: string, decision: 'PASS' | 'FAIL') => {
+  const handleUpdateInterviewDecision = async (id: string, decision: 'PASS_PV' | 'PASS_HS' | 'FAIL') => {
     try {
-      if (decision === 'PASS') {
-        await api.patch(`/candidates/${id}/interview`, { hrDecision: 'PASS', interviewStatus: 'QUA_PV' });
+      if (decision === 'PASS_PV') {
+        await api.patch(`/candidates/${id}/interview`, { hrDecision: 'PASS_PV', interviewStatus: 'QUA_PV' });
         await api.patch(`/training/${id}`, { trangThaiTraining: 'BAT_DAU' });
-        toast('success', '🎉 Đã cập nhật ứng viên PASS phỏng vấn! Đã mở khóa các thao tác chốt ca.');
+        toast('success', '🎉 Đã cập nhật ứng viên ĐẠT PHỎNG VẤN (PASS PV)!');
+      } else if (decision === 'PASS_HS') {
+        await api.patch(`/candidates/${id}/interview`, { hrDecision: 'PASS_HS', interviewStatus: 'QUA_PV' });
+        await api.patch(`/training/${id}`, { trangThaiTraining: 'BAT_DAU' });
+        toast('success', '🎉 Đã cập nhật ứng viên ĐẠT HỒ SƠ (PASS HS)! Đã mở khóa các thao tác chốt ca & lịch.');
       } else {
         await api.patch(`/candidates/${id}/interview`, { hrDecision: 'FAIL', interviewStatus: 'TRUOT_PV' });
         await api.patch(`/training/${id}`, { trangThaiTraining: 'LOAI' });
@@ -342,9 +348,10 @@ export default function Training() {
                 {visible.map((r) => {
                   const isPendingConfirm = r.trangThaiTraining === 'CHUA_THAM_GIA';
                   const pvRealtimeStatus = getInterviewStatus(r.phongVanAt);
-                  const isInterviewPassed = r.hrDecision === 'PASS' && r.trangThaiTraining !== 'CHUA_THAM_GIA' && r.trangThaiTraining !== 'LOAI';
-                  const isRestLocked = isPendingConfirm || pvRealtimeStatus !== 'DA_PV' || !isInterviewPassed;
-                  const isInterviewDone = r.hrDecision === 'PASS' || r.hrDecision === 'FAIL' || r.trangThaiTraining === 'LOAI' || r.interviewStatus === 'QUA_PV' || r.interviewStatus === 'TRUOT_PV';
+                  const isPassDecision = r.hrDecision === 'PASS' || r.hrDecision === 'PASS_PV' || r.hrDecision === 'PASS_HS';
+                  const isInterviewPassed = isPassDecision && r.trangThaiTraining !== 'CHUA_THAM_GIA' && r.trangThaiTraining !== 'LOAI';
+                  const isRestLocked = isPendingConfirm || (!isPassDecision && pvRealtimeStatus !== 'DA_PV') || !isInterviewPassed;
+                  const isInterviewDone = isPassDecision || r.hrDecision === 'FAIL' || r.trangThaiTraining === 'LOAI' || r.interviewStatus === 'QUA_PV' || r.interviewStatus === 'TRUOT_PV';
                   return (
                     <tr key={r.id} className={cn('hover:bg-brand-50/40 transition-colors', isPendingConfirm && 'bg-rose-50/30')}>
                       <td className="table-td font-mono text-xs font-bold text-brand-600">{r.id}</td>
@@ -435,51 +442,69 @@ export default function Training() {
                           {/* Hiển Thị Trạng Thái / Nút Bấm Đơn Nhất */}
                           {isPendingConfirm ? (
                             <span className="text-[10px] font-semibold text-rose-600 italic">⏳ CHỜ UV XÁC NHẬN ZALO</span>
-                          ) : r.hrDecision === 'PASS' ? (
-                            /* Đã PASS -> CHỈ hiển thị đúng 1 thẻ ✅ ĐẠT (PASS) duy nhất */
+                          ) : r.hrDecision === 'PASS_HS' ? (
+                            /* Đã PASS_HS -> Hiển thị thẻ 📄 ĐẠT HỒ SƠ */
+                            <div className="inline-flex items-center justify-center gap-1 px-3 py-1 rounded-xl text-xs font-black bg-teal-600 text-white shadow-2xs">
+                              <FileCheck size={15} />
+                              <span>📄 ĐẠT HỒ SƠ</span>
+                            </div>
+                          ) : r.hrDecision === 'PASS_PV' || r.hrDecision === 'PASS' ? (
+                            /* Đã PASS_PV -> Hiển thị thẻ ✅ ĐẠT PHỎNG VẤN */
                             <div className="inline-flex items-center justify-center gap-1 px-3 py-1 rounded-xl text-xs font-black bg-emerald-600 text-white shadow-2xs">
                               <CheckCircle2 size={15} />
-                              <span>✅ ĐẠT (PASS)</span>
+                              <span>✅ ĐẠT PHỎNG VẤN</span>
                             </div>
                           ) : r.hrDecision === 'FAIL' || r.trangThaiTraining === 'LOAI' ? (
-                            /* Đã FAIL -> CHỈ hiển thị đúng 1 thẻ ❌ TRƯỢT (FAIL) duy nhất */
+                            /* Đã FAIL -> Hiển thị thẻ ❌ TRƯỢT (FAIL) */
                             <div className="inline-flex items-center justify-center gap-1 px-3 py-1 rounded-xl text-xs font-black bg-rose-600 text-white shadow-2xs">
                               <XCircle size={15} />
                               <span>❌ TRƯỢT (FAIL)</span>
                             </div>
                           ) : pvRealtimeStatus === 'CHUA_PV' ? (
-                            <div className="flex items-center justify-center gap-1.5">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-extrabold bg-amber-500 text-white shadow-2xs">
-                                ⏳ Chưa PV
-                              </span>
-                              <span className="text-[10px] text-slate-400">Tự mở khi xong PV</span>
-                            </div>
-                          ) : pvRealtimeStatus === 'DANG_PV' ? (
-                            <div className="flex items-center justify-center gap-1.5">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-extrabold bg-blue-600 text-white shadow-2xs animate-pulse">
-                                🎥 Đang PV
-                              </span>
-                              <span className="text-[10px] text-blue-600 font-semibold">Đang phỏng vấn</span>
-                            </div>
-                          ) : (
-                            /* Đã PV nhưng chưa chốt -> Cho phép HR chọn PASS / FAIL */
-                            <div className="flex items-center justify-center gap-1 pt-0.5">
+                            <div className="flex flex-col items-center justify-center gap-1">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-extrabold bg-amber-500 text-white shadow-2xs">
+                                  ⏳ Chưa PV
+                                </span>
+                              </div>
                               <button
                                 type="button"
-                                onClick={() => handleUpdateInterviewDecision(r.id, 'PASS')}
-                                className="btn-success !py-1 !px-2.5 !text-[11px] font-extrabold shadow-2xs flex items-center gap-1 hover:scale-102"
-                                title="Đánh dấu Ứng viên ĐẠT phỏng vấn"
+                                onClick={() => handleUpdateInterviewDecision(r.id, 'PASS_HS')}
+                                className="bg-teal-600 hover:bg-teal-700 text-white !py-0.5 !px-2 text-[10px] font-extrabold shadow-2xs rounded-lg flex items-center gap-0.5 transition-all hover:scale-102 cursor-pointer"
+                                title="Chấm ĐẠT HỒ SƠ ngay lập tức (Không cần chờ phỏng vấn, mở chốt ca & lịch)"
                               >
-                                <CheckCircle2 size={13} />
-                                <span>✅ PASS</span>
+                                <FileCheck size={11} />
+                                <span>📄 Đạt Hồ Sơ (Mở chốt ca)</span>
+                              </button>
+                            </div>
+                          ) : (
+                            /* Đã PV / Đang PV hoặc sẵn sàng chốt -> Cho phép HR chọn PASS PV / PASS HS / FAIL */
+                            <div className="flex flex-wrap items-center justify-center gap-1 pt-0.5">
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateInterviewDecision(r.id, 'PASS_PV')}
+                                className="btn-success !py-1 !px-2 !text-[10px] font-extrabold shadow-2xs flex items-center gap-0.5 hover:scale-102 cursor-pointer"
+                                title="Chấm ĐẠT PHỎNG VẤN cho ứng viên"
+                              >
+                                <CheckCircle2 size={12} />
+                                <span>✅ PASS PV</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateInterviewDecision(r.id, 'PASS_HS')}
+                                className="bg-teal-600 hover:bg-teal-700 text-white !py-1 !px-2 !text-[10px] font-extrabold shadow-2xs rounded-xl flex items-center gap-0.5 hover:scale-102 transition-all cursor-pointer"
+                                title="Chấm ĐẠT HỒ SƠ cho ứng viên (Đồng thời mở chức năng chốt ca & lịch)"
+                              >
+                                <FileCheck size={12} />
+                                <span>📄 PASS HS</span>
                               </button>
                               <button
                                 type="button"
                                 onClick={() => handleUpdateInterviewDecision(r.id, 'FAIL')}
-                                className="btn-danger !py-1 !px-2.5 !text-[11px] font-extrabold shadow-2xs flex items-center gap-1 hover:scale-102"
-                                title="Đánh dấu Ứng viên TRƯỢT phỏng vấn"
+                                className="btn-danger !py-1 !px-2 !text-[10px] font-extrabold shadow-2xs flex items-center gap-0.5 hover:scale-102 cursor-pointer"
+                                title="Đánh dấu Ứng viên TRƯỢT (FAIL)"
                               >
-                                <XCircle size={13} />
+                                <XCircle size={12} />
                                 <span>❌ FAIL</span>
                               </button>
                             </div>

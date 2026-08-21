@@ -536,7 +536,7 @@ export class CandidateService {
   async updateInterview(
     id: string,
     user: string,
-    patch: { phongVanAt?: Date; ggMeetLink?: string; interviewStatus?: string },
+    patch: { phongVanAt?: Date; ggMeetLink?: string; interviewStatus?: string; hrDecision?: string },
   ): Promise<Candidate> {
     const candidate = await prisma.candidate.findUnique({ where: { id } });
     if (!candidate) throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy ứng viên.');
@@ -556,6 +556,11 @@ export class CandidateService {
       data.calendarEventId = null;
     }
     if (patch.interviewStatus) data.interviewStatus = patch.interviewStatus;
+    if (patch.hrDecision !== undefined) {
+      data.hrDecision = patch.hrDecision;
+      data.hrDecisionAt = new Date();
+      data.hrUser = user;
+    }
 
     const updated = await prisma.candidate.update({ where: { id }, data });
     await prisma.candidate.update({ where: { id }, data: { dataHash: computeHash(updated) } });

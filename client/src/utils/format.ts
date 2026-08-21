@@ -33,8 +33,10 @@ export const trainingStatusLabel: Record<string, { label: string; cls: string }>
 
 
 export const decisionLabel: Record<string, { label: string; cls: string }> = {
-  PASS: { label: 'ĐẠT', cls: 'bg-emerald-100 text-emerald-700' },
-  FAIL: { label: 'LOẠI', cls: 'bg-rose-100 text-rose-700' },
+  PASS: { label: 'ĐẠT (PASS)', cls: 'bg-emerald-100 text-emerald-700' },
+  PASS_PV: { label: 'ĐẠT PHỎNG VẤN', cls: 'bg-emerald-100 text-emerald-700' },
+  PASS_HS: { label: 'ĐẠT HỒ SƠ', cls: 'bg-teal-100 text-teal-700' },
+  FAIL: { label: 'LOẠI (FAIL)', cls: 'bg-rose-100 text-rose-700' },
   REVIEW: { label: 'CẦN XEM LẠI', cls: 'bg-amber-100 text-amber-700' },
 };
 
