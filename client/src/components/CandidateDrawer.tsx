@@ -369,8 +369,6 @@ export default function CandidateDrawer({
       '👉 VUI LÒNG BẤM LINK DƯỚI ĐÂY ĐỂ XÁC NHẬN THAM GIA PHỎNG VẤN 1-CLICK:',
       `🔗 ${confirmUrl}`,
       '',
-      '*(Hoặc nhắn lại "XÁC NHẬN THAM GIA" vào Zalo này để hệ thống tự động ghi nhận)*',
-      '',
       'UMBO MILK rất mong được gặp bạn! ✨',
     ].join('\n');
 
