@@ -129,50 +129,12 @@ export async function startSystem(server: http.Server) {
   reconciliationService.start(15 * 60 * 1000);
   // 5 phút thay vì 60s: refreshAll giờ là batch 2 query, nhưng vẫn không cần chạy dày
   trainingRefreshTimer = setInterval(() => void trainingService.refreshAll().catch(() => undefined), 5 * 60 * 1000);
-  // Sao lưu tự động định kỳ (BACKUP_AUTO_DAYS, mặc định 7 ngày) — chạy ngay khi khởi động + mỗi chu kỳ
-  startBackupTimer();
-  // Zalo auto-refresh token: chạy sau 5s (để DB kịp load) và mỗi 1 giờ
-  // Access token sống 25h → refresh mỗi 20h (buffer 5h). Mỗi lần refresh cũng rotate refresh_token.
-  startZaloTokenTimer();
-
-  // Có job mới -> đánh thức worker ngay (không cần poll DB liên tục khi rảnh)
   const { syncQueue } = await import('./services/SyncQueueService');
   syncQueue.setWakeCallback(() => syncWorker.wake());
+  startBackupTimer();
 }
 
 let backupTimer: NodeJS.Timeout | null = null;
-let zaloTokenTimer: NodeJS.Timeout | null = null;
-
-/** Zalo token auto-refresh: chạy ngay sau 5s (để DB kịp init) rồi lặp lại mỗi 1 giờ.
- *  ensureTokenFresh() bên trong kiểm tra lastRefreshAt — chỉ thực sự gọi API sau 20h. */
-function startZaloTokenTimer(): void {
-  // Chạy lần đầu sau 5 giây (không chạy ngay để tránh race với DB init)
-  const runOnce = setTimeout(async () => {
-    try {
-      const { zaloService } = await import('./services/ZaloService');
-      const r = await zaloService.ensureTokenFresh();
-      if (r.refreshed) {
-        console.log('[ZaloTimer] Token đã được gia hạn khi khởi động.');
-      } else {
-        console.log(`[ZaloTimer] Token OK (${r.reason ?? 'không cần refresh'}).`);
-      }
-    } catch (e) {
-      console.warn('[ZaloTimer] Lỗi khi kiểm tra token lúc khởi động:', e instanceof Error ? e.message : String(e));
-    }
-  }, 5_000);
-  // Lặp lại mỗi 1 giờ
-  zaloTokenTimer = setInterval(async () => {
-    try {
-      const { zaloService } = await import('./services/ZaloService');
-      await zaloService.ensureTokenFresh();
-    } catch (e) {
-      console.warn('[ZaloTimer] Lỗi auto-refresh token:', e instanceof Error ? e.message : String(e));
-    }
-  }, 60 * 60 * 1000); // mỗi 1 giờ
-  // Dọn timeout 1 lần khi timer interval đã chạy (phòng memory leak)
-  zaloTokenTimer.unref?.();
-  void runOnce;
-}
 
 function startBackupTimer(): void {
   const { backupService } = require('./services/BackupService');

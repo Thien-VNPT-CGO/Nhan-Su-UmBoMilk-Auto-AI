@@ -54,13 +54,7 @@ async function loadSettings(): Promise<Settings> {
   const base = row
     ? mergeSettings(row.value)
     : (JSON.parse(JSON.stringify(DEFAULT_SETTINGS)) as Settings);
-  // BUG FIX: Env chỉ là FALLBACK khi DB chưa có giá trị — KHÔNG phải override!
-  // Trước đây: if (env.zaloAccessToken) base.zalo.accessToken = env.zaloAccessToken
-  //   → env LUÔN thắng DB → token mới lưu qua UI bị token cũ trong .env ghi đè ngay lập tức
-  // Đúng: chỉ dùng env khi DB đang empty (lần đầu setup, chưa qua OAuth)
-  if (env.zaloOaId && !base.zalo.oaId) base.zalo.oaId = env.zaloOaId;
-  if (env.zaloAccessToken && !base.zalo.accessToken) base.zalo.accessToken = env.zaloAccessToken;
-  if (env.zaloRefreshToken && !base.zalo.refreshToken) base.zalo.refreshToken = env.zaloRefreshToken;
+
   return base;
 }
 

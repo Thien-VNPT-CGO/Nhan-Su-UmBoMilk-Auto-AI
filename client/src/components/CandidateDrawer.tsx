@@ -637,7 +637,16 @@ export default function CandidateDrawer({
                       <Video size={14} className="text-emerald-600" />
                       <a className="text-emerald-700 underline break-all" href={c.ggMeetLink ?? '#'} target="_blank" rel="noreferrer">{c.ggMeetLink}</a>
                     </div>
-                    <div className="flex gap-1.5 pt-1">
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      <a
+                        href={`https://zalo.me/${c.sdtZalo}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn-primary !px-2.5 !py-1.5 !text-xs font-bold bg-[#0068ff] hover:bg-[#0052cc] text-white flex items-center gap-1 shadow-xs"
+                        title="Mở Zalo nhắn trực tiếp 1-1 với ứng viên trên App Zalo"
+                      >
+                        <span>💬 Mở App Zalo gửi Thư Mời PV</span>
+                      </a>
                       <button className="btn-secondary !px-2.5 !py-1.5 !text-xs" onClick={openEditInterviewModal}>
                         <CalendarDays size={13} /> Sửa lịch
                       </button>

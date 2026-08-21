@@ -35,12 +35,7 @@ export const env = {
   aiApiKey: process.env.AI_API_KEY ?? '',
   aiModel: process.env.AI_MODEL ?? 'gpt-4o-mini',
 
-  zaloOaId: process.env.ZALO_OA_ID ?? '',
-  zaloAccessToken: process.env.ZALO_ACCESS_TOKEN ?? '',
-  zaloRefreshToken: process.env.ZALO_REFRESH_TOKEN ?? '',
-  zaloAppId: process.env.ZALO_APP_ID ?? '',
-  zaloAppSecret: process.env.ZALO_APP_SECRET ?? '',
-  zaloRedirectUri: process.env.ZALO_REDIRECT_URI ?? 'http://localhost:3000/api/zalo/oauth-callback',
+
 
   // ===== Google Calendar (tự tạo link Meet khi chấm PASS) =====
   googleClientId: process.env.GOOGLE_CLIENT_ID ?? '',

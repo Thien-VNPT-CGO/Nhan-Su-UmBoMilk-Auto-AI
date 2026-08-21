@@ -46,11 +46,7 @@ export class SyncWorker {
   private alertTimer: NodeJS.Timeout | null = null;
   private runningAlert = false;
   private lastQueueAlertAt = 0;
-  private zaloTokenTimer: NodeJS.Timeout | null = null;
-  private zaloUserIdTimer: NodeJS.Timeout | null = null;
   private pruneReferralTimer: NodeJS.Timeout | null = null;
-  private runningZaloRefresh = false;
-  private runningZaloUserId = false;
   private runningPruneReferral = false;
 
   constructor(intervalMs = 3000) {
@@ -99,12 +95,6 @@ export class SyncWorker {
     this.alertTimer = setInterval(() => {
       void this.tickQueueAlert();
     }, 5 * 60_000);
-    this.zaloTokenTimer = setInterval(() => {
-      void this.tickZaloTokenRefresh();
-    }, 60_000);
-    this.zaloUserIdTimer = setInterval(() => {
-      void this.tickAutoZaloUserId();
-    }, 2 * 60_000);
     this.pruneReferralTimer = setInterval(() => {
       void this.tickPruneReferralRejected();
     }, 15 * 60_000);
@@ -116,8 +106,6 @@ export class SyncWorker {
     void this.tickInterviewReminders();
     void this.tickPrune();
     void this.tickQueueAlert();
-    void this.tickZaloTokenRefresh();
-    void this.tickAutoZaloUserId();
     void this.tickPruneReferralRejected();
     console.log('[SyncWorker] started');
   }
@@ -147,36 +135,7 @@ export class SyncWorker {
 
 
 
-  /**
-   * Gia hạn token Zalo OA trước khi hết hạn (mỗi 25 ngày) — refresh token xoay vòng
-   * nên kết nối Zalo duy trì "vĩnh viễn" mà không cần admin kết nối lại tay.
-   */
-  private async tickZaloTokenRefresh(): Promise<void> {
-    if (!this.running || this.runningZaloRefresh) return;
-    this.runningZaloRefresh = true;
-    try {
-      await zaloService.ensureTokenFresh();
-    } catch (e) {
-      console.warn('[SyncWorker] zalo token:', e instanceof Error ? e.message : String(e));
-    } finally {
-      this.runningZaloRefresh = false;
-    }
-  }
 
-  private async tickAutoZaloUserId(): Promise<void> {
-    if (!this.running || this.runningZaloUserId) return;
-    this.runningZaloUserId = true;
-    try {
-      const missingCount = await prisma.candidate.count({ where: { zaloUserId: null } });
-      if (missingCount > 0) {
-        await zaloService.syncOaUsersAndMatchCandidates();
-      }
-    } catch (e) {
-      console.warn('[SyncWorker] auto zaloUserId:', e instanceof Error ? e.message : String(e));
-    } finally {
-      this.runningZaloUserId = false;
-    }
-  }
 
   /** Tự động xóa các hồ sơ bị LOẠI do thuộc kênh giới thiệu sau 24 giờ. */
   private async tickPruneReferralRejected(): Promise<void> {

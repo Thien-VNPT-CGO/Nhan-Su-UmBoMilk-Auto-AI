@@ -223,15 +223,7 @@ router.post('/:id/resolve-zalo-user-id', requireAuth, async (req: AuthedRequest,
   try {
     const candidate = await prisma.candidate.findUnique({ where: { id: req.params.id } });
     if (!candidate) throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy ứng viên.');
-    const userId = await zaloService.tryResolveAndSaveUserId(candidate.id, candidate.sdtZalo);
-    if (!userId) {
-      res.json({
-        success: false,
-        message: 'Chưa tra cứu được Zalo User ID từ SĐT này. Nhờ ứng viên nhắn 1 tin cho OA hoặc nhập tay.',
-      });
-      return;
-    }
-    res.json({ success: true, data: { zaloUserId: userId } });
+    res.json({ success: true, data: { zaloUserId: candidate.sdtZalo, note: 'Sử dụng Zalo Cá Nhân theo SĐT' } });
   } catch (e) {
     next(e);
   }
