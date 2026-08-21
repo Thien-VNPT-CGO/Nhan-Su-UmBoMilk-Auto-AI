@@ -692,31 +692,12 @@ export default function CandidateDrawer({
                 )}
 
                 {c.hrDecision === 'PASS' && (
-                  <div className="rounded-xl bg-slate-50/90 p-4 border border-slate-200/80 space-y-2.5">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <div>
-                        <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Trạng thái xác nhận tham gia</div>
-                        <div className="mt-1 flex items-center gap-2">
-                          <Badge className={trainingStatusLabel[c.trangThaiTraining ?? 'CHUA_THAM_GIA']?.cls}>
-                            {trainingStatusLabel[c.trangThaiTraining ?? 'CHUA_THAM_GIA']?.label ?? c.trangThaiTraining}
-                          </Badge>
-                        </div>
-                      </div>
-                      {c.trangThaiTraining === 'CHUA_THAM_GIA' ? (
-                        <button
-                          type="button"
-                          onClick={confirmTrainingParticipation}
-                          className="btn-success !py-2 !px-3.5 !text-xs font-bold shadow-xs flex items-center gap-1.5"
-                          title="Bấm khi ứng viên đã nhắn Zalo 'XÁC NHẬN THAM GIA' để đưa ứng viên vào danh sách Training"
-                        >
-                          <CheckCircle2 size={15} />
-                          <span>Xác nhận UV Đã Đồng Ý Tham Gia</span>
-                        </button>
-                      ) : (
-                        <div className="text-xs font-semibold text-emerald-600 flex items-center gap-1">
-                          ✓ Đã xác nhận tham gia Training
-                        </div>
-                      )}
+                  <div className="rounded-xl bg-slate-50/90 p-4 border border-slate-200/80 space-y-2">
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Trạng thái xác nhận tham gia</div>
+                    <div className="mt-1 flex items-center gap-2">
+                      <Badge className={trainingStatusLabel[c.trangThaiTraining ?? 'CHUA_THAM_GIA']?.cls}>
+                        {trainingStatusLabel[c.trangThaiTraining ?? 'CHUA_THAM_GIA']?.label ?? c.trangThaiTraining}
+                      </Badge>
                     </div>
                   </div>
                 )}
