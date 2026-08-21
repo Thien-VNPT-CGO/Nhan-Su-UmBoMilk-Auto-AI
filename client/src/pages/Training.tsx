@@ -90,9 +90,6 @@ export default function Training() {
     'Ca sáng: 7h00 - 12h00',
     'Ca chiều: 12h00 - 18h00',
     'Ca tối: 18h00 - 23h00',
-    'Ca sáng + Ca chiều',
-    'Ca sáng + Ca tối',
-    'Ca chiều + Ca tối',
   ];
 
   const load = useCallback(async () => {
