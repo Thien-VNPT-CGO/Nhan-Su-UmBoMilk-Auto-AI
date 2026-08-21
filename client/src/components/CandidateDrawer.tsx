@@ -672,9 +672,20 @@ export default function CandidateDrawer({
                       </div>
                     </div>
                   </div>
-                  <button className="btn-secondary !text-xs !py-1 !px-2.5" onClick={notifyZalo}>
-                    <Send size={13} /> Gửi thông báo đào tạo
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={`https://zalo.me/${c.sdtZalo}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn-primary !text-xs !py-1 !px-2.5 font-bold flex items-center gap-1 bg-[#0068ff] hover:bg-[#0052cc] text-white shadow-xs"
+                      title="Mở Zalo cá nhân nhắn 1-1 với ứng viên trên App Zalo"
+                    >
+                      <span>💬 Mở App Zalo nhắn trực tiếp</span>
+                    </a>
+                    <button className="btn-secondary !text-xs !py-1 !px-2.5" onClick={notifyZalo}>
+                      <Send size={13} /> Gửi thông báo đào tạo
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex-1 p-4 overflow-y-auto space-y-3.5 bg-slate-50/50">

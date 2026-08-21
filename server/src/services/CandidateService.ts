@@ -149,8 +149,23 @@ export class CandidateService {
 
     emit('candidate:new', { candidateId: withHash.id });
 
-    // Tự động lấy Zalo User ID theo SĐT từ Zalo OA API và lưu vào hồ sơ ngay khi điền Form
-    void zaloService.tryResolveAndSaveUserId(withHash.id, sdt).catch(() => undefined);
+    // Tự động gửi tin nhắn chào mừng Zalo Cá Nhân trực tiếp tới SĐT ứng viên ngay khi nộp Form
+    void (async () => {
+      try {
+        const welcomeText = [
+          '🐮 [UMBO MILK] – CẢM ƠN BẠN ĐÃ ĐĂNG KÝ ỨNG TUYỂN ✨',
+          '',
+          `Chào ${withHash.tenUv.trim()} ❤️`,
+          `Hệ thống tuyển dụng UmBo Milk đã nhận được hồ sơ ứng tuyển của bạn tại chi nhánh ${withHash.chiNhanh}.`,
+          '',
+          '📌 Bộ phận HR sẽ xem xét hồ sơ và liên hệ thông báo kết quả/lịch phỏng vấn sớm nhất cho bạn!',
+          'Chúc bạn một ngày nhiều năng lượng! 🍀',
+        ].join('\n');
+        await zaloService.sendText(sdt, welcomeText, withHash.id);
+      } catch (e) {
+        console.warn('[FormSubmit] Lỗi gửi Zalo chào mừng:', e instanceof Error ? e.message : String(e));
+      }
+    })();
 
     // Thông báo nội bộ cho HR khi có hồ sơ mới
     try {
