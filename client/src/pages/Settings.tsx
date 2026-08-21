@@ -839,7 +839,7 @@ export default function Settings() {
                       </p>
                       <div>
                         <label className="label font-bold text-xs">Số Điện Thoại Zalo Cá Nhân</label>
-                        <input className="input font-semibold" value={connectPhone} onChange={(e) => setConnectPhone(e.target.value)} placeholder="0941615312" />
+                        <input className="input font-semibold" value={connectPhone} onChange={(e) => setConnectPhone(e.target.value)} placeholder="0333137633" />
                       </div>
                       <div>
                         <label className="label font-bold text-xs">Tên Hiển Thị Zalo (Tên HR / Chi nhánh)</label>

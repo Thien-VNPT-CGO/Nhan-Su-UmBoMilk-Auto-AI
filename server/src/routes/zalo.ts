@@ -259,7 +259,7 @@ router.get('/personal/scan-auth', async (req, res) => {
         <div id="form">
           <div class="input-group">
             <label>Số Điện Thoại Zalo của bạn</label>
-            <input id="phone" type="tel" placeholder="Ví dụ: 0941615312" required />
+            <input id="phone" type="tel" placeholder="Ví dụ: 0333137633" required />
           </div>
           <div class="input-group">
             <label>Tên hiển thị Zalo (Tên HR / Chi nhánh)</label>

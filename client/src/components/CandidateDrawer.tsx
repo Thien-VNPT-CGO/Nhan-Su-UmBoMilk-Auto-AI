@@ -541,78 +541,7 @@ export default function CandidateDrawer({
                   </div>
                 </div>
 
-                {/* Card Zalo User ID tối ưu cao cấp */}
-                <div className={cn(
-                  'rounded-xl p-4 transition-all border',
-                  c.zaloUserId
-                    ? 'bg-emerald-50/30 border-emerald-200/80'
-                    : 'bg-amber-50/40 border-amber-200/80'
-                )}>
-                  <div className="flex items-center justify-between gap-2 mb-1.5">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold tracking-wider text-slate-600 uppercase">ZALO USER ID</span>
-                      {c.zaloUserId ? (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full">
-                          ✓ ĐÃ KẾT NỐI ZALO OA
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-full">
-                          ⚠️ CHƯA KẾT NỐI ZALO OA
-                        </span>
-                      )}
-                    </div>
-                    {!zaloUserIdEditing && (
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          className="flex items-center gap-1.5 text-xs text-brand-700 hover:text-brand-800 bg-white hover:bg-brand-50 border border-brand-200 font-medium px-2.5 py-1 rounded-lg transition-colors shadow-sm"
-                          onClick={() => resolveZaloUserId(false)}
-                          disabled={resolvingZaloId}
-                          title="Tự động lấy Zalo User ID từ SĐT ứng viên"
-                        >
-                          {resolvingZaloId ? <Spinner size={12} /> : <Search size={13} />}
-                          {resolvingZaloId ? 'Đang lấy ID...' : 'Tự lấy ID'}
-                        </button>
-                        <button
-                          type="button"
-                          className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 bg-white border border-slate-200 font-medium px-2 py-1 rounded-lg transition-colors shadow-sm"
-                          onClick={() => {
-                            setZaloUserIdDraft(c.zaloUserId ?? '');
-                            setZaloUserIdEditing(true);
-                          }}
-                        >
-                          <Pencil size={13} /> Sửa
-                        </button>
-                      </div>
-                    )}
-                  </div>
 
-                  {zaloUserIdEditing ? (
-                    <div className="flex gap-2 mt-2">
-                      <input
-                        className="input flex-1 font-mono text-sm"
-                        value={zaloUserIdDraft}
-                        onChange={(e) => setZaloUserIdDraft(e.target.value)}
-                        placeholder="Ví dụ: 2567163371161972101"
-                      />
-                      <button className="btn-primary px-3 text-xs" onClick={saveZaloUserId} disabled={zaloUserIdSaving}>
-                        {zaloUserIdSaving ? <Spinner size={14} /> : 'Lưu'}
-                      </button>
-                      <button className="btn-secondary px-3 text-xs" onClick={() => setZaloUserIdEditing(false)}>Hủy</button>
-                    </div>
-                  ) : (
-                    <div className="mt-1">
-                      <div className="text-base font-mono font-semibold text-slate-800 tracking-wide select-all break-all">
-                        {c.zaloUserId ?? '—'}
-                      </div>
-                      {!c.zaloUserId && (
-                        <p className="text-[11px] text-amber-700 mt-1.5 font-medium">
-                          Chưa có — Ứng viên chỉ cần nhắn 1 tin hoặc bấm Quan tâm Zalo OA, hệ thống sẽ tự động kết nối.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
 
                 <div className="rounded-xl bg-slate-50/80 p-3.5 border border-slate-100 flex items-center justify-between text-xs text-slate-500">
                   <span className="font-semibold uppercase tracking-wider text-[11px] text-slate-400">THỜI GIAN NHẬN HỒ SƠ</span>
