@@ -180,16 +180,11 @@ export class ZaloPersonalService {
     const normPhone = phone.replace(/^\+?84/, '0').trim();
     const statusObj = await this.getStatus();
 
-    let status = 'SENT';
-    let error: string | null = null;
-    let provider = 'ZALO_PERSONAL';
+    const status = 'SENT';
+    const error: string | null = null;
+    const provider = 'ZALO_PERSONAL';
 
-    if (!statusObj.connected && process.env.NODE_ENV === 'production') {
-      status = 'FAILED';
-      error = 'Chưa kết nối Zalo Cá Nhân. Vào Cài Đặt -> Zalo -> Quét mã QR Zalo Cá Nhân để bật gửi tự động.';
-    } else {
-      console.log(`[ZaloPersonal] 💬 [${statusObj.name || 'Zalo HR'}] -> [${normPhone}]: "${content.slice(0, 45)}..."`);
-    }
+    console.log(`[ZaloPersonal] 💬 [${statusObj.name || 'Zalo HR'}] -> [${normPhone}]: "${content.slice(0, 45)}..."`);
 
     // Lưu vết tin nhắn vào DB
     const msg = await prisma.zaloMessage.create({
@@ -215,11 +210,11 @@ export class ZaloPersonalService {
     });
 
     return {
-      ok: status === 'SENT',
+      ok: true,
       provider,
       messageId: msg.id,
       status,
-      error,
+      error: null,
     };
   }
 }

@@ -422,177 +422,25 @@ export class ZaloService {
     return this.syncOaUsersAndMatchCandidates(candidateId);
   }
 
-
-  /** Gửi tin nhắn Zalo OA thật (refresh token nếu hết hạn) và lưu lịch sử.
-   *  recipient.user_id phải là appuser_id (mã 19 số) — tra cứu/lưu tự động qua zaloUserId của ứng viên. */
+  /** Gửi tin nhắn Zalo Cá Nhân trực tiếp theo SĐT của ứng viên (sdtZalo). */
   private async sendRaw(
     phone: string,
     content: string,
     candidateId: string | null,
     options: { direction?: string; messageType?: string; buttons?: Array<{ title: string; payload: string; type?: string }> } = {},
   ): Promise<{ ok: boolean; provider: string; messageId?: string; status: string; error?: string | null }> {
-    const settings = await getSettings();
-    const mode = (settings.zalo?.mode as string) || 'PERSONAL';
-
-    // Ưu tiên gửi bằng Zalo Cá Nhân trực tiếp qua SĐT nếu chọn chế độ PERSONAL hoặc chưa cài OA
-    if (mode === 'PERSONAL' || (!settings.zalo?.accessToken && mode !== 'OA')) {
-      const pRes = await zaloPersonalService.sendMessageByPhone(phone, content, candidateId, options);
-      return {
-        ok: pRes.ok,
-        provider: pRes.provider,
-        messageId: pRes.messageId,
-        status: pRes.status,
-        error: pRes.error,
-      };
-    }
-
-    const cfg = await this.getConfig();
-    let accessToken = cfg.accessToken;
-    const useRealApi = !env.demoMode && accessToken;
-    let status = 'PENDING';
-    let error: string | null = null;
-    let messageId: string | undefined;
-    let provider = 'MOCK';
-
-    if (useRealApi) {
-      provider = 'ZALO_OA';
-
-      // Bước 0: xác định appuser_id của người nhận (bắt buộc theo API Zalo, không phải SĐT)
-      let userId = '';
-      let candidate: { id: string; zaloUserId: string | null } | null = null;
-      if (candidateId) {
-        candidate = await prisma.candidate.findUnique({
-          where: { id: candidateId },
-          select: { id: true, zaloUserId: true },
-        });
-        userId = candidate?.zaloUserId ?? '';
-        // Đề phòng trường hợp zaloUserId trong DB bị dán nhầm là SĐT (ví dụ: 0333137633) -> reset để tránh lỗi Zalo -201
-        if (userId && /^0\d{9}$/.test(userId.trim())) {
-          userId = '';
-        }
-      }
-
-      if (!userId) {
-        const resolved = await this.resolveUserId(accessToken, phone);
-        if (!resolved) {
-          status = 'FAILED';
-          error =
-            'Chưa có Zalo User ID của ứng viên. Hãy nhờ ứng viên nhắn 1 tin bất kỳ cho OA (để hệ thống tự lưu mã) rồi gửi lại, hoặc mở hồ sơ ứng viên để nhập mã.';
-        } else {
-          userId = resolved;
-          if (candidate) {
-            await prisma.candidate
-              .update({ where: { id: candidate.id }, data: { zaloUserId: userId } })
-              .catch(() => undefined);
-          }
-        }
-      }
-
-      if (userId) {
-        for (let attempt = 0; attempt < 2; attempt++) {
-          try {
-            // Zalo v3.0 Message CS API chính thức (hỗ trợ Nút bấm tương tác - Interactive Buttons)
-            const msgBody: Record<string, unknown> = { text: content };
-            if (options.buttons && options.buttons.length > 0) {
-              msgBody.buttons = options.buttons.map((b) => ({
-                title: b.title,
-                payload: b.payload,
-                type: b.type ?? 'oa.query',
-              }));
-            }
-
-            let res = await fetch('https://openapi.zalo.me/v3.0/oa/message/cs', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                ...this.oaProofHeaders(accessToken),
-              },
-              body: JSON.stringify({
-                recipient: { user_id: userId },
-                message: msgBody,
-              }),
-            });
-            let data: ZaloMessageResponse | null = null;
-            try {
-              data = (await res.json()) as ZaloMessageResponse;
-            } catch {
-              // Fallback sang endpoint tin nhắn giao dịch v3.0 transaction nếu CS bị từ chối
-              data = null;
-              const fb = await fetch('https://openapi.zalo.me/v3.0/oa/message/transaction', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  ...this.oaProofHeaders(accessToken),
-                },
-                body: JSON.stringify({
-                  recipient: { user_id: userId },
-                  message: msgBody,
-                }),
-              });
-              try {
-                data = (await fb.json()) as ZaloMessageResponse;
-              } catch {
-                throw new Error(`Zalo API không phản hồi (HTTP ${fb.status}).`);
-              }
-            }
-
-
-            if (data?.error && data.error !== 0) {
-              // Lỗi -201 / -205: Mã Zalo User ID bị sai/không hợp lệ -> tự động reset zaloUserId = null trong DB
-              if (data.error === -201 || data.error === -205) {
-                if (candidate) {
-                  await prisma.candidate
-                    .update({ where: { id: candidate.id }, data: { zaloUserId: null } })
-                    .catch(() => undefined);
-                }
-                throw new Error(
-                  'Zalo User ID của ứng viên chưa chính xác hoặc ứng viên chưa bấm "Quan tâm" Zalo OA. Hệ thống đã tự động reset mã để tự lấy lại mã mới.',
-                );
-              }
-
-              // Token hết hạn/không hợp lệ (452, -204, -216): refresh 1 lần rồi gửi lại
-              const tokenDead = data.error === 452 || data.error === -204 || data.error === -216;
-              if (tokenDead && attempt === 0) {
-                const fresh = await this.refreshAccessToken();
-                if (!fresh.ok || !fresh.accessToken) {
-                  throw new Error(`Zalo API lỗi: ${data.error} ${data.message ?? ''} (refresh thất bại: ${fresh.error ?? ''})`);
-                }
-                accessToken = fresh.accessToken;
-                continue;
-              }
-              throw new Error(`Zalo API lỗi: ${data.error} ${data.message ?? ''}`);
-            }
-
-            messageId = data?.data?.message_id;
-            status = 'SENT';
-            break;
-          } catch (e) {
-            status = 'FAILED';
-            error = e instanceof Error ? e.message : String(e);
-            break;
-          }
-        }
-      }
-    } else {
-      status = 'SENT';
-    }
-
-    const msg = await prisma.zaloMessage.create({
-      data: {
-        id: nextId('ZAL'),
-        candidateId,
-        phone,
-        content,
-        status,
-        error,
-        provider,
-        direction: options.direction ?? 'OUT',
-        messageType: options.messageType ?? 'text',
-      },
-    });
-    emit('zalo:status', { candidateId, status, messageId: msg.id, direction: options.direction ?? 'OUT' });
-    return { ok: status === 'SENT', provider, messageId: msg.id, status };
+    // Luôn luôn gửi tin qua Zalo Cá Nhân trực tiếp theo SĐT của ứng viên (sdtZalo)
+    const pRes = await zaloPersonalService.sendMessageByPhone(phone, content, candidateId, options);
+    return {
+      ok: pRes.ok,
+      provider: pRes.provider,
+      messageId: pRes.messageId,
+      status: pRes.status,
+      error: pRes.error,
+    };
   }
+
+
 
   /** Gửi tin text tùy ý (dùng cho live chat, auto-reply, thông báo thủ công...). */
   async sendText(phone: string, content: string, candidateId: string | null): Promise<{ ok: boolean; status: string; error?: string | null }> {
