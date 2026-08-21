@@ -48,9 +48,10 @@ export class SyncWorker {
   private lastQueueAlertAt = 0;
   private zaloTokenTimer: NodeJS.Timeout | null = null;
   private zaloUserIdTimer: NodeJS.Timeout | null = null;
+  private pruneReferralTimer: NodeJS.Timeout | null = null;
   private runningZaloRefresh = false;
   private runningZaloUserId = false;
-
+  private runningPruneReferral = false;
 
   constructor(intervalMs = 3000) {
     this.intervalMs = intervalMs;
@@ -104,6 +105,9 @@ export class SyncWorker {
     this.zaloUserIdTimer = setInterval(() => {
       void this.tickAutoZaloUserId();
     }, 2 * 60_000);
+    this.pruneReferralTimer = setInterval(() => {
+      void this.tickPruneReferralRejected();
+    }, 15 * 60_000);
     void this.tick();
     void this.tickFormImport();
     void this.tickAutoDedup();
@@ -114,8 +118,10 @@ export class SyncWorker {
     void this.tickQueueAlert();
     void this.tickZaloTokenRefresh();
     void this.tickAutoZaloUserId();
+    void this.tickPruneReferralRejected();
     console.log('[SyncWorker] started');
   }
+
 
   stop(): void {
     this.running = false;
@@ -171,6 +177,52 @@ export class SyncWorker {
       this.runningZaloUserId = false;
     }
   }
+
+  /** Tự động xóa các hồ sơ bị LOẠI do thuộc kênh giới thiệu sau 24 giờ. */
+  private async tickPruneReferralRejected(): Promise<void> {
+    if (!this.running || this.runningPruneReferral) return;
+    this.runningPruneReferral = true;
+    try {
+      const hours24Ago = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const candidates = await prisma.candidate.findMany({
+        where: {
+          OR: [
+            { aiRecommendation: 'FAIL' },
+            { xepLoai: null, tongDiem: { not: null } },
+          ],
+          thoiGian: { lt: hours24Ago },
+        },
+        select: { id: true, tenUv: true, sdtZalo: true, thoiGian: true, kenhBietTin: true },
+      });
+
+      const referralKeywords = ['gioi thieu', 'ban be', 'nguoi quen'];
+      const toDelete = candidates.filter((c) => {
+        if (!c.kenhBietTin) return false;
+        const norm = c.kenhBietTin.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
+        return referralKeywords.some((k) => norm.includes(k));
+      });
+
+      for (const cand of toDelete) {
+        try {
+          const cleared = await getGoogleSheetService().clearFormResponseRows(cand.sdtZalo, cand.thoiGian);
+          if (cleared > 0) {
+            console.log(`[SyncWorker] auto prune referral: cleared ${cleared} dòng Google Sheet cho ${cand.id}`);
+          }
+        } catch (e) {
+          console.warn(`[SyncWorker] auto prune clear Sheet ${cand.id}:`, e instanceof Error ? e.message : String(e));
+        }
+
+        await prisma.candidate.delete({ where: { id: cand.id } });
+        console.log(`[SyncWorker] 🗑️ Tự động xóa ứng viên LOẠI (Giới thiệu) >24h: ${cand.id} (${cand.tenUv})`);
+        emit('candidate:deleted', { candidateId: cand.id });
+      }
+    } catch (e) {
+      console.warn('[SyncWorker] tickPruneReferralRejected:', e instanceof Error ? e.message : String(e));
+    } finally {
+      this.runningPruneReferral = false;
+    }
+  }
+
 
 
   /**

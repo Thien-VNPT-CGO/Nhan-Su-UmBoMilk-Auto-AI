@@ -25,6 +25,7 @@ interface CandidateRow {
   caLam: string;
   chiNhanh: string;
   kinhNghiem: string;
+  kenhBietTin?: string | null;
   tongDiem: number | null;
   xepLoai: string | null;
   aiRecommendation: string | null;
@@ -80,6 +81,17 @@ function decisionBadge(d: string | null) {
   if (d === 'REVIEW') return <Badge className="bg-amber-100 text-amber-700"><AlertTriangle size={11} /> CẦN XEM LẠI</Badge>;
   return <span className="text-slate-400 text-xs">—</span>;
 }
+
+function isReferralChannel(v?: string | null): boolean {
+  if (!v) return false;
+  const n = v.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
+  return ['gioi thieu', 'ban be', 'nguoi quen'].some((k) => n.includes(k));
+}
+
+function isReferralRejected(r: { kenhBietTin?: string | null; aiRecommendation?: string | null; xepLoai?: string | null }): boolean {
+  return isReferralChannel(r.kenhBietTin) && (r.aiRecommendation === 'FAIL' || !r.xepLoai);
+}
+
 
 export default function Candidates() {
   const { toast } = useToast();
@@ -274,87 +286,103 @@ export default function Candidates() {
                     ))}
                   </tr>
                 ))}
-              {!loading && rows.map((r) => (
-                <tr
-                  key={r.id}
-                  className="hover:bg-brand-50/40 cursor-pointer transition-colors"
-                  onClick={() => setSelected(r)}
-                >
-                  <td className="table-td font-mono text-xs font-bold text-brand-600">{r.id}</td>
-                  <td className="table-td text-xs text-slate-500">{formatDateTime(r.thoiGian)}</td>
-                  <td className="table-td font-semibold text-slate-800">{r.tenUv}</td>
-                  <td className="table-td text-slate-600">{r.gioiTinh || '—'}</td>
-                  <td className="table-td text-slate-600">{r.namSinh}</td>
-                  <td className="table-td text-slate-600">{r.sdtZalo}</td>
-                  <td className="table-td text-slate-600 max-w-[160px] truncate">{r.trinhDo}</td>
-                  <td className="table-td text-slate-600">{r.queQuan}</td>
-                  <td className="table-td"><Badge className="bg-brand-50 text-brand-700">{r.caLam}</Badge></td>
-                  <td className="table-td text-slate-600">{r.chiNhanh}</td>
-                  <td className="table-td text-slate-600 max-w-[160px] truncate">{r.kinhNghiem}</td>
-                  <td className="table-td">
-                    {r.tongDiem !== null ? (
-                      <span className={cn(
-                        'inline-flex items-center justify-center w-8 h-8 rounded-xl text-sm font-extrabold',
-                        r.tongDiem >= 7 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600',
-                      )}>
-                        {r.tongDiem}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-slate-400">—</span>
+              {!loading && rows.map((r) => {
+                const isRefFail = isReferralRejected(r);
+                return (
+                  <tr
+                    key={r.id}
+                    className={cn(
+                      'transition-colors',
+                      isRefFail
+                        ? 'bg-rose-100/80 hover:bg-rose-200/80 text-rose-900 border-l-4 border-l-rose-500 cursor-not-allowed select-none'
+                        : 'hover:bg-brand-50/40 cursor-pointer'
                     )}
-                  </td>
-                  <td className="table-td">
-                    {r.xepLoai ? (
-                      xepLoaiBadge(r.xepLoai)
-                    ) : r.aiRecommendation ? (
-                      r.aiRecommendation === 'PASS'
-                        ? <Badge className="bg-emerald-50 text-emerald-600 border border-emerald-100">ĐẠT</Badge>
-                        : <Badge className="bg-slate-100 text-slate-500">LOẠI</Badge>
-                    ) : r.aiScoredAt ? (
-                      <Badge className="bg-sky-50 text-sky-600"><BrainCircuit size={11} /> Đang chấm</Badge>
-                    ) : (
-                      <span className="text-xs text-slate-400">Chưa chấm</span>
-                    )}
-                  </td>
-                  <td className="table-td">{decisionBadge(r.hrDecision)}</td>
-                  <td className="table-td">
-                    {r.trangThaiTraining ? (
-                      <Badge className={trainingStatusLabel[r.trangThaiTraining]?.cls}>
-                        {trainingStatusLabel[r.trangThaiTraining]?.label ?? r.trangThaiTraining}
-                      </Badge>
-                    ) : (
-                      <span className="text-xs text-slate-400">—</span>
-                    )}
-                  </td>
-                  <td className="table-td">
-                    {r._count && r._count.conflicts > 0 ? (
-                      <Badge className="bg-purple-100 text-purple-700">XUNG ĐỘT</Badge>
-                    ) : (
-                      <Badge className={syncStatusStyle.SYNCED.cls}>{syncStatusStyle.SYNCED.label}</Badge>
-                    )}
-                  </td>
-                  <td className="table-td">
-                    <div className="flex items-center gap-1.5">
-                      <Tooltip text="Xem chi tiết">
-                        <button
-                          className="btn-secondary !px-2.5 !py-1.5"
-                          onClick={(e) => { e.stopPropagation(); setSelected(r); }}
-                        >
-                          <Eye size={14} />
-                        </button>
-                      </Tooltip>
-                      <Tooltip text="Xóa ứng viên">
-                        <button
-                          className="btn-secondary !px-2.5 !py-1.5 !text-red-500 hover:!bg-red-50"
-                          onClick={(e) => { e.stopPropagation(); setConfirmDelete(r); }}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </Tooltip>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    onClick={() => {
+                      if (!isRefFail) setSelected(r);
+                    }}
+                    title={isRefFail ? 'Ứng viên bị loại do thuộc kênh giới thiệu (Hệ thống tự động xóa sau 24h)' : undefined}
+                  >
+                    <td className="table-td font-mono text-xs font-bold text-brand-600">{r.id}</td>
+                    <td className="table-td text-xs text-slate-500">{formatDateTime(r.thoiGian)}</td>
+                    <td className="table-td font-semibold text-slate-800">{r.tenUv}</td>
+                    <td className="table-td text-slate-600">{r.gioiTinh || '—'}</td>
+                    <td className="table-td text-slate-600">{r.namSinh}</td>
+                    <td className="table-td text-slate-600">{r.sdtZalo}</td>
+                    <td className="table-td text-slate-600 max-w-[160px] truncate">{r.trinhDo}</td>
+                    <td className="table-td text-slate-600">{r.queQuan}</td>
+                    <td className="table-td"><Badge className="bg-brand-50 text-brand-700">{r.caLam}</Badge></td>
+                    <td className="table-td text-slate-600">{r.chiNhanh}</td>
+                    <td className="table-td text-slate-600 max-w-[160px] truncate">{r.kinhNghiem}</td>
+                    <td className="table-td">
+                      {r.tongDiem !== null ? (
+                        <span className={cn(
+                          'inline-flex items-center justify-center w-8 h-8 rounded-xl text-sm font-extrabold',
+                          r.tongDiem >= 7 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600',
+                        )}>
+                          {r.tongDiem}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
+                    </td>
+                    <td className="table-td">
+                      {isRefFail ? (
+                        <Badge className="bg-rose-200 text-rose-800 font-bold border border-rose-300">
+                          <XCircle size={11} /> LOẠI (GIỚI THIỆU)
+                        </Badge>
+                      ) : r.xepLoai ? (
+                        xepLoaiBadge(r.xepLoai)
+                      ) : r.aiRecommendation ? (
+                        r.aiRecommendation === 'PASS'
+                          ? <Badge className="bg-emerald-50 text-emerald-600 border border-emerald-100">ĐẠT</Badge>
+                          : <Badge className="bg-slate-100 text-slate-500">LOẠI</Badge>
+                      ) : r.aiScoredAt ? (
+                        <Badge className="bg-sky-50 text-sky-600"><BrainCircuit size={11} /> Đang chấm</Badge>
+                      ) : (
+                        <span className="text-xs text-slate-400">Chưa chấm</span>
+                      )}
+                    </td>
+                    <td className="table-td">{decisionBadge(r.hrDecision)}</td>
+                    <td className="table-td">
+                      {r.trangThaiTraining ? (
+                        <Badge className={trainingStatusLabel[r.trangThaiTraining]?.cls}>
+                          {trainingStatusLabel[r.trangThaiTraining]?.label ?? r.trangThaiTraining}
+                        </Badge>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
+                    </td>
+                    <td className="table-td">
+                      {r._count && r._count.conflicts > 0 ? (
+                        <Badge className="bg-purple-100 text-purple-700">XUNG ĐỘT</Badge>
+                      ) : (
+                        <Badge className={syncStatusStyle.SYNCED.cls}>{syncStatusStyle.SYNCED.label}</Badge>
+                      )}
+                    </td>
+                    <td className="table-td">
+                      <div className="flex items-center gap-1.5">
+                        <Tooltip text={isRefFail ? 'Ứng viên bị loại do giới thiệu (Không thể xem)' : 'Xem chi tiết'}>
+                          <button
+                            className="btn-secondary !px-2.5 !py-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                            onClick={(e) => { e.stopPropagation(); if (!isRefFail) setSelected(r); }}
+                            disabled={isRefFail}
+                          >
+                            <Eye size={14} />
+                          </button>
+                        </Tooltip>
+                        <Tooltip text="Xóa ứng viên">
+                          <button
+                            className="btn-secondary !px-2.5 !py-1.5 !text-red-500 hover:!bg-red-50"
+                            onClick={(e) => { e.stopPropagation(); setConfirmDelete(r); }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </Tooltip>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
