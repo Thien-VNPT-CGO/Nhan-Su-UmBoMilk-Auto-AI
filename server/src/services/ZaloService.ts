@@ -300,27 +300,127 @@ export class ZaloService {
   }
 
   /**
-   * Tự động tra cứu Zalo User ID theo SĐT ứng viên ngay khi ứng viên điền Form đăng ký
-   * và lưu mã Zalo User ID vào hồ sơ database của ứng viên.
+   * Tự động quét danh sách người dùng / người quan tâm Zalo OA,
+   * tra cứu profile (SĐT/Họ tên) và tự động khớp + gán Zalo User ID cho các ứng viên chưa có ID.
    */
-  async tryResolveAndSaveUserId(candidateId: string, phone: string): Promise<string | null> {
+  async syncOaUsersAndMatchCandidates(targetCandidateId?: string): Promise<string | null> {
     try {
       const cfg = await this.getConfig();
       if (!cfg.accessToken) return null;
-      const userId = await this.resolveUserId(cfg.accessToken, phone);
-      if (userId) {
-        await prisma.candidate.update({
-          where: { id: candidateId },
-          data: { zaloUserId: userId },
-        }).catch(() => undefined);
-        console.log(`[ZaloService] ✅ Tự động lấy Zalo User ID (${userId}) cho ứng viên ${candidateId} (${phone}) từ Form đăng ký.`);
-        return userId;
+
+      // 1. Lấy danh sách ứng viên chưa có zaloUserId (hoặc ứng viên chỉ định)
+      const pendingCandidates = targetCandidateId
+        ? await prisma.candidate.findMany({ where: { id: targetCandidateId } })
+        : await prisma.candidate.findMany({ where: { zaloUserId: null }, take: 100 });
+
+      if (pendingCandidates.length === 0) return null;
+
+      // 2. Thử tìm từ lịch sử ZaloMessage trong DB trước
+      for (const cand of pendingCandidates) {
+        if (!cand.sdtZalo) continue;
+        const msg = await prisma.zaloMessage.findFirst({
+          where: {
+            OR: [
+              { candidateId: cand.id },
+              { phone: cand.sdtZalo },
+            ],
+            direction: 'IN',
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+        if (msg && msg.phone && !/^0\d{9}$/.test(msg.phone)) {
+          const matchedUserId = msg.phone;
+          await prisma.candidate.update({
+            where: { id: cand.id },
+            data: { zaloUserId: matchedUserId },
+          }).catch(() => undefined);
+          console.log(`[ZaloService] 🎉 Tự động gán Zalo User ID (${matchedUserId}) cho ứng viên ${cand.tenUv} từ lịch sử tin nhắn.`);
+          emit('candidate:new', { candidateId: cand.id });
+          if (cand.id === targetCandidateId) return matchedUserId;
+        }
+      }
+
+      // 3. Quét danh sách người dùng Zalo OA qua Zalo OpenAPI (v3.0 / v2.0)
+      let usersList: string[] = [];
+      try {
+        const paramStr = JSON.stringify({ offset: 0, count: 50 });
+        const res = await fetch(`https://openapi.zalo.me/v3.0/oa/user/getlist?data=${encodeURIComponent(paramStr)}`, {
+          headers: this.oaProofHeaders(cfg.accessToken),
+        });
+        const data = (await res.json()) as { error?: number; data?: { users?: Array<{ user_id?: string; id?: string }> } };
+        if (data.data?.users) {
+          usersList = data.data.users.map((u) => String(u.user_id ?? u.id ?? '').trim()).filter(Boolean);
+        }
+      } catch {
+        try {
+          const paramStr = JSON.stringify({ offset: 0, count: 50 });
+          const res = await fetch(`https://openapi.zalo.me/v2.0/oa/getuserslist?data=${encodeURIComponent(paramStr)}`, {
+            headers: this.oaProofHeaders(cfg.accessToken),
+          });
+          const data = (await res.json()) as { error?: number; data?: { users?: Array<{ user_id?: string; id?: string }> } };
+          if (data.data?.users) {
+            usersList = data.data.users.map((u) => String(u.user_id ?? u.id ?? '').trim()).filter(Boolean);
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      let foundTargetId: string | null = null;
+
+      // 4. Với mỗi user_id trong OA, tra cứu profile và ghép vào ứng viên chưa có zaloUserId
+      for (const uid of usersList) {
+        if (!uid || /^0\d{9}$/.test(uid)) continue;
+        try {
+          const profileRes = await fetch(`https://openapi.zalo.me/v2.0/oa/getprofile?uid=${encodeURIComponent(uid)}`, {
+            headers: this.oaProofHeaders(cfg.accessToken),
+          });
+          const profileData = (await profileRes.json()) as {
+            error?: number;
+            data?: { display_name?: string; shared_info?: { phone?: string | number } };
+          };
+          if (!profileData.data) continue;
+
+          const pName = String(profileData.data.display_name ?? '').trim();
+          const rawP = String(profileData.data.shared_info?.phone ?? '').trim();
+          const pPhone = rawP ? rawP.replace(/^\+?84/, '0') : '';
+
+          const matchedCand = pendingCandidates.find((c) => {
+            if (pPhone && c.sdtZalo === pPhone) return true;
+            if (pName && c.tenUv && c.tenUv.toLowerCase().includes(pName.toLowerCase())) return true;
+            return false;
+          });
+
+          if (matchedCand) {
+            await prisma.candidate.update({
+              where: { id: matchedCand.id },
+              data: { zaloUserId: uid },
+            });
+            console.log(`[ZaloService] 🎉 Quét thành công & gán Zalo User ID (${uid}) cho ứng viên ${matchedCand.tenUv} (${matchedCand.sdtZalo}).`);
+            emit('candidate:new', { candidateId: matchedCand.id });
+            if (matchedCand.id === targetCandidateId) {
+              foundTargetId = uid;
+            }
+          }
+        } catch {
+          // continue
+        }
+      }
+
+      if (targetCandidateId) {
+        const recheck = await prisma.candidate.findUnique({ where: { id: targetCandidateId }, select: { zaloUserId: true } });
+        return recheck?.zaloUserId ?? foundTargetId;
       }
     } catch (e) {
-      console.warn(`[ZaloService] Chưa tra cứu được Zalo User ID cho SĐT ${phone}:`, e instanceof Error ? e.message : String(e));
+      console.warn('[ZaloService] syncOaUsersAndMatchCandidates lỗi:', e instanceof Error ? e.message : String(e));
     }
     return null;
   }
+
+  async tryResolveAndSaveUserId(candidateId: string, _phone: string): Promise<string | null> {
+    return this.syncOaUsersAndMatchCandidates(candidateId);
+  }
+
 
   /** Gửi tin nhắn Zalo OA thật (refresh token nếu hết hạn) và lưu lịch sử.
    *  recipient.user_id phải là appuser_id (mã 19 số) — tra cứu/lưu tự động qua zaloUserId của ứng viên. */

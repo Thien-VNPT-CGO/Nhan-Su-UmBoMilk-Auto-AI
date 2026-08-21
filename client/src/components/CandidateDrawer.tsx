@@ -248,12 +248,14 @@ export default function CandidateDrawer({
     try {
       const res = await api.post<{ zaloUserId?: string }>(`/candidates/${c.id}/resolve-zalo-user-id`, {});
       if (res?.zaloUserId) {
-        if (!silent) toast('success', `Đã tìm thấy Zalo User ID: ${res.zaloUserId}`);
+        if (!silent) toast('success', `🎉 Đã tự động tìm thấy & gán Zalo User ID: ${res.zaloUserId}`);
         const d = await api.get<CandidateDetail>(`/candidates/${candidateId}`);
         setC(d);
         onChanged();
       } else {
-        if (!silent) toast('error', 'Zalo chưa trả về ID cho SĐT này. Nhờ ứng viên nhắn 1 tin cho OA.');
+        if (!silent) {
+          toast('error', 'Đã tự động quét Zalo OA nhưng chưa thấy tương tác. Nhờ ứng viên bấm "Quan tâm" hoặc nhắn 1 tin (VD: Hello) tới Zalo OA!');
+        }
       }
     } catch (e) {
       if (!silent) toast('error', e instanceof ApiError ? e.message : 'Tra cứu Zalo User ID thất bại.');
@@ -261,6 +263,7 @@ export default function CandidateDrawer({
       setResolvingZaloId(false);
     }
   };
+
 
   const saveZaloUserId = async () => {
     if (!c) return;

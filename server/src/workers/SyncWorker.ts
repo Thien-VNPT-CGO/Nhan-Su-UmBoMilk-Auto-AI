@@ -47,8 +47,10 @@ export class SyncWorker {
   private runningAlert = false;
   private lastQueueAlertAt = 0;
   private zaloTokenTimer: NodeJS.Timeout | null = null;
+  private zaloUserIdTimer: NodeJS.Timeout | null = null;
   private runningZaloRefresh = false;
   private runningZaloUserId = false;
+
 
   constructor(intervalMs = 3000) {
     this.intervalMs = intervalMs;
@@ -98,7 +100,10 @@ export class SyncWorker {
     }, 5 * 60_000);
     this.zaloTokenTimer = setInterval(() => {
       void this.tickZaloTokenRefresh();
-    }, 60 * 60_000);
+    }, 60_000);
+    this.zaloUserIdTimer = setInterval(() => {
+      void this.tickAutoZaloUserId();
+    }, 2 * 60_000);
     void this.tick();
     void this.tickFormImport();
     void this.tickAutoDedup();
@@ -134,28 +139,7 @@ export class SyncWorker {
     this.idleTimer = null;
   }
 
-  /**
-   * AI tự động quét và lấy Zalo User ID theo SĐT cho tất cả ứng viên chưa có ID (chạy ngầm tự động).
-   */
-  private async tickAutoZaloUserId(): Promise<void> {
-    if (!this.running || this.runningZaloUserId) return;
-    this.runningZaloUserId = true;
-    try {
-      const candidates = await prisma.candidate.findMany({
-        where: { zaloUserId: null },
-        select: { id: true, sdtZalo: true },
-        take: 10,
-      });
-      for (const c of candidates) {
-        if (!c.sdtZalo) continue;
-        await zaloService.tryResolveAndSaveUserId(c.id, c.sdtZalo);
-      }
-    } catch (e) {
-      console.warn('[SyncWorker] auto zalo user id:', e instanceof Error ? e.message : String(e));
-    } finally {
-      this.runningZaloUserId = false;
-    }
-  }
+
 
   /**
    * Gia hạn token Zalo OA trước khi hết hạn (mỗi 25 ngày) — refresh token xoay vòng
@@ -172,6 +156,22 @@ export class SyncWorker {
       this.runningZaloRefresh = false;
     }
   }
+
+  private async tickAutoZaloUserId(): Promise<void> {
+    if (!this.running || this.runningZaloUserId) return;
+    this.runningZaloUserId = true;
+    try {
+      const missingCount = await prisma.candidate.count({ where: { zaloUserId: null } });
+      if (missingCount > 0) {
+        await zaloService.syncOaUsersAndMatchCandidates();
+      }
+    } catch (e) {
+      console.warn('[SyncWorker] auto zaloUserId:', e instanceof Error ? e.message : String(e));
+    } finally {
+      this.runningZaloUserId = false;
+    }
+  }
+
 
   /**
    * Monitoring: nếu job đồng bộ mắc kẹt quá X phút (settings.notifications.queueAlertMinutes)
