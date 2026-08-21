@@ -48,19 +48,24 @@ export class ZaloService {
     const nameGreeting = c.tenUv.trim().toLowerCase().startsWith('sếp') ? c.tenUv.trim() : `Sếp ${c.tenUv.trim()}`;
 
     const content = [
-      '🐮 [UMBO MILK] – THÔNG BÁO LỊCH TRAINING 🎓',
+      '🐮 [UMBO MILK] – THÔNG BÁO LỊCH TRAINING & NHẬN VIỆC 🎉',
       '',
       `Chào ${nameGreeting} ❤️`,
-      'UMBO MILK thông báo lịch đào tạo (Training) của bạn như sau:',
+      'Chúc mừng bạn đã trúng tuyển! UMBO MILK xin thông báo lịch nhận việc và đào tạo (Training) của bạn như sau:',
       '',
-      '📌 CHI TIẾT LỊCH TRAINING:',
-      `• 📅 Ngày bắt đầu: ${formatDate(c.ngayBatDauTraining)}`,
-      `• 🏢 Chi nhánh làm việc: ${c.chiNhanh}`,
-      `• ⏱️ Ca làm việc chính thức: ${c.caLam}`,
+      '📌 THÔNG TIN NHẬN VIỆC & ĐÀO TẠO CHÍNH THỨC:',
+      `• 🏢 Chi nhánh làm việc chính thức: ${c.chiNhanh || 'Theo phân công'}`,
+      `• ⏱️ Ca làm việc chính thức: ${c.caLam || 'Theo ca chốt'}`,
+      `• 📅 Ngày bắt đầu đi làm / training: ${formatDate(c.ngayBatDauTraining)}`,
       '',
-      '👉 Vui lòng có mặt đúng giờ và thực hiện điểm danh theo hướng dẫn nhé!',
+      '📌 GIẤY TỜ HỒ SƠ CẦN CHUẨN BỊ KHI ĐI NHẬN CA:',
+      '1. Bản photo CCCD/CMND (kèm bản gốc đối chiếu)',
+      '2. Sơ yếu lý lịch / Giấy xác nhận hạnh kiểm',
+      '3. 2 ảnh thẻ 3x4',
       '',
-      'UMBO MILK chúc bạn có một quá trình đào tạo thuận lợi và hiệu quả! ✨',
+      '👉 Vui lòng có mặt đúng giờ và giữ liên lạc với Quản lý chi nhánh nhé!',
+      '',
+      'UMBO MILK chúc bạn có một quá trình làm việc thuận lợi và hiệu quả! ✨',
     ].join('\n');
 
     const r = await this.sendRaw(c.sdtZalo, content, c.id);

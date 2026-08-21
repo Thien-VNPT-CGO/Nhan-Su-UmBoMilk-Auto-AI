@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GraduationCap, CalendarDays, Send, RefreshCw, Briefcase, Video, CheckCircle2, XCircle, FileCheck, FileText } from 'lucide-react';
+import { GraduationCap, CalendarDays, Send, RefreshCw, Briefcase, Video, CheckCircle2, XCircle, FileCheck, FileText, MessageCircle } from 'lucide-react';
 import { api, ApiError } from '../api/client';
 import { Badge, Skeleton, EmptyState, Modal, Field, ConfirmDialog } from '../components/ui';
 import InterviewScoreModal from '../components/InterviewScoreModal';
@@ -196,13 +196,14 @@ export default function Training() {
     }
   };
 
-  const updateInterviewResult = async (id: string, interviewStatus: string) => {
+  const handleSendZaloNoticeAndOpenApp = async (r: TrainingRow) => {
     try {
-      await api.patch(`/candidates/${id}/interview`, { interviewStatus });
-      toast('success', 'Đã cập nhật kết quả phỏng vấn!');
-      void load();
-    } catch (e) {
-      toast('error', e instanceof ApiError ? e.message : 'Thao tác thất bại.');
+      await notify(r.id);
+      const cleanPhone = r.sdtZalo.replace(/\D/g, '');
+      const zaloUrl = cleanPhone ? `https://zalo.me/${cleanPhone}` : 'https://chat.zalo.me';
+      window.open(zaloUrl, '_blank');
+    } catch {
+      toast('error', 'Mở Zalo thất bại.');
     }
   };
 
@@ -210,15 +211,20 @@ export default function Training() {
 
   const handleUpdateInterviewDecision = async (id: string, decision: 'PASS_PV' | 'PASS_HS' | 'FAIL', note?: string) => {
     try {
-      if (decision === 'PASS_PV' || decision === 'PASS_HS') {
+      if (decision === 'PASS_PV') {
         await api.patch(`/candidates/${id}/interview`, {
-          hrDecision: decision,
+          hrDecision: 'PASS_PV',
           hrReason: note,
           interviewStatus: 'QUA_PV',
-          sendZaloNotice: true,
         });
-        await api.patch(`/training/${id}`, { trangThaiTraining: 'BAT_DAU' });
-        toast('success', `🎉 Đã cập nhật ứng viên ${decision === 'PASS_HS' ? 'ĐẠT HỒ SƠ' : 'ĐẠT PHỎNG VẤN'} & tự động gửi Zalo thông báo!`);
+        toast('success', '🎉 Đã cập nhật ứng viên ĐẠT PHỎNG VẤN (PASS PV)! Hãy bấm PASS HS để tiếp tục chốt ca & lịch.');
+      } else if (decision === 'PASS_HS') {
+        await api.patch(`/candidates/${id}/interview`, {
+          hrDecision: 'PASS_HS',
+          hrReason: note,
+          interviewStatus: 'QUA_PV',
+        });
+        toast('success', '🎉 Đã cập nhật ứng viên ĐẠT HỒ SƠ (PASS HS)! Nút Chốt ca & lịch đã sáng hồng mở khóa.');
       } else {
         await api.patch(`/candidates/${id}/interview`, {
           hrDecision: 'FAIL',
@@ -353,7 +359,7 @@ export default function Training() {
                   <th className="table-th">SĐT</th>
                   <th className="table-th">Chi nhánh</th>
                   <th className="table-th">Ca</th>
-                  <th className="table-th">Lịch phỏng vấn</th>
+                  <th className="table-th">Lịch phỏng vấn & Đánh giá</th>
                   <th className="table-th">Ngày bắt đầu</th>
                   <th className="table-th">Số ngày</th>
                   <th className="table-th">Trạng thái</th>
@@ -364,10 +370,10 @@ export default function Training() {
                 {visible.map((r) => {
                   const isPendingConfirm = r.trangThaiTraining === 'CHUA_THAM_GIA';
                   const pvRealtimeStatus = getInterviewStatus(r.phongVanAt);
-                  const isPassDecision = r.hrDecision === 'PASS_PV' || r.hrDecision === 'PASS_HS';
-                  const isInterviewPassed = isPassDecision && r.trangThaiTraining !== 'CHUA_THAM_GIA' && r.trangThaiTraining !== 'LOAI';
-                  const isRestLocked = isPendingConfirm || (!isPassDecision && pvRealtimeStatus !== 'DA_PV') || !isInterviewPassed;
-                  const isInterviewDone = (isPassDecision || r.hrDecision === 'FAIL' || r.trangThaiTraining === 'LOAI' || r.interviewStatus === 'QUA_PV' || r.interviewStatus === 'TRUOT_PV') && pvRealtimeStatus === 'DA_PV';
+                  const isPassPv = r.hrDecision === 'PASS_PV';
+                  const isPassHs = r.hrDecision === 'PASS_HS';
+                  const isHsLocked = !isPassHs;
+                  const isRestLocked = isPendingConfirm || isHsLocked;
                   return (
                     <tr key={r.id} className={cn('hover:bg-brand-50/40 transition-colors', isPendingConfirm && 'bg-rose-50/30')}>
                       <td className="table-td font-mono text-xs font-bold text-brand-600">{r.id}</td>
@@ -393,15 +399,13 @@ export default function Training() {
                       </td>
                       <td className="table-td">
                         {r.caLam && !r.caLam.includes('Có thể làm') ? (
-                          <button className="btn-secondary !px-2.5 !py-1 text-xs disabled:opacity-40 disabled:cursor-not-allowed" disabled={isPendingConfirm} onClick={() => openEditModal(r)}>
-                            {r.caLam}
-                          </button>
+                          <span className="font-medium text-slate-800">{r.caLam}</span>
                         ) : (
                           <button
                             type="button"
                             disabled={isPendingConfirm}
                             className={cn(
-                              'text-[11px] font-semibold text-rose-700 bg-rose-100/90 hover:bg-rose-200 px-2.5 py-1 rounded-lg border border-rose-300 flex items-center gap-1 shadow-2xs animate-pulse',
+                              'text-[11px] font-semibold text-amber-700 bg-amber-100/90 hover:bg-amber-200 px-2.5 py-1 rounded-lg border border-amber-300 flex items-center gap-1 shadow-2xs animate-pulse',
                               isPendingConfirm && 'opacity-40 cursor-not-allowed pointer-events-none'
                             )}
                             onClick={() => openEditModal(r)}
@@ -411,33 +415,25 @@ export default function Training() {
                           </button>
                         )}
                       </td>
-                      {/* Cột Lịch Phỏng Vấn (Hiển thị đẹp, gọn gàng, CHỈ 1 trạng thái duy nhất sau khi HR chốt) */}
-                      <td className="table-td">
-                        <div className="flex flex-col items-center justify-center gap-1.5 min-w-[200px] mx-auto">
-                          {r.phongVanAt ? (
-                            <div className="flex items-center justify-center gap-2">
-                              <span className="text-xs font-bold text-slate-800">{formatDateTime(r.phongVanAt)}</span>
-                              {isAdmin && (
-                                <button
-                                  className="text-[10px] text-slate-400 hover:text-slate-600 underline disabled:opacity-40"
-                                  disabled={isPendingConfirm}
-                                  onClick={() => openInterviewEdit(r)}
-                                >
-                                  Sửa
-                                </button>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-xs text-slate-400">Chưa hẹn</span>
-                          )}
-
-                          {/* Link Google Meet Trực Tiếp (Vô hiệu hóa sau khi có kết quả PV PASS/FAIL) */}
-                          {r.ggMeetLink && (
-                            isInterviewDone ? (
-                              <span
-                                className="inline-flex items-center justify-center gap-1.5 text-[11px] font-semibold text-slate-400 bg-slate-100 px-2.5 py-1 rounded-xl border border-slate-200 opacity-60 cursor-not-allowed pointer-events-none"
-                                title="Phỏng vấn đã kết thúc - Link Google Meet đã bị vô hiệu hóa"
+                      <td className="table-td min-w-[220px]">
+                        <div className="flex flex-col items-center justify-center gap-1">
+                          <div className="flex items-center justify-center gap-1">
+                            <span className="text-[11px] font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-lg border border-slate-200">
+                              {r.phongVanAt ? formatDateTime(r.phongVanAt) : 'Chưa xếp lịch'}
+                            </span>
+                            {isAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => openInterviewEdit(r)}
+                                className="text-[10px] text-brand-600 hover:text-brand-700 underline font-semibold cursor-pointer"
                               >
+                                Sửa
+                              </button>
+                            )}
+                          </div>
+                          {r.ggMeetLink && (
+                            pvRealtimeStatus === 'DA_PV' && (isPassPv || isPassHs || r.hrDecision === 'FAIL') ? (
+                              <span className="inline-flex items-center justify-center gap-1.5 text-[11px] font-bold text-slate-400 bg-slate-100 px-2.5 py-1 rounded-xl border border-slate-200 cursor-not-allowed opacity-60">
                                 <Video size={13} />
                                 <span>🔗 Google Meet (Đã kết thúc)</span>
                               </span>
@@ -454,12 +450,9 @@ export default function Training() {
                               </a>
                             )
                           )}
-
-                          {/* Hiển Thị Trạng Thái / Nút Bấm Đơn Nhất */}
                           {isPendingConfirm ? (
                             <span className="text-[10px] font-semibold text-rose-600 italic">⏳ CHỜ UV XÁC NHẬN ZALO</span>
-                          ) : r.hrDecision === 'PASS_HS' ? (
-                            /* Đã PASS_HS -> Hiển thị thẻ 📄 ĐẠT HỒ SƠ */
+                          ) : isPassHs ? (
                             <div className="flex flex-col items-center gap-1">
                               <div className="inline-flex items-center justify-center gap-1 px-3 py-1 rounded-xl text-xs font-black bg-teal-600 text-white shadow-2xs">
                                 <FileCheck size={15} />
@@ -471,13 +464,21 @@ export default function Training() {
                                 </span>
                               )}
                             </div>
-                          ) : r.hrDecision === 'PASS_PV' && pvRealtimeStatus !== 'CHUA_PV' ? (
-                            /* Đã PASS_PV -> Hiển thị thẻ ✅ ĐẠT PHỎNG VẤN */
+                          ) : isPassPv ? (
                             <div className="flex flex-col items-center gap-1">
                               <div className="inline-flex items-center justify-center gap-1 px-3 py-1 rounded-xl text-xs font-black bg-emerald-600 text-white shadow-2xs">
                                 <CheckCircle2 size={15} />
                                 <span>✅ ĐẠT PHỎNG VẤN</span>
                               </div>
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateInterviewDecision(r.id, 'PASS_HS')}
+                                className="bg-teal-600 hover:bg-teal-700 text-white !py-0.5 !px-2 text-[10px] font-extrabold shadow-2xs rounded-lg flex items-center gap-0.5 transition-all hover:scale-102 cursor-pointer mt-0.5"
+                                title="Đánh giá Đạt Hồ Sơ để mở nút Chốt ca & lịch"
+                              >
+                                <FileCheck size={11} />
+                                <span>📄 Chấm PASS HS (Mở chốt ca)</span>
+                              </button>
                               {r.hrReason && (
                                 <span className="text-[10px] text-slate-600 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200/80 max-w-[200px] truncate" title={`Nhận xét từ HR: ${r.hrReason}`}>
                                   📝 {r.hrReason}
@@ -485,7 +486,6 @@ export default function Training() {
                               )}
                             </div>
                           ) : r.hrDecision === 'FAIL' || r.trangThaiTraining === 'LOAI' ? (
-                            /* Đã FAIL -> Hiển thị thẻ ❌ TRƯỢT (FAIL) */
                             <div className="flex flex-col items-center gap-1">
                               <div className="inline-flex items-center justify-center gap-1 px-3 py-1 rounded-xl text-xs font-black bg-rose-600 text-white shadow-2xs">
                                 <XCircle size={15} />
@@ -515,7 +515,6 @@ export default function Training() {
                               </button>
                             </div>
                           ) : (
-                            /* Đã PV / Đang PV hoặc sẵn sàng chốt -> Cho phép HR chọn PASS PV / PASS HS / FAIL hoặc Mở Bảng điểm */
                             <div className="flex flex-wrap items-center justify-center gap-1 pt-0.5">
                               <button
                                 type="button"
@@ -557,27 +556,28 @@ export default function Training() {
                           )}
                         </div>
                       </td>
-
-                      {/* Cột Ngày Bắt Đầu (Bị khóa cho tới khi PASS) */}
                       <td className="table-td">
-                        <button
-                          className="btn-secondary !px-2 !py-0.5 text-xs disabled:opacity-40 disabled:cursor-not-allowed mx-auto"
-                          disabled={isRestLocked}
-                          onClick={() => openEditModal(r)}
-                          title={isRestLocked ? 'Khóa thao tác: Vui lòng chờ phỏng vấn kết thúc và HR chốt PASS' : 'Bấm để đổi ngày bắt đầu'}
-                        >
-                          {formatDate(r.ngayBatDauTraining) || 'Chưa đặt'}
-                        </button>
+                        {isHsLocked && !r.ngayBatDauTraining ? (
+                          <span className="text-xs text-slate-400 font-medium italic opacity-60">Chưa mở</span>
+                        ) : (
+                          <button
+                            className={cn(
+                              'btn-secondary !px-2 !py-0.5 text-xs disabled:opacity-40 disabled:cursor-not-allowed mx-auto font-bold',
+                              !r.ngayBatDauTraining && 'text-amber-600 bg-amber-50 border-amber-200'
+                            )}
+                            disabled={isHsLocked}
+                            onClick={() => openEditModal(r)}
+                            title={isHsLocked ? 'Khóa thao tác: Vui lòng hoàn tất PASS HS để mở khóa' : 'Bấm để chốt/đổi ngày bắt đầu đi làm'}
+                          >
+                            {formatDate(r.ngayBatDauTraining) || 'Chưa chốt'}
+                          </button>
+                        )}
                       </td>
-
-                      {/* Cột Số Ngày (Bị khóa cho tới khi PASS) */}
                       <td className="table-td">
                         <span className={cn('font-bold', isRestLocked ? 'text-slate-400 opacity-50' : 'text-brand-700')}>
                           {r.soNgayDaTraining}/7
                         </span>
                       </td>
-
-                      {/* Cột Trạng Thái (Vô hiệu hóa các bước cũ ngoại trừ ADMIN) */}
                       <td className="table-td">
                         {isPendingConfirm ? (
                           <div className="flex flex-col items-center justify-center gap-0.5">
@@ -586,7 +586,21 @@ export default function Training() {
                             </span>
                             <span className="text-[10px] text-rose-600 font-semibold italic text-center">🔒 Khóa thao tác đến khi UV xác nhận Zalo</span>
                           </div>
-                        ) : isRestLocked ? (
+                        ) : isPassPv && !isPassHs ? (
+                          <div className="flex flex-col items-center justify-center gap-0.5">
+                            <span className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold bg-emerald-600 text-white border border-emerald-700 shadow-2xs">
+                              🎉 ĐẠT PHỎNG VẤN
+                            </span>
+                            <span className="text-[10px] text-emerald-600 font-semibold italic text-center">⏳ Chờ chốt ca & lịch</span>
+                          </div>
+                        ) : isPassHs && !r.ngayBatDauTraining ? (
+                          <div className="flex flex-col items-center justify-center gap-0.5">
+                            <span className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold bg-teal-600 text-white border border-teal-700 shadow-2xs">
+                              📄 ĐẠT HỒ SƠ
+                            </span>
+                            <span className="text-[10px] text-teal-600 font-semibold italic text-center">⏳ Chờ HR bấm Chốt ca & lịch</span>
+                          </div>
+                        ) : isHsLocked ? (
                           <div className="flex flex-col items-center justify-center gap-0.5">
                             <span className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold bg-amber-500 text-white border border-amber-600 shadow-2xs">
                               ⏳ {pvRealtimeStatus === 'CHUA_PV' ? 'CHỜ ĐẾN GIỜ PV' : pvRealtimeStatus === 'DANG_PV' ? 'ĐANG PHỎNG VẤN' : 'CHỜ HR CHỐT PASS'}
@@ -620,25 +634,47 @@ export default function Training() {
                         )}
                       </td>
 
-                      {/* Cột Thao Tác (Bị khóa cho tới khi PASS) */}
-                      <td className="table-td">
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            className="btn-primary !px-2.5 !py-1.5 !text-xs disabled:opacity-40 disabled:cursor-not-allowed"
-                            disabled={isRestLocked}
-                            onClick={() => openEditModal(r)}
-                            title={isRestLocked ? 'Khóa thao tác: Vui lòng chờ phỏng vấn kết thúc và HR chốt PASS' : 'Cập nhật chi nhánh, ca làm & ngày bắt đầu'}
-                          >
-                            Chốt ca & lịch
-                          </button>
-                          <button
-                            className="btn-secondary !px-2.5 !py-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
-                            disabled={isRestLocked}
-                            onClick={() => navigate(`/shifts`)}
-                            title={isRestLocked ? 'Khóa thao tác: Vui lòng chờ phỏng vấn kết thúc và HR chốt PASS' : 'Xem lịch làm việc'}
-                          >
-                            <CalendarDays size={13} />
-                          </button>
+                      {/* Cột Thao Tác */}
+                      <td className="table-td min-w-[210px]">
+                        <div className="flex flex-col items-center justify-center gap-1.5">
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              className={cn(
+                                'px-2.5 py-1.5 text-xs rounded-xl font-extrabold transition-all cursor-pointer',
+                                isHsLocked
+                                  ? 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-50'
+                                  : isPassHs && !r.ngayBatDauTraining
+                                  ? 'bg-pink-600 hover:bg-pink-700 text-white shadow-md animate-pulse'
+                                  : 'btn-primary !px-2.5 !py-1.5 !text-xs'
+                              )}
+                              disabled={isHsLocked}
+                              onClick={() => openEditModal(r)}
+                              title={isHsLocked ? 'Khóa thao tác: Vui lòng hoàn tất PASS HS để mở khóa' : 'Cập nhật chi nhánh, ca làm & ngày bắt đầu đi làm'}
+                            >
+                              Chốt ca & lịch
+                            </button>
+                            <button
+                              className="btn-secondary !px-2.5 !py-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                              disabled={isHsLocked}
+                              onClick={() => navigate(`/shifts`)}
+                              title={isHsLocked ? 'Khóa thao tác: Vui lòng hoàn tất PASS HS để mở khóa' : 'Xem lịch làm việc'}
+                            >
+                              <CalendarDays size={13} />
+                            </button>
+                          </div>
+
+                          {/* Nút 💬 Mở App Zalo gửi Lịch Training */}
+                          {(r.ngayBatDauTraining || r.trangThaiTraining === 'SAP_BAT_DAU' || r.trangThaiTraining === 'BAT_DAU') && (
+                            <button
+                              type="button"
+                              onClick={() => handleSendZaloNoticeAndOpenApp(r)}
+                              className="bg-sky-600 hover:bg-sky-700 text-white !py-1 !px-2.5 text-[10px] font-extrabold shadow-md rounded-xl flex items-center gap-1 hover:scale-102 transition-all cursor-pointer"
+                              title="Gửi Zalo thông báo Lịch Training & Mở Zalo App/Web chat với ứng viên"
+                            >
+                              <MessageCircle size={12} />
+                              <span>💬 Mở App Zalo gửi Lịch Training</span>
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
