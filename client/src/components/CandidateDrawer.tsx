@@ -59,7 +59,6 @@ const TABS = [
   { key: 'profile', label: 'Hồ sơ' },
   { key: 'score', label: 'Điểm AI' },
   { key: 'decision', label: 'Quyết định HR' },
-  { key: 'zalo', label: 'Zalo' },
 ];
 
 
@@ -314,25 +313,16 @@ export default function CandidateDrawer({
     }
     try {
       if (interviewEditMode) {
-        const res = await api.patch<{ zalo: { ok: boolean; provider: string } | null }>(`/candidates/${candidateId}/interview`, {
+        await api.patch(`/candidates/${candidateId}/interview`, {
           phongVanAt,
           ggMeetLink: ggMeetLink.trim() || undefined,
-          resend: interviewResend,
         });
         const d = await api.get<CandidateDetail>(`/candidates/${candidateId!}`);
         setC(d);
         onChanged();
-        if (interviewResend) {
-          if (res?.zalo?.ok) {
-            toast('success', 'Đã sửa lịch phỏng vấn & gửi lại lời mời qua Zalo.');
-          } else {
-            toast('error', 'Đã sửa lịch phỏng vấn. (Tin Zalo chưa gửi được do ứng viên chưa kết nối Zalo OA)');
-          }
-        } else {
-          toast('success', 'Đã sửa lịch phỏng vấn.');
-        }
+        toast('success', 'Đã lưu lịch phỏng vấn mới! Bấm nút "Mở App Zalo" để gửi thông báo.');
       } else {
-        const res = await api.patch<{ zalo: { ok: boolean; provider: string } | null }>(`/candidates/${candidateId}/decision`, {
+        await api.patch(`/candidates/${candidateId}/decision`, {
           decision: 'PASS',
           reason: reason || undefined,
           phongVanAt,
@@ -341,13 +331,8 @@ export default function CandidateDrawer({
         const d = await api.get<CandidateDetail>(`/candidates/${candidateId!}`);
         setC(d);
         onChanged();
-        if (res?.zalo?.ok) {
-          toast('success', 'Đã lưu quyết định HR & gửi lời mời phỏng vấn qua Zalo.');
-        } else {
-          toast('error', 'Đã lưu quyết định ĐẠT & hẹn lịch. (Chưa gửi được tin Zalo do ứng viên chưa kết nối Zalo OA)');
-        }
+        toast('success', '🎉 Đã hẹn lịch phỏng vấn thành công! Hãy bấm nút màu xanh "Mở App Zalo gửi Thư Mời PV" để gửi tin nhắn cho ứng viên.');
       }
-
     } catch (e) {
       toast('error', e instanceof ApiError ? e.message : 'Thao tác thất bại.');
     } finally {
@@ -355,15 +340,55 @@ export default function CandidateDrawer({
     }
   };
 
+  const handleOpenZaloInvite = async () => {
+    if (!c || !c.sdtZalo) {
+      toast('error', 'Chưa có SĐT Zalo của ứng viên.');
+      return;
+    }
+
+    const pvTimeStr = c.phongVanAt ? formatDateTime(c.phongVanAt) : 'Theo lịch đã hẹn';
+    const nameGreeting = c.tenUv?.trim()
+      ? (c.tenUv.trim().toLowerCase().startsWith('sếp') ? c.tenUv.trim() : `Sếp ${c.tenUv.trim()}`)
+      : 'bạn';
+
+    const inviteContent = [
+      '🐮 [UMBO MILK] – THƯ MỜI PHỎNG VẤN 📋',
+      '',
+      `Chào ${nameGreeting} ❤️`,
+      'Chúc mừng bạn đã vượt qua vòng lọc hồ sơ ứng tuyển của UMBO MILK!',
+      '',
+      '📌 THÔNG TIN PHỎNG VẤN:',
+      `• ⏰ Thời gian: ${pvTimeStr}`,
+      `• 📍 Hình thức: Phỏng vấn Online qua Google Meet`,
+      `• 🔗 Link Google Meet: ${c.ggMeetLink || 'https://meet.google.com'}`,
+      `• 🏢 Chi nhánh ứng tuyển: ${c.chiNhanh || ''}`,
+      `• ⏱️ Ca làm việc đăng ký: ${c.caLam || ''}`,
+      '',
+      'UMBO MILK rất mong được gặp bạn! ✨',
+    ].join('\n');
+
+    // 1. Sao chép nội dung thư mời vào Clipboard để HR bấm Ctrl+V dán ngay
+    try {
+      await navigator.clipboard.writeText(inviteContent);
+    } catch {
+      /* ignore clipboard error */
+    }
+
+    // 2. Lưu vết tin nhắn vào DB history
+    api.post('/zalo/chat', { candidateId: c.id, content: inviteContent }).catch(() => undefined);
+
+    // 3. Mở Zalo Cá Nhân trực tiếp với SĐT ứng viên
+    window.open(`https://zalo.me/${c.sdtZalo}`, '_blank', 'noopener,noreferrer');
+
+    // 4. Thông báo hướng dẫn HR
+    toast('success', '📋 Đã sao chép Thư Mời PV & Mở Zalo! Bạn chỉ cần nhấn Dán (Ctrl+V) trong khung chat Zalo để gửi.');
+  };
 
   const setInterviewStatus = (status: string) =>
     act(
       () => api.patch(`/candidates/${candidateId}/interview`, { interviewStatus: status }),
       'Đã cập nhật trạng thái phỏng vấn.',
     );
-
-  const resendInterview = () =>
-    act(() => api.post(`/training/${candidateId}/interview-notify`, {}), 'Đã gửi lại lời mời phỏng vấn qua Zalo.');
 
   const notifyZalo = () =>
     act(() => api.post(`/zalo/send`, { candidateId }), 'Đã gửi thông báo Zalo.');
@@ -637,21 +662,17 @@ export default function CandidateDrawer({
                       <Video size={14} className="text-emerald-600" />
                       <a className="text-emerald-700 underline break-all" href={c.ggMeetLink ?? '#'} target="_blank" rel="noreferrer">{c.ggMeetLink}</a>
                     </div>
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      <a
-                        href={`https://zalo.me/${c.sdtZalo}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="btn-primary !px-2.5 !py-1.5 !text-xs font-bold bg-[#0068ff] hover:bg-[#0052cc] text-white flex items-center gap-1 shadow-xs"
-                        title="Mở Zalo nhắn trực tiếp 1-1 với ứng viên trên App Zalo"
+                    <div className="flex flex-wrap gap-2 pt-1.5">
+                      <button
+                        type="button"
+                        onClick={handleOpenZaloInvite}
+                        className="btn-primary !px-3 !py-1.5 !text-xs font-bold bg-[#0068ff] hover:bg-[#0052cc] text-white flex items-center gap-1.5 shadow-xs rounded-xl"
+                        title="Sao chép nội dung Thư Mời PV & Mở Zalo nhắn 1-1 với ứng viên"
                       >
                         <span>💬 Mở App Zalo gửi Thư Mời PV</span>
-                      </a>
+                      </button>
                       <button className="btn-secondary !px-2.5 !py-1.5 !text-xs" onClick={openEditInterviewModal}>
                         <CalendarDays size={13} /> Sửa lịch
-                      </button>
-                      <button className="btn-secondary !px-2.5 !py-1.5 !text-xs" onClick={resendInterview}>
-                        <Send size={13} /> Gửi lại lời mời (Zalo)
                       </button>
                     </div>
                   </div>
@@ -664,118 +685,6 @@ export default function CandidateDrawer({
                     {c.hrReason && <div className="text-xs text-slate-500">Lý do: {c.hrReason}</div>}
                   </div>
                 )}
-              </div>
-            )}
-
-            {tab === 'zalo' && (
-              <div className="flex flex-col h-[520px] bg-slate-50/60 rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs">
-                <div className="px-4 py-3 bg-white border-b border-slate-200/80 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-brand-100 text-brand-700 font-bold flex items-center justify-center text-xs">
-                      {c.tenUv ? c.tenUv.charAt(0).toUpperCase() : 'Z'}
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-slate-800">{c.tenUv} ({c.sdtZalo})</div>
-                      <div className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
-                        ✓ Zalo Cá Nhân HR (Tự động gửi qua SĐT {c.sdtZalo})
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <a
-                      href={`https://zalo.me/${c.sdtZalo}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="btn-primary !text-xs !py-1 !px-2.5 font-bold flex items-center gap-1 bg-[#0068ff] hover:bg-[#0052cc] text-white shadow-xs"
-                      title="Mở Zalo cá nhân nhắn 1-1 với ứng viên trên App Zalo"
-                    >
-                      <span>💬 Mở App Zalo nhắn trực tiếp</span>
-                    </a>
-                    <button className="btn-secondary !text-xs !py-1 !px-2.5" onClick={notifyZalo}>
-                      <Send size={13} /> Gửi thông báo đào tạo
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex-1 p-4 overflow-y-auto space-y-3.5 bg-slate-50/50">
-
-                  {c.zaloMessages.length === 0 && (
-                    <div className="text-center py-12 text-slate-400 text-xs">
-                      💬 Chưa có lịch sử tin nhắn. Nhập nội dung bên dưới để bắt đầu chat trực tiếp với ứng viên!
-                    </div>
-                  )}
-
-                  {[...c.zaloMessages]
-                    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-                    .map((m) => {
-                      const isOut = m.direction !== 'IN';
-                      return (
-                        <div key={m.id} className={cn('flex flex-col', isOut ? 'items-end' : 'items-start')}>
-                          <div className={cn(
-                            'max-w-[82%] px-4 py-3 text-xs whitespace-pre-wrap break-words leading-relaxed shadow-xs',
-                            isOut
-                              ? 'bg-brand-600 text-white rounded-2xl rounded-br-xs'
-                              : 'bg-white border border-slate-200 text-slate-800 rounded-2xl rounded-bl-xs'
-                          )}>
-                            {m.content}
-                          </div>
-                          <div className="flex items-center gap-1.5 mt-1 px-1 text-[10px] text-slate-400">
-                            <span>{formatDateTime(m.createdAt)}</span>
-                            {isOut && (
-                              <span className={cn('font-semibold', m.status === 'SENT' ? 'text-emerald-600' : 'text-rose-500')}>
-                                · {m.status === 'SENT' ? 'Đã gửi Zalo' : 'Lỗi gửi'}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  <div ref={chatBottomRef} />
-
-                </div>
-
-                <div className="px-3 py-1.5 bg-slate-100/80 border-t border-slate-200 flex items-center gap-1.5 overflow-x-auto text-[11px] text-slate-600">
-                  <span className="font-semibold text-slate-400 shrink-0 text-[10px] uppercase">Mẫu nhanh:</span>
-                  {[
-                    `Chào ${c.tenUv}, UMBO MILK xin thông báo bạn đã ĐẠT vòng sơ tuyển! Bạn có thể đến phỏng vấn không ạ?`,
-                    `Chào ${c.tenUv}, bạn nhớ mang theo CCCD khi đến phỏng vấn tại chi nhánh nhé!`,
-                    `Chào ${c.tenUv}, bạn vui lòng nhắn lại "điểm danh" để xác nhận ca làm việc hôm nay nhé!`,
-                  ].map((tpl, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      className="shrink-0 bg-white hover:bg-slate-200 border border-slate-200 rounded-full px-2.5 py-0.5 text-[11px] text-slate-700 truncate max-w-[180px] transition-colors"
-                      onClick={() => setChatText(tpl)}
-                    >
-                      Mẫu {i + 1}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="p-3 bg-white border-t border-slate-200 flex items-end gap-2">
-                  <textarea
-                    className="input flex-1 min-h-[42px] max-h-[100px] text-xs resize-none py-2.5 font-sans"
-                    rows={1}
-                    value={chatText}
-                    onChange={(e) => setChatText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        void sendLiveChat();
-                      }
-                    }}
-                    placeholder="Nhập tin nhắn Zalo gửi ứng viên (ấn Enter để gửi, Shift+Enter xuống dòng)..."
-                  />
-                  <button
-                    type="button"
-                    className="btn-primary !py-2.5 !px-4 h-[42px] shrink-0 font-semibold text-xs flex items-center gap-1.5"
-                    onClick={() => sendLiveChat()}
-                    disabled={sendingChat || !chatText.trim()}
-                  >
-                    {sendingChat ? <Spinner size={14} /> : <Send size={14} />}
-                    Gửi Zalo
-                  </button>
-                </div>
               </div>
             )}
           </div>
@@ -845,14 +754,8 @@ export default function CandidateDrawer({
               ? 'Để trống → hệ thống tự tạo sự kiện + link Google Meet mới. Nhập link tay sẽ ưu tiên dùng link đó.'
               : 'Để trống → hệ thống dùng link GG Meet mặc định của chi nhánh (Cài đặt → Phỏng vấn & Meet).'}
           </p>
-          {interviewEditMode && (
-            <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-              <input type="checkbox" className="w-4 h-4 accent-brand-600" checked={interviewResend} onChange={(e) => setInterviewResend(e.target.checked)} />
-              Gửi lại lời mời phỏng vấn qua Zalo sau khi lưu
-            </label>
-          )}
           <button className="btn-success w-full" onClick={submitInterview} disabled={!!timeConflict}>
-            <Video size={15} /> {interviewEditMode ? 'Lưu lịch phỏng vấn' : 'Xác nhận ĐẠT & gửi lời mời phỏng vấn'}
+            <Video size={15} /> {interviewEditMode ? 'Lưu lịch phỏng vấn' : 'Xác nhận ĐẠT & Hẹn lịch phỏng vấn'}
           </button>
         </div>
       </Modal>
