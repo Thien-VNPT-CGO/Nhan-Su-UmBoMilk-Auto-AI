@@ -497,61 +497,51 @@ export default function Training() {
                                 </span>
                               )}
                             </div>
-                          ) : pvRealtimeStatus === 'CHUA_PV' ? (
+                          ) : pvRealtimeStatus === 'CHUA_PV' && !isAdmin ? (
+                            /* Chưa đến giờ PV & Không phải Admin -> Khóa thao tác chấm PASS PV */
                             <div className="flex flex-col items-center justify-center gap-1">
-                              <div className="flex items-center justify-center gap-1.5">
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-extrabold bg-amber-500 text-white shadow-2xs">
-                                  ⏳ Chưa PV
-                                </span>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => setScoreModalCandidate(r)}
-                                className="bg-indigo-600 hover:bg-indigo-700 text-white !py-0.5 !px-2 text-[10px] font-extrabold shadow-2xs rounded-lg flex items-center gap-0.5 transition-all hover:scale-102 cursor-pointer"
-                                title="Mở phiếu chấm điểm phỏng vấn theo bộ tiêu chí CÓ KN / KHÔNG KN"
-                              >
-                                <FileText size={11} />
-                                <span>📝 Bảng điểm PV</span>
-                              </button>
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-extrabold bg-amber-500 text-white shadow-2xs">
+                                ⏳ Chưa đến giờ PV
+                              </span>
+                              <span className="text-[10px] text-amber-600 font-semibold italic text-center">🔒 Khóa thao tác cho đến khi tới giờ PV</span>
                             </div>
                           ) : (
-                            <div className="flex flex-wrap items-center justify-center gap-1 pt-0.5">
-                              <button
-                                type="button"
-                                onClick={() => setScoreModalCandidate(r)}
-                                className="bg-indigo-600 hover:bg-indigo-700 text-white !py-1 !px-2.5 text-[10px] font-extrabold shadow-2xs rounded-xl flex items-center gap-1 hover:scale-102 transition-all cursor-pointer"
-                                title="Mở Phiếu Chấm Điểm Phỏng Vấn Nhanh (Có KN / Không KN)"
-                              >
-                                <FileText size={12} />
-                                <span>📝 Bảng điểm PV</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateInterviewDecision(r.id, 'PASS_PV')}
-                                className="btn-success !py-1 !px-2 !text-[10px] font-extrabold shadow-2xs flex items-center gap-0.5 hover:scale-102 cursor-pointer"
-                                title="Chấm ĐẠT PHỎNG VẤN cho ứng viên"
-                              >
-                                <CheckCircle2 size={12} />
-                                <span>✅ PASS PV</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setScoreModalCandidate(r)}
-                                className="bg-teal-600 hover:bg-teal-700 text-white !py-1 !px-2 !text-[10px] font-extrabold shadow-2xs rounded-xl flex items-center gap-0.5 hover:scale-102 transition-all cursor-pointer"
-                                title="Mở Bảng tiêu chí phỏng vấn (Có KN / Không KN) để chấm điểm PASS HS"
-                              >
-                                <FileCheck size={12} />
-                                <span>📄 PASS HS</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateInterviewDecision(r.id, 'FAIL')}
-                                className="btn-danger !py-1 !px-2 !text-[10px] font-extrabold shadow-2xs flex items-center gap-0.5 hover:scale-102 cursor-pointer"
-                                title="Đánh dấu Ứng viên TRƯỢT (FAIL)"
-                              >
-                                <XCircle size={12} />
-                                <span>❌ FAIL</span>
-                              </button>
+                            /* Đang PV hoặc Đã PV (hoặc tài khoản Admin) -> Mở nút bấm PASS PV & Bảng điểm PV */
+                            <div className="flex flex-col items-center justify-center gap-1">
+                              {pvRealtimeStatus === 'DANG_PV' && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-extrabold bg-blue-600 text-white shadow-2xs animate-pulse mb-0.5">
+                                  🎥 ĐANG PHỎNG VẤN
+                                </span>
+                              )}
+                              <div className="flex flex-wrap items-center justify-center gap-1 pt-0.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setScoreModalCandidate(r)}
+                                  className="bg-indigo-600 hover:bg-indigo-700 text-white !py-1 !px-2.5 text-[10px] font-extrabold shadow-2xs rounded-xl flex items-center gap-1 hover:scale-102 transition-all cursor-pointer"
+                                  title="Mở Phiếu Chấm Điểm Phỏng Vấn (Có KN / Không KN)"
+                                >
+                                  <FileText size={12} />
+                                  <span>📝 Bảng điểm PV</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateInterviewDecision(r.id, 'PASS_PV')}
+                                  className="btn-success !py-1 !px-2 !text-[10px] font-extrabold shadow-2xs flex items-center gap-0.5 hover:scale-102 cursor-pointer"
+                                  title="Chấm ĐẠT PHỎNG VẤN cho ứng viên"
+                                >
+                                  <CheckCircle2 size={12} />
+                                  <span>✅ PASS PV</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateInterviewDecision(r.id, 'FAIL')}
+                                  className="btn-danger !py-1 !px-2 !text-[10px] font-extrabold shadow-2xs flex items-center gap-0.5 hover:scale-102 cursor-pointer"
+                                  title="Đánh dấu Ứng viên TRƯỢT (FAIL)"
+                                >
+                                  <XCircle size={12} />
+                                  <span>❌ FAIL</span>
+                                </button>
+                              </div>
                             </div>
                           )}
                         </div>
@@ -865,6 +855,7 @@ export default function Training() {
           candidateName={scoreModalCandidate.tenUv}
           kinhNghiem={scoreModalCandidate.kinhNghiem}
           hrDecision={scoreModalCandidate.hrDecision}
+          isAdmin={isAdmin}
           onSuccess={handleScoreSuccess}
         />
       )}

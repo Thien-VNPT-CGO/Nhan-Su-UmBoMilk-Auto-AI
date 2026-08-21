@@ -162,6 +162,7 @@ interface InterviewScoreModalProps {
   candidateName: string;
   kinhNghiem?: string;
   hrDecision?: string | null;
+  isAdmin?: boolean;
   onSuccess: (decision: 'PASS_PV' | 'PASS_HS' | 'FAIL', note: string, score: number) => void;
 }
 
@@ -172,9 +173,10 @@ export default function InterviewScoreModal({
   candidateName,
   kinhNghiem,
   hrDecision,
+  isAdmin,
   onSuccess,
 }: InterviewScoreModalProps) {
-  const isPassPv = hrDecision === 'PASS_PV' || hrDecision === 'PASS_HS';
+  const isPassPv = Boolean(isAdmin) || hrDecision === 'PASS_PV' || hrDecision === 'PASS_HS';
 
   const hasExperience = Boolean(
     kinhNghiem &&
