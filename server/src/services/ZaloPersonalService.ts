@@ -35,19 +35,17 @@ export class ZaloPersonalService {
    * Tạo / Lấy Mã QR Đăng Nhập Zalo Cá Nhân để Admin quét trực tiếp trên điện thoại.
    */
   async generateLoginQr(): Promise<{ qrCode: string; status: string; expireAt: string }> {
+    const timestamp = Date.now();
+    const qrData = `https://chat.zalo.me/login?app=umbo_hr_bot_${timestamp}`;
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrData)}`;
+    const expireAt = new Date(timestamp + 5 * 60 * 1000).toISOString();
+
     const settings = await getSettings();
-    const existingQr = settings.zaloPersonal?.qrCode;
-
-    // Giả lập / Tạo SVG QR Code cho Web Zalo Login
-    const simulatedQr = existingQr || `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent('https://chat.zalo.me/login?app=umbo_hr_bot_' + Date.now())}`;
-
-    const expireAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5 phút
-
     await saveSettings(
       {
         zaloPersonal: {
           ...(settings.zaloPersonal ?? {}),
-          qrCode: simulatedQr,
+          qrCode: qrCodeUrl,
           qrExpireAt: expireAt,
         },
       },
@@ -55,7 +53,7 @@ export class ZaloPersonalService {
     );
 
     return {
-      qrCode: simulatedQr,
+      qrCode: qrCodeUrl,
       status: 'WAITING_FOR_SCAN',
       expireAt,
     };

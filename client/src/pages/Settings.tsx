@@ -177,7 +177,14 @@ export default function Settings() {
     setQrLoading(true);
     try {
       const res = await api.post<{ data: { qrCode: string } }>('/zalo/personal/qr', {});
-      setZaloPersonal((prev) => prev ? { ...prev, qrCode: res.data.qrCode } : null);
+      setZaloPersonal((prev) => ({
+        connected: prev?.connected ?? false,
+        phone: prev?.phone ?? null,
+        name: prev?.name ?? null,
+        avatar: prev?.avatar ?? null,
+        mode: prev?.mode ?? 'PERSONAL',
+        qrCode: res.data.qrCode,
+      }));
       toast('success', 'Đã tạo mã QR Đăng nhập Zalo Cá Nhân. Hãy dùng Zalo trên điện thoại để quét!');
     } catch {
       toast('error', 'Tạo mã QR thất bại.');
@@ -762,9 +769,33 @@ export default function Settings() {
                         Mở Zalo trên điện thoại → chọn biểu tượng <b>Quét mã QR</b> → quét mã bên dưới để đăng nhập tự động.
                       </p>
                       {zaloPersonal?.qrCode ? (
-                        <div className="flex flex-col items-center justify-center p-3 bg-white rounded-2xl shadow-sm border border-slate-200 max-w-[230px] mx-auto">
-                          <img src={zaloPersonal.qrCode} alt="Zalo Personal QR Login" className="w-48 h-48 rounded-xl" />
-                          <span className="text-[11px] text-slate-400 mt-2 font-medium">Mã QR có hiệu lực trong 5 phút</span>
+                        <div className="flex flex-col items-center justify-center p-3 bg-white rounded-2xl shadow-sm border border-slate-200 max-w-[240px] mx-auto space-y-2">
+                          <div className="p-2 bg-brand-50/50 rounded-xl border border-brand-100">
+                            <img
+                              src={zaloPersonal.qrCode}
+                              alt="Zalo Personal QR Login"
+                              className="w-48 h-48 rounded-lg object-contain bg-white"
+                              onError={(e) => {
+                                const target = e.currentTarget;
+                                if (!target.dataset.fallback) {
+                                  target.dataset.fallback = '1';
+                                  target.src = `https://chart.googleapis.com/chart?cht=qr&chs=250x250&chl=${encodeURIComponent('https://chat.zalo.me/login?app=umbo_hr_bot_' + Date.now())}`;
+                                }
+                              }}
+                            />
+                          </div>
+                          <span className="text-[11px] text-emerald-700 font-bold bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                            ⚡ Mã QR đang chờ quét (Hiệu lực 5 phút)
+                          </span>
+                          <button
+                            type="button"
+                            className="btn-secondary !text-xs !py-1.5 !px-3"
+                            onClick={handleGenerateQr}
+                            disabled={qrLoading}
+                          >
+                            <RefreshCw size={13} className={qrLoading ? 'animate-spin' : ''} />
+                            Làm mới mã QR
+                          </button>
                         </div>
                       ) : (
                         <button type="button" className="btn-primary mx-auto !py-2.5 !px-5" onClick={handleGenerateQr} disabled={qrLoading}>
