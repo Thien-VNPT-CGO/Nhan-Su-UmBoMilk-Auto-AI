@@ -609,9 +609,16 @@ export default function Training() {
                           </div>
                         ) : (
                           <select
-                            className="input !py-1.5 !text-xs font-bold bg-emerald-600 text-white border-emerald-700 rounded-xl shadow-2xs cursor-pointer text-center mx-auto"
+                            disabled={!isAdmin}
+                            className={cn(
+                              'input !py-1.5 !text-xs font-bold rounded-xl shadow-2xs text-center mx-auto transition-all',
+                              !isAdmin
+                                ? 'bg-slate-100 text-slate-500 cursor-not-allowed border-slate-300 opacity-80'
+                                : 'bg-emerald-600 text-white border-emerald-700 cursor-pointer hover:bg-emerald-700'
+                            )}
                             value={r.trangThaiTraining ?? 'CHUA_THAM_GIA'}
                             onChange={(e) => setConfirmStatus({ row: r, status: e.target.value })}
+                            title={!isAdmin ? '🔒 Chỉ tài khoản Admin mới có quyền chủ động thay đổi Trạng thái' : 'Thay đổi trạng thái đào tạo'}
                           >
                             {STATUS_OPTIONS.map((st, idx) => {
                               const currentIdx = STATUS_OPTIONS.indexOf(r.trangThaiTraining ?? 'CHUA_THAM_GIA');

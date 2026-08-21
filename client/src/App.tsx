@@ -15,6 +15,7 @@ import SyncCenter from './pages/SyncCenter';
 import AuditLog from './pages/AuditLog';
 import Settings from './pages/Settings';
 import ConfirmInterview from './pages/ConfirmInterview';
+import PublicAttendance from './pages/PublicAttendance';
 import { Spinner } from './components/ui';
 
 function Protected({ children }: { children: React.ReactNode }) {
@@ -36,6 +37,7 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/confirm-pv/:id" element={<ConfirmInterview />} />
+        <Route path="/diemdanh/:id" element={<PublicAttendance />} />
         <Route path="/dang-ky" element={<Navigate to="/" replace />} />
         <Route
           path="/"

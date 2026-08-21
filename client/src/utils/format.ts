@@ -22,12 +22,14 @@ export function shiftColor(shift: string): { bg: string; text: string; label: st
 
 export const trainingStatusLabel: Record<string, { label: string; cls: string }> = {
   CHUA_THAM_GIA: { label: '⏳ CHỜ UV XÁC NHẬN ZALO', cls: 'bg-rose-600 text-white font-bold border border-rose-700 shadow-xs animate-pulse' },
-  SAP_BAT_DAU: { label: '✓ ĐÃ XÁC NHẬN (SẮP BẮT ĐẦU)', cls: 'bg-emerald-600 text-white font-bold border border-emerald-700 shadow-xs' },
-  BAT_DAU: { label: 'BẮT ĐẦU', cls: 'bg-amber-100 text-amber-700 font-bold' },
-  HOAN_THANH: { label: 'HOÀN THÀNH', cls: 'bg-emerald-100 text-emerald-700 font-bold' },
-  KHONG_DU_NGAY: { label: 'KHÔNG ĐỦ NGÀY', cls: 'bg-rose-100 text-rose-700' },
-  LOAI: { label: 'LOẠI / TỪ CHỐI', cls: 'bg-red-100 text-red-700' },
-  NHAN_VIEN_CHINH_THUC: { label: 'NHÂN VIÊN CHÍNH THỨC', cls: 'bg-violet-100 text-violet-700' },
+  PASS_PV_WAITING: { label: '🎉 ĐẠT PHỎNG VẤN (Chờ chốt ca & lịch)', cls: 'bg-emerald-600 text-white font-bold border border-emerald-700 shadow-xs' },
+  PASS_HS_WAITING: { label: '📄 ĐẠT HỒ SƠ (Chờ chốt ca & lịch)', cls: 'bg-teal-600 text-white font-bold border border-teal-700 shadow-xs' },
+  SAP_BAT_DAU: { label: '🚀 SẮP BẮT ĐẦU TRAINING (0/7 ngày)', cls: 'bg-indigo-600 text-white font-bold border border-indigo-700 shadow-xs' },
+  BAT_DAU: { label: '🟢 ĐANG TRAINING', cls: 'bg-amber-500 text-white font-bold' },
+  HOAN_THANH: { label: '🏆 HOÀN THÀNH TRAINING (7/7 ngày)', cls: 'bg-emerald-600 text-white font-bold' },
+  KHONG_DU_NGAY: { label: '❌ KHÔNG ĐỦ NGÀY', cls: 'bg-rose-100 text-rose-700' },
+  LOAI: { label: '❌ LOẠI / HỦY (Vắng mặt / Không đủ ngày)', cls: 'bg-red-600 text-white font-bold' },
+  NHAN_VIEN_CHINH_THUC: { label: '🎓 NHÂN VIÊN CHÍNH THỨC', cls: 'bg-violet-600 text-white font-bold' },
 };
 
 
