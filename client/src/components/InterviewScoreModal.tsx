@@ -215,7 +215,17 @@ export default function InterviewScoreModal({
     return { totalScore: sum, isLoai: hasLoai, recommendation: rec };
   }, [answers]);
 
+  const hasAnsweredAny = Object.keys(answers).length > 0;
+
   const handleConfirm = (decision: 'PASS_PV' | 'PASS_HS' | 'FAIL') => {
+    if ((decision === 'PASS_HS' || decision === 'PASS_PV') && !hasAnsweredAny) {
+      alert('⚠️ Vui lòng chọn các câu hỏi trong Bảng tiêu chí chấm điểm phỏng vấn trước khi chốt PASS!');
+      return;
+    }
+    if ((decision === 'PASS_HS' || decision === 'PASS_PV') && isLoai) {
+      alert('⚠️ Ứng viên dính điểm LOẠI trong Bảng tiêu chí phỏng vấn. Hệ thống không cho phép chốt PASS!');
+      return;
+    }
     onSuccess(decision, note, totalScore);
     onClose();
   };

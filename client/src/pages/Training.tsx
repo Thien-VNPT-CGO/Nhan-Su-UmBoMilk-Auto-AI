@@ -472,12 +472,12 @@ export default function Training() {
                               </div>
                               <button
                                 type="button"
-                                onClick={() => handleUpdateInterviewDecision(r.id, 'PASS_HS')}
+                                onClick={() => setScoreModalCandidate(r)}
                                 className="bg-teal-600 hover:bg-teal-700 text-white !py-0.5 !px-2 text-[10px] font-extrabold shadow-2xs rounded-lg flex items-center gap-0.5 transition-all hover:scale-102 cursor-pointer mt-0.5"
-                                title="Đánh giá Đạt Hồ Sơ để mở nút Chốt ca & lịch"
+                                title="Mở Bảng tiêu chí phỏng vấn để đánh giá PASS HS & mở chốt ca"
                               >
                                 <FileCheck size={11} />
-                                <span>📄 Chấm PASS HS (Mở chốt ca)</span>
+                                <span>📄 Chấm PASS HS (Bảng tiêu chí)</span>
                               </button>
                               {r.hrReason && (
                                 <span className="text-[10px] text-slate-600 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200/80 max-w-[200px] truncate" title={`Nhận xét từ HR: ${r.hrReason}`}>
@@ -536,9 +536,9 @@ export default function Training() {
                               </button>
                               <button
                                 type="button"
-                                onClick={() => handleUpdateInterviewDecision(r.id, 'PASS_HS')}
+                                onClick={() => setScoreModalCandidate(r)}
                                 className="bg-teal-600 hover:bg-teal-700 text-white !py-1 !px-2 !text-[10px] font-extrabold shadow-2xs rounded-xl flex items-center gap-0.5 hover:scale-102 transition-all cursor-pointer"
-                                title="Chấm ĐẠT HỒ SƠ cho ứng viên (Đồng thời mở chức năng chốt ca & lịch)"
+                                title="Mở Bảng tiêu chí phỏng vấn (Có KN / Không KN) để chấm điểm PASS HS"
                               >
                                 <FileCheck size={12} />
                                 <span>📄 PASS HS</span>
