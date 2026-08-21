@@ -667,12 +667,8 @@ export default function CandidateDrawer({
                     </div>
                     <div>
                       <div className="text-xs font-bold text-slate-800">{c.tenUv} ({c.sdtZalo})</div>
-                      <div className="text-[11px] text-slate-400 flex items-center gap-1">
-                        {c.zaloUserId ? (
-                          <span className="text-emerald-600 font-medium">✓ Zalo OA Live Connected</span>
-                        ) : (
-                          <span className="text-amber-600 font-medium">⚠️ Chưa có Zalo User ID</span>
-                        )}
+                      <div className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
+                        ✓ Zalo Cá Nhân HR (Tự động gửi qua SĐT {c.sdtZalo})
                       </div>
                     </div>
                   </div>
@@ -682,19 +678,6 @@ export default function CandidateDrawer({
                 </div>
 
                 <div className="flex-1 p-4 overflow-y-auto space-y-3.5 bg-slate-50/50">
-                  {!c.zaloUserId && (
-                    <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-800 border border-amber-200 flex items-center justify-between gap-2">
-                      <span>⚠️ Ứng viên chưa có Zalo User ID. Hãy bấm &quot;Tự lấy ID&quot; hoặc nhờ ứng viên nhắn 1 tin tới OA.</span>
-                      <button
-                        type="button"
-                        className="btn-primary !text-[11px] !py-1 !px-2 shrink-0"
-                        onClick={() => resolveZaloUserId(false)}
-                        disabled={resolvingZaloId}
-                      >
-                        {resolvingZaloId ? <Spinner size={12} /> : <Search size={12} />} Tự lấy ID
-                      </button>
-                    </div>
-                  )}
 
                   {c.zaloMessages.length === 0 && (
                     <div className="text-center py-12 text-slate-400 text-xs">
