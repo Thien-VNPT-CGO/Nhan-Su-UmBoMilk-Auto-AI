@@ -2,6 +2,7 @@ import { prisma } from '../lib/prisma';
 import { nextId } from '../lib/id';
 import { env } from '../config/env';
 import { getSettings } from './SettingsService';
+import { zaloPersonalService } from './ZaloPersonalService';
 import { emit } from '../sockets';
 import { formatDate, TZ } from '../lib/date';
 import { TRAINING_STATUS } from '../lib/constants';
@@ -430,6 +431,21 @@ export class ZaloService {
     candidateId: string | null,
     options: { direction?: string; messageType?: string; buttons?: Array<{ title: string; payload: string; type?: string }> } = {},
   ): Promise<{ ok: boolean; provider: string; messageId?: string; status: string; error?: string | null }> {
+    const settings = await getSettings();
+    const mode = (settings.zalo?.mode as string) || 'PERSONAL';
+
+    // Ưu tiên gửi bằng Zalo Cá Nhân trực tiếp qua SĐT nếu chọn chế độ PERSONAL hoặc chưa cài OA
+    if (mode === 'PERSONAL' || (!settings.zalo?.accessToken && mode !== 'OA')) {
+      const pRes = await zaloPersonalService.sendMessageByPhone(phone, content, candidateId, options);
+      return {
+        ok: pRes.ok,
+        provider: pRes.provider,
+        messageId: pRes.messageId,
+        status: pRes.status,
+        error: pRes.error,
+      };
+    }
+
     const cfg = await this.getConfig();
     let accessToken = cfg.accessToken;
     const useRealApi = !env.demoMode && accessToken;

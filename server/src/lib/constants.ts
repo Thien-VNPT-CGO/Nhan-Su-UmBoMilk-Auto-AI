@@ -142,6 +142,7 @@ export const DEFAULT_SETTINGS = {
     },
   },
   zalo: {
+    mode: 'PERSONAL' as 'PERSONAL' | 'OA' | 'MOCK',
     oaId: '',
     accessToken: '',
     refreshToken: '',
@@ -149,6 +150,16 @@ export const DEFAULT_SETTINGS = {
     autoReply: true,
     // Lần cuối refresh token thành công (job gia hạn định kỳ dùng để giữ kết nối "vĩnh viễn")
     lastRefreshAt: '',
+  },
+  zaloPersonal: {
+    phone: null as string | null,
+    name: null as string | null,
+    avatar: null as string | null,
+    session: null as Record<string, string> | null,
+    secretKey: null as string | null,
+    qrCode: null as string | null,
+    qrExpireAt: null as string | null,
+    updatedAt: null as string | null,
   },
   // Phỏng vấn: nhắc Zalo trước giờ PV + link GG Meet mặc định theo chi nhánh
   interview: {

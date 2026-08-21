@@ -2,6 +2,7 @@ import { Router, Request } from 'express';
 import { z } from 'zod';
 import { requireAuth, requireWrite, requireRole, AuthedRequest } from '../middleware/auth';
 import { zaloService } from '../services/ZaloService';
+import { zaloPersonalService } from '../services/ZaloPersonalService';
 import { saveSettings } from '../services/SettingsService';
 import { prisma } from '../lib/prisma';
 import { env } from '../config/env';
@@ -194,6 +195,45 @@ router.post('/webhook', (req, res) => {
       console.error('[ZaloWebhook] Lỗi xử lý ngầm:', e instanceof Error ? e.message : String(e));
     }
   })();
+});
+
+/** Endpoints quản lý Zalo Cá Nhân (Tự động gửi tin theo SĐT) */
+router.get('/personal/status', requireAuth, async (_req, res, next) => {
+  try {
+    const status = await zaloPersonalService.getStatus();
+    res.json({ success: true, data: status });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post('/personal/qr', requireAuth, requireWrite(), async (_req, res, next) => {
+  try {
+    const result = await zaloPersonalService.generateLoginQr();
+    res.json({ success: true, data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post('/personal/connect', requireAuth, requireWrite(), async (req, res, next) => {
+  try {
+    const { phone, name, avatar } = req.body;
+    if (!phone || !name) throw ApiError.badRequest('INVALID_INPUT', 'Thiếu SĐT hoặc tên tài khoản Zalo.');
+    const status = await zaloPersonalService.connectSession({ phone, name, avatar });
+    res.json({ success: true, data: status });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post('/personal/logout', requireAuth, requireWrite(), async (_req, res, next) => {
+  try {
+    await zaloPersonalService.logout();
+    res.json({ success: true, message: 'Đã đăng xuất Zalo Cá nhân thành công.' });
+  } catch (e) {
+    next(e);
+  }
 });
 
 export default router;
