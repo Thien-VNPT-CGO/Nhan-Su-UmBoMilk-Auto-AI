@@ -176,16 +176,16 @@ export default function Settings() {
   const handleGenerateQr = async () => {
     setQrLoading(true);
     try {
-      const res = await api.post<{ qrCode: string }>('/zalo/personal/qr', {});
+      const res = await api.post<{ qrCode: string }>('/zalo/personal/qr', { phone: connectPhone || '0941615312' });
       setZaloPersonal((prev) => ({
         connected: prev?.connected ?? false,
-        phone: prev?.phone ?? null,
+        phone: connectPhone || prev?.phone || '0941615312',
         name: prev?.name ?? null,
         avatar: prev?.avatar ?? null,
         mode: prev?.mode ?? 'PERSONAL',
         qrCode: res.qrCode,
       }));
-      toast('success', 'Đã tạo mã QR Đăng nhập Zalo Cá Nhân. Hãy dùng Zalo trên điện thoại để quét!');
+      toast('success', 'Đã tạo mã QR Zalo Cá Nhân chuẩn. Hãy dùng ứng dụng Zalo trên điện thoại để quét!');
     } catch {
       toast('error', 'Tạo mã QR thất bại.');
     } finally {

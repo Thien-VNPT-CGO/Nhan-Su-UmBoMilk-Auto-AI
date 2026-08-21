@@ -207,9 +207,10 @@ router.get('/personal/status', requireAuth, async (_req, res, next) => {
   }
 });
 
-router.post('/personal/qr', requireAuth, requireWrite(), async (_req, res, next) => {
+router.post('/personal/qr', requireAuth, requireWrite(), async (req, res, next) => {
   try {
-    const result = await zaloPersonalService.generateLoginQr();
+    const { phone } = (req.body ?? {}) as { phone?: string };
+    const result = await zaloPersonalService.generateLoginQr(phone);
     res.json({ success: true, data: result });
   } catch (e) {
     next(e);

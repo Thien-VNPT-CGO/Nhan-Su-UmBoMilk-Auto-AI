@@ -34,17 +34,21 @@ export class ZaloPersonalService {
   /**
    * Tạo / Lấy Mã QR Đăng Nhập Zalo Cá Nhân để Admin quét trực tiếp trên điện thoại.
    */
-  async generateLoginQr(): Promise<{ qrCode: string; status: string; expireAt: string }> {
+  async generateLoginQr(phone?: string): Promise<{ qrCode: string; status: string; expireAt: string }> {
     const timestamp = Date.now();
-    const qrData = `https://chat.zalo.me/login?app=umbo_hr_bot_${timestamp}`;
+    const settings = await getSettings();
+    const targetPhone = (phone || settings.zaloPersonal?.phone || '0941615312').replace(/^\+?84/, '0').trim();
+
+    // Dùng link Zalo chuẩn (https://zalo.me/09xxxxxxxx) để khi quét bằng App Zalo sẽ mở Zalo profile/chat chuẩn, KHÔNG bị trắng màn hình của chat.zalo.me trên mobile
+    const qrData = `https://zalo.me/${targetPhone}`;
     const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrData)}`;
     const expireAt = new Date(timestamp + 5 * 60 * 1000).toISOString();
 
-    const settings = await getSettings();
     await saveSettings(
       {
         zaloPersonal: {
           ...(settings.zaloPersonal ?? {}),
+          phone: targetPhone,
           qrCode: qrCodeUrl,
           qrExpireAt: expireAt,
         },
