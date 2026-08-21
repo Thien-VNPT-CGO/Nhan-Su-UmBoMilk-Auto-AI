@@ -364,6 +364,9 @@ export default function CandidateDrawer({
       `• 🏢 Chi nhánh ứng tuyển: ${c.chiNhanh || ''}`,
       `• ⏱️ Ca làm việc đăng ký: ${c.caLam || ''}`,
       '',
+      '👉 VUI LÒNG NHẮN LẠI CỤM TỪ "XÁC NHẬN THAM GIA" (hoặc "THAM GIA") vào Zalo này để hệ thống ghi nhận lịch hẹn của bạn nhé!',
+      '*(Trường hợp bận không tham gia được, bạn nhắn "TỪ CHỐI" giúp UMBO MILK nhé)*',
+      '',
       'UMBO MILK rất mong được gặp bạn! ✨',
     ].join('\n');
 
@@ -383,6 +386,12 @@ export default function CandidateDrawer({
     // 4. Thông báo hướng dẫn HR
     toast('success', '📋 Đã sao chép Thư Mời PV & Mở Zalo! Bạn chỉ cần nhấn Dán (Ctrl+V) trong khung chat Zalo để gửi.');
   };
+
+  const confirmTrainingParticipation = () =>
+    act(
+      () => api.patch(`/training/${candidateId}`, { trangThaiTraining: 'SAP_BAT_DAU' }),
+      '🎉 Đã ghi nhận ứng viên xác nhận tham gia! Hồ sơ đã được chuyển sang tab Nhân viên Training.',
+    );
 
   const setInterviewStatus = (status: string) =>
     act(
@@ -674,6 +683,36 @@ export default function CandidateDrawer({
                       <button className="btn-secondary !px-2.5 !py-1.5 !text-xs" onClick={openEditInterviewModal}>
                         <CalendarDays size={13} /> Sửa lịch
                       </button>
+                    </div>
+                  </div>
+                )}
+
+                {c.hrDecision === 'PASS' && (
+                  <div className="rounded-xl bg-slate-50/90 p-4 border border-slate-200/80 space-y-2.5">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div>
+                        <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Trạng thái xác nhận tham gia</div>
+                        <div className="mt-1 flex items-center gap-2">
+                          <Badge className={trainingStatusLabel[c.trangThaiTraining ?? 'CHUA_THAM_GIA']?.cls}>
+                            {trainingStatusLabel[c.trangThaiTraining ?? 'CHUA_THAM_GIA']?.label ?? c.trangThaiTraining}
+                          </Badge>
+                        </div>
+                      </div>
+                      {c.trangThaiTraining === 'CHUA_THAM_GIA' ? (
+                        <button
+                          type="button"
+                          onClick={confirmTrainingParticipation}
+                          className="btn-success !py-2 !px-3.5 !text-xs font-bold shadow-xs flex items-center gap-1.5"
+                          title="Bấm khi ứng viên đã nhắn Zalo 'XÁC NHẬN THAM GIA' để đưa ứng viên vào danh sách Training"
+                        >
+                          <CheckCircle2 size={15} />
+                          <span>Xác nhận UV Đã Đồng Ý Tham Gia</span>
+                        </button>
+                      ) : (
+                        <div className="text-xs font-semibold text-emerald-600 flex items-center gap-1">
+                          ✓ Đã xác nhận tham gia Training
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

@@ -89,7 +89,7 @@ export class ZaloService {
       `• 🏢 Chi nhánh ứng tuyển: ${c.chiNhanh}`,
       `• ⏱️ Ca làm việc đăng ký: ${c.caLam}`,
       '',
-      '👉 Vui lòng nhắn lại cụm từ "THAM GIA PHỎNG VẤN" (hoặc "THAM GIA") vào khung chat này để hệ thống tự động ghi nhận lịch hẹn của bạn nhé!',
+      '👉 VUI LÒNG NHẮN LẠI CỤM TỪ "XÁC NHẬN THAM GIA" (hoặc "THAM GIA") vào Zalo này để hệ thống ghi nhận lịch hẹn của bạn nhé!',
       '*(Trường hợp bận không tham gia được, bạn nhắn "TỪ CHỐI" giúp UMBO MILK nhé)*',
       '',
       'UMBO MILK rất mong được gặp bạn! ✨',
