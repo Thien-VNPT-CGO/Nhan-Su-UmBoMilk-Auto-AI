@@ -428,13 +428,15 @@ export default function InterviewScoreModal({
           >
             <FileCheck size={14} /> Chốt ĐẠT HỒ SƠ (PASS HS) {!isPassPv && '🔒'}
           </button>
-          <button
-            type="button"
-            onClick={() => handleConfirm('PASS_PV')}
-            className="btn-success !py-2 !px-4 text-xs font-bold flex items-center gap-1 cursor-pointer shadow-2xs"
-          >
-            <CheckCircle2 size={14} /> Chốt ĐẠT PHỎNG VẤN (PASS PV)
-          </button>
+          {!isPassPv && (
+            <button
+              type="button"
+              onClick={() => handleConfirm('PASS_PV')}
+              className="btn-success !py-2 !px-4 text-xs font-bold flex items-center gap-1 cursor-pointer shadow-2xs"
+            >
+              <CheckCircle2 size={14} /> Chốt ĐẠT PHỎNG VẤN (PASS PV)
+            </button>
+          )}
         </div>
       </div>
     </Modal>
