@@ -99,10 +99,7 @@ export default function Training() {
     const socket = getSocket();
     const refresh = debounce(() => void load(), 500);
 
-    const handleAiConfirmed = (data: { candidateName?: string; action?: string }) => {
-      if (data?.action === 'CONFIRMED_ACCEPT') {
-        toast('success', `🎉 AI vừa tự động xác nhận ứng viên ${data.candidateName ?? ''} đồng ý phỏng vấn từ Zalo cá nhân!`);
-      }
+    const handleAiConfirmed = (_data: { candidateName?: string; action?: string }) => {
       refresh();
     };
 
