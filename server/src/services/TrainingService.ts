@@ -55,7 +55,51 @@ export class TrainingService {
     }
   }
 
+  async autoPassCompletedInterviews(): Promise<number> {
+    const now = new Date();
+    const unclosed = await prisma.candidate.findMany({
+      where: {
+        phongVanAt: { not: null },
+        hrDecision: null,
+        trangThaiTraining: { not: TRAINING_STATUS.NHAN_VIEN_CHINH_THUC },
+      },
+    });
+
+    let count = 0;
+    for (const c of unclosed) {
+      if (!c.phongVanAt) continue;
+      const pvEndTime = new Date(c.phongVanAt).getTime() + 30 * 60 * 1000;
+      if (now.getTime() >= pvEndTime) {
+        const newVersion = c.dataVersion + 1;
+        await prisma.candidate.update({
+          where: { id: c.id },
+          data: {
+            hrDecision: 'PASS_PV',
+            hrReason: 'AI tự động chốt HOÀN THÀNH PV khi kết thúc giờ phỏng vấn',
+            interviewStatus: 'QUA_PV',
+            dataVersion: newVersion,
+            updatedBy: 'AI-SYSTEM',
+          },
+        });
+        await audit({
+          user: 'AI-SYSTEM',
+          action: 'AUTO_PASS_INTERVIEW',
+          entity: 'candidate',
+          entityId: c.id,
+          oldValue: c.hrDecision ?? 'CHUA_CHOT',
+          newValue: 'PASS_PV',
+          version: newVersion,
+        });
+        emit('candidate:decision', { candidateId: c.id, hrDecision: 'PASS_PV' });
+        emit('training:updated', { candidateId: c.id });
+        count++;
+      }
+    }
+    return count;
+  }
+
   async list() {
+    await this.autoPassCompletedInterviews();
     const rows = await prisma.candidate.findMany({
       where: { trangThaiTraining: { not: TRAINING_STATUS.NHAN_VIEN_CHINH_THUC } },
       include: {

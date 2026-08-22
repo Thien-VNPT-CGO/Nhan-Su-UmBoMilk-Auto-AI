@@ -11,6 +11,7 @@ import { emit, emitSyncSuccess } from '../sockets';
 import { nextId } from '../lib/id';
 import { dateKey } from '../lib/date';
 import { TRAINING_STATUS } from '../lib/constants';
+import { trainingService } from '../services/TrainingService';
 
 const ENDED_TRAINING_STATUSES = [
   TRAINING_STATUS.HOAN_THANH,
@@ -88,7 +89,8 @@ export class SyncWorker {
     }, 60_000);
     this.interviewTimer = setInterval(() => {
       void this.tickInterviewReminders();
-    }, 60_000);
+      void this.tickAutoPassCompletedInterviews();
+    }, 15_000);
     this.pruneTimer = setInterval(() => {
       void this.tickPrune();
     }, 60 * 60_000);
@@ -104,6 +106,7 @@ export class SyncWorker {
     void this.tickAutoScore();
     void this.tickTrainingNotices();
     void this.tickInterviewReminders();
+    void this.tickAutoPassCompletedInterviews();
     void this.tickPrune();
     void this.tickQueueAlert();
     void this.tickPruneReferralRejected();
@@ -424,6 +427,19 @@ export class SyncWorker {
       console.warn('[SyncWorker] interview reminders:', e instanceof Error ? e.message : String(e));
     } finally {
       this.runningInterviews = false;
+    }
+  }
+
+  /** AI tự động chốt HOÀN THÀNH PV khi hết 30 phút phỏng vấn mà HR chưa bấm chốt thủ công */
+  private async tickAutoPassCompletedInterviews(): Promise<void> {
+    if (!this.running) return;
+    try {
+      const count = await trainingService.autoPassCompletedInterviews();
+      if (count > 0) {
+        console.log(`[SyncWorker] AI tự động chốt HOÀN THÀNH PV cho ${count} ứng viên hết giờ PV`);
+      }
+    } catch (e) {
+      console.warn('[SyncWorker] auto pass interviews:', e instanceof Error ? e.message : String(e));
     }
   }
 
