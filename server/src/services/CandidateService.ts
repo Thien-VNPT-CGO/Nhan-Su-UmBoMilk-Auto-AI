@@ -431,7 +431,7 @@ export class CandidateService {
     if (conflict && conflict.phongVanAt) {
       throw ApiError.conflict(
         'INTERVIEW_TIME_CONFLICT',
-        `Khung giờ này quá gần lịch phỏng vấn đã hẹn của Sếp ${conflict.tenUv} (${formatDateTime(conflict.phongVanAt)}). Lịch phỏng vấn giữa các ứng viên phải cách nhau ít nhất 30 phút.`,
+        `Khung giờ này quá gần lịch phỏng vấn đã hẹn của ứng viên ${conflict.tenUv} (${formatDateTime(conflict.phongVanAt)}). Lịch phỏng vấn giữa các ứng viên phải cách nhau ít nhất 30 phút.`,
       );
     }
   }

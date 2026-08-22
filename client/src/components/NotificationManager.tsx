@@ -76,7 +76,7 @@ export function NotificationManager() {
         url: '/training',
       };
       setActiveToast(item);
-      notifyDesktop(`⏰ Nhắc lịch phỏng vấn với Sếp ${candidateName}!`, item.message, '/training');
+      notifyDesktop(`⏰ Nhắc lịch phỏng vấn với ${candidateName}!`, item.message, '/training');
     };
 
     const handleNotificationNew = (data: { title?: string; body?: string; url?: string }) => {
@@ -184,7 +184,7 @@ export function NotificationManager() {
                   <Sparkles size={12} /> {activeToast.title}
                 </div>
                 <h4 className="text-lg font-black text-white truncate tracking-tight drop-shadow-xs">
-                  Sếp {activeToast.candidateName}
+                  {activeToast.candidateName}
                 </h4>
                 <p className="text-xs text-pink-50 font-semibold leading-relaxed mt-1">
                   {activeToast.message}

@@ -225,7 +225,7 @@ export function checkinReasonText(valid: boolean, reason: string, tenUv: string)
     return [
       '🎉 [UMBO MILK] – ĐIỂM DANH THÀNH CÔNG ✅',
       '',
-      `Chào Sếp ${tenUv} ❤️`,
+      `Chào ${tenUv} ❤️`,
       'Hệ thống đã ghi nhận thông tin điểm danh của bạn.',
       '',
       'Chúc bạn một ngày làm việc vui vẻ và hiệu quả cùng UMBO MILK! 🥤✨',
@@ -246,7 +246,7 @@ export function checkinReasonText(valid: boolean, reason: string, tenUv: string)
   return [
     '❌ [UMBO MILK] – ĐIỂM DANH KHÔNG THÀNH CÔNG',
     '',
-    `Chào Sếp ${tenUv} ❤️`,
+    `Chào ${tenUv} ❤️`,
     `Lý do: ${map[first] ?? 'Thông tin điểm danh chưa hợp lệ.'}`,
     '',
     'Vui lòng kiểm tra lại hoặc liên hệ Quản lý chi nhánh để được trợ giúp nhé! ✨',

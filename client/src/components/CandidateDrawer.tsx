@@ -353,7 +353,7 @@ export default function CandidateDrawer({
 
     const pvTimeStr = c.phongVanAt ? formatDateTime(c.phongVanAt) : 'Theo lịch đã hẹn';
     const nameGreeting = c.tenUv?.trim()
-      ? (c.tenUv.trim().toLowerCase().startsWith('sếp') ? c.tenUv.trim() : `Sếp ${c.tenUv.trim()}`)
+      ? c.tenUv.trim()
       : 'bạn';
 
     const pvTs = c.phongVanAt ? new Date(c.phongVanAt).getTime() : 0;
@@ -749,7 +749,7 @@ export default function CandidateDrawer({
                 🔒 XUNG ĐỘT THỜI GIAN (CÁCH NHAU TỐI THIỂU 30 PHÚT)
               </div>
               <div>
-                Khung giờ này quá gần lịch đã hẹn của <b>Sếp {timeConflict.tenUv}</b> lúc <b>{formatDateTime(timeConflict.phongVanAt)}</b>.
+                Khung giờ này quá gần lịch đã hẹn của <b>ứng viên {timeConflict.tenUv}</b> lúc <b>{formatDateTime(timeConflict.phongVanAt)}</b>.
               </div>
               <div className="text-[11px] text-rose-600 font-bold">
                 Vui lòng chọn khung giờ khác cách tối thiểu 30 phút!
@@ -774,7 +774,7 @@ export default function CandidateDrawer({
                       : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700'
                   )}
                   onClick={() => setPhongVanAt(slot.iso)}
-                  title={slot.conflictUser ? `Đã hẹn phỏng vấn với Sếp ${slot.conflictUser}` : `Chọn khung giờ ${slot.timeStr}`}
+                  title={slot.conflictUser ? `Đã hẹn phỏng vấn với ứng viên ${slot.conflictUser}` : `Chọn khung giờ ${slot.timeStr}`}
                 >
                   {slot.conflictUser ? `🔒 ${slot.timeStr} (${slot.conflictUser})` : slot.timeStr}
                 </button>

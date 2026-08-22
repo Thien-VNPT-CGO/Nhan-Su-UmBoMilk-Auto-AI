@@ -45,7 +45,7 @@ export class ZaloService {
     if (!c) throw new Error('Không tìm thấy ứng viên');
     if (!c.ngayBatDauTraining) throw new Error('Chưa có ngày bắt đầu Training');
 
-    const nameGreeting = c.tenUv.trim().toLowerCase().startsWith('sếp') ? c.tenUv.trim() : `Sếp ${c.tenUv.trim()}`;
+    const nameGreeting = c.tenUv.trim();
 
     const content = [
       '🐮 [UMBO MILK] – THÔNG BÁO LỊCH TRAINING & NHẬN VIỆC 🎉',
@@ -79,7 +79,7 @@ export class ZaloService {
     if (!c.phongVanAt) throw new Error('Chưa có thời gian phỏng vấn');
     if (!c.ggMeetLink) throw new Error('Chưa có link GG Meet');
 
-    const nameGreeting = c.tenUv.trim().toLowerCase().startsWith('sếp') ? c.tenUv.trim() : `Sếp ${c.tenUv.trim()}`;
+    const nameGreeting = c.tenUv.trim();
 
     const hostOrigin = process.env.PUBLIC_APP_URL || 'https://tuyendung.umbomilk.com';
     const pvTs = c.phongVanAt ? c.phongVanAt.getTime() : 0;
@@ -121,7 +121,7 @@ export class ZaloService {
     if (!c) throw new Error('Không tìm thấy ứng viên');
     if (!c.phongVanAt || !c.ggMeetLink) throw new Error('Chưa có lịch phỏng vấn');
 
-    const nameGreeting = c.tenUv.trim().toLowerCase().startsWith('sếp') ? c.tenUv.trim() : `Sếp ${c.tenUv.trim()}`;
+    const nameGreeting = c.tenUv.trim();
 
     const marker = `[NHACPV:${c.phongVanAt.toISOString()}]`;
     const content = [
@@ -161,7 +161,7 @@ export class ZaloService {
       marker,
       '🐮 [UMBO MILK] – NHẮC NHỞ ĐIỂM DANH CA LÀM 🥤',
       '',
-      `Chào Sếp ${candidate.tenUv} ❤️`,
+      `Chào ${candidate.tenUv} ❤️`,
       `Ca làm việc (${shift}) của bạn tại ${candidate.chiNhanh} sắp bắt đầu trong 30 phút tới.`,
       '',
       '👉 Vui lòng có mặt đúng giờ và mở Zalo thực hiện gửi Vị trí / Điểm danh nhé!',
@@ -187,7 +187,7 @@ export class ZaloService {
     const c = await prisma.candidate.findUnique({ where: { id: candidateId } });
     if (!c) throw new Error('Không tìm thấy ứng viên');
 
-    const nameGreeting = c.tenUv.trim().toLowerCase().startsWith('sếp') ? c.tenUv.trim() : `Sếp ${c.tenUv.trim()}`;
+    const nameGreeting = c.tenUv.trim();
 
     let content = '';
 

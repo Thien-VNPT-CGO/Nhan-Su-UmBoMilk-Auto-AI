@@ -93,7 +93,7 @@ export default function ConfirmInterview() {
   }
 
   const nameGreeting = candidate.tenUv?.trim()
-    ? (candidate.tenUv.trim().toLowerCase().startsWith('sếp') ? candidate.tenUv.trim() : `Sếp ${candidate.tenUv.trim()}`)
+    ? candidate.tenUv.trim()
     : 'bạn';
 
   return (

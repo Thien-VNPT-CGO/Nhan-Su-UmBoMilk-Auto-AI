@@ -204,7 +204,7 @@ export default function Training() {
     }
 
     // 1. Tạo tin nhắn mẫu Lịch Training tự động theo thông tin ứng viên
-    const nameGreeting = r.tenUv.trim().toLowerCase().startsWith('sếp') ? r.tenUv.trim() : `Sếp ${r.tenUv.trim()}`;
+    const nameGreeting = r.tenUv.trim();
     const startDateStr = formatDate(r.ngayBatDauTraining) || (r.ngayBatDauTraining ? String(r.ngayBatDauTraining) : 'Theo phân công');
 
     const msg = [
@@ -827,7 +827,7 @@ export default function Training() {
                   🔒 XUNG ĐỘT THỜI GIAN (CÁCH NHAU TỐI THIỂU 30 PHÚT)
                 </div>
                 <div>
-                  Khung giờ này quá gần lịch đã hẹn của <b>Sếp {conflict.tenUv}</b> lúc <b>{formatDateTime(conflict.phongVanAt)}</b>.
+                  Khung giờ này quá gần lịch đã hẹn của <b>ứng viên {conflict.tenUv}</b> lúc <b>{formatDateTime(conflict.phongVanAt)}</b>.
                 </div>
                 <div className="text-[11px] text-rose-600 font-bold">
                   Vui lòng chọn khung giờ khác cách tối thiểu 30 phút!
@@ -875,7 +875,7 @@ export default function Training() {
                           : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700'
                       )}
                       onClick={() => setIvPhongVanAt(slotIso)}
-                      title={conflictUser ? `Đã hẹn phỏng vấn với Sếp ${conflictUser.tenUv}` : `Chọn khung giờ ${timeStr}`}
+                      title={conflictUser ? `Đã hẹn phỏng vấn với ứng viên ${conflictUser.tenUv}` : `Chọn khung giờ ${timeStr}`}
                     >
                       {conflictUser ? `🔒 ${timeStr} (${conflictUser.tenUv})` : timeStr}
                     </button>
