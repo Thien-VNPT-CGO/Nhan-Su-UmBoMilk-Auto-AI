@@ -4,6 +4,7 @@ import { api, ApiError } from '../api/client';
 import { Skeleton, Badge, Modal, Spinner, Field } from '../components/ui';
 
 import { useToast } from '../stores/Toast';
+import { useAuth } from '../stores/auth';
 import { getSocket } from '../api/socket';
 import { dateKey, addDays, weekdayVi } from '../utils/date';
 import { cn, shiftColor } from '../utils/format';
@@ -26,13 +27,24 @@ function startOfToday(): string {
   return dateKey(tzDate);
 }
 
+function getLockedShiftKey(caLam?: string): 'SANG' | 'CHIEU' | 'TOI' | null {
+  if (!caLam) return null;
+  const str = caLam.toLowerCase();
+  if (str.includes('sang') || str.includes('7h')) return 'SANG';
+  if (str.includes('chieu') || str.includes('12h') || str.includes('trua')) return 'CHIEU';
+  if (str.includes('toi') || str.includes('18h')) return 'TOI';
+  return null;
+}
+
 export default function Shifts() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const [tab, setTab] = useState<'training' | 'employees'>('training');
   const [trainingRows, setTrainingRows] = useState<RowData[]>([]);
   const [employeeRows, setEmployeeRows] = useState<RowData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [edit, setEdit] = useState<{ candidateId: string; tenUv: string; date: string; current: string } | null>(null);
+  const [edit, setEdit] = useState<{ candidateId: string; tenUv: string; date: string; current: string; caLam?: string } | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [editInfo, setEditInfo] = useState<{ candidateId: string; tenUv: string; chiNhanh: string; caLam: string } | null>(null);
@@ -306,14 +318,33 @@ export default function Shifts() {
                           </button>
                         )}
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleSendAttendanceNoticeAndOpenZalo(r)}
-                        className="mt-1.5 w-full bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-extrabold px-2 py-1 rounded-lg flex items-center justify-center gap-1 shadow-2xs transition-all hover:scale-102 cursor-pointer"
-                        title="Click để tự động tạo tin nhắn Zalo kèm link điểm danh web & mở Zalo gửi cho ứng viên"
-                      >
-                        <span>💬 Mở App Zalo gửi Lịch điểm danh</span>
-                      </button>
+                      {(() => {
+                        const scheduledCount = Object.values(r.shifts || {}).filter(
+                          (s) => s && s.shifts && s.shifts.trim() !== '' && s.shifts !== 'OFF'
+                        ).length;
+
+                        if (scheduledCount >= 7) {
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => handleSendAttendanceNoticeAndOpenZalo(r)}
+                              className="mt-1.5 w-full bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-extrabold px-2 py-1 rounded-lg flex items-center justify-center gap-1 shadow-2xs transition-all hover:scale-102 cursor-pointer animate-pulse"
+                              title="Click để tự động tạo tin nhắn Zalo kèm link điểm danh web & mở Zalo gửi cho ứng viên"
+                            >
+                              <span>💬 Mở App Zalo gửi Lịch điểm danh</span>
+                            </button>
+                          );
+                        }
+
+                        return (
+                          <div
+                            className="mt-1.5 w-full bg-slate-100 border border-slate-200 text-slate-400 text-[10px] font-bold px-2 py-1 rounded-lg flex items-center justify-center gap-1 select-none cursor-not-allowed"
+                            title="Cần xếp đủ tối thiểu 7 ngày ca làm việc để hiển thị nút gửi Zalo"
+                          >
+                            <span>⏳ Chưa đủ ca ({scheduledCount}/7 ngày)</span>
+                          </div>
+                        );
+                      })()}
                     </td>
 
                     {dates.map((d) => {
@@ -324,7 +355,7 @@ export default function Shifts() {
                         <td key={d} className="border-r border-slate-50 p-1 text-center">
                           <button
                             onClick={() => {
-                              setEdit({ candidateId: r.candidateId, tenUv: r.tenUv, date: d, current: shifts.join('|') });
+                              setEdit({ candidateId: r.candidateId, tenUv: r.tenUv, date: d, current: shifts.join('|'), caLam: r.caLam });
                               setSelected(shifts.length ? shifts : ['OFF']);
                             }}
                             className={cn(
@@ -371,31 +402,57 @@ export default function Shifts() {
           </>
         }
       >
-        <div className="space-y-4">
-          <p className="text-xs text-slate-500">Có thể chọn nhiều ca trong ngày (với training: tối đa 1 ngày training/ngày):</p>
-          <div className="grid grid-cols-2 gap-2.5">
-            {SHIFT_KEYS.map((k) => {
-              const c = shiftColor(k);
-              const active = selected.includes(k);
-              return (
-                <button
-                  key={k}
-                  onClick={() => toggleShift(k)}
-                  className={cn(
-                    'rounded-xl border-2 px-4 py-3 text-sm font-bold transition-all',
-                    active ? c.bg + ' ' + c.text + ' border-transparent' : 'bg-white border-slate-200 text-slate-500',
-                  )}
-                >
-                  {c.label}
-                </button>
-              );
-            })}
-          </div>
-          <div className="rounded-xl bg-slate-50 px-3.5 py-2.5 text-xs text-slate-500">
-            Hiện tại: <b>{edit?.current.replace(/\|/g, ' + ') || 'Chưa xếp'}</b>
-            {selected.length === 0 && <span className="ml-2 text-amber-600">→ sẽ lưu OFF</span>}
-          </div>
-        </div>
+        {(() => {
+          const lockedKey = getLockedShiftKey(edit?.caLam);
+          return (
+            <div className="space-y-4">
+              {!isAdmin && lockedKey && (
+                <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900 space-y-1">
+                  <p className="font-bold flex items-center gap-1">
+                    🔒 Ca làm chính thức đã chốt: <span className="font-extrabold text-amber-950 uppercase">{lockedKey === 'SANG' ? 'Ca Sáng (07h00 - 12h00)' : lockedKey === 'CHIEU' ? 'Ca Chiều (12h00 - 18h00)' : 'Ca Tối (18h00 - 23h00)'}</span>
+                  </p>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    Tài khoản HR chỉ được chọn ca <strong>{lockedKey === 'SANG' ? 'Ca Sáng' : lockedKey === 'CHIEU' ? 'Ca Chiều' : 'Ca Tối'}</strong> hoặc <strong>OFF</strong>. Nếu ứng viên có nhu cầu hoán đổi ca làm khác, vui lòng liên hệ <strong>Admin</strong> để hỗ trợ đổi ca.
+                  </p>
+                </div>
+              )}
+
+              {isAdmin && (
+                <div className="rounded-xl bg-purple-50 border border-purple-200 p-2.5 text-xs text-purple-900 font-semibold flex items-center gap-1.5">
+                  <span>👑 <strong>Tài khoản Admin:</strong> Được phép hoán đổi tất cả các ca theo yêu cầu ứng viên.</span>
+                </div>
+              )}
+
+              <p className="text-xs text-slate-500">Chọn ca làm việc cho ngày {edit?.date.slice(8, 10)}/{edit?.date.slice(5, 7)}:</p>
+              <div className="grid grid-cols-2 gap-2.5">
+                {SHIFT_KEYS.map((k) => {
+                  const c = shiftColor(k);
+                  const active = selected.includes(k);
+                  const isLockedForHR = !isAdmin && lockedKey !== null && k !== lockedKey && k !== 'OFF';
+                  return (
+                    <button
+                      key={k}
+                      disabled={isLockedForHR}
+                      onClick={() => toggleShift(k)}
+                      title={isLockedForHR ? `🔒 Ca chốt là ${lockedKey}. Chỉ Admin mới có quyền đổi ca.` : undefined}
+                      className={cn(
+                        'rounded-xl border-2 px-4 py-3 text-sm font-bold transition-all relative',
+                        active ? c.bg + ' ' + c.text + ' border-transparent' : 'bg-white border-slate-200 text-slate-500',
+                        isLockedForHR && 'opacity-40 cursor-not-allowed bg-slate-100 border-slate-200 text-slate-400 hover:border-slate-200'
+                      )}
+                    >
+                      {c.label} {isLockedForHR && '🔒'}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="rounded-xl bg-slate-50 px-3.5 py-2.5 text-xs text-slate-500">
+                Hiện tại: <b>{edit?.current.replace(/\|/g, ' + ') || 'Chưa xếp'}</b>
+                {selected.length === 0 && <span className="ml-2 text-amber-600">→ sẽ lưu OFF</span>}
+              </div>
+            </div>
+          );
+        })()}
       </Modal>
 
       <Modal open={!!editInfo} onClose={() => setEditInfo(null)} title={`Chốt Chi Nhánh & Ca Làm Chính Thức – ${editInfo?.tenUv ?? ''}`}>
