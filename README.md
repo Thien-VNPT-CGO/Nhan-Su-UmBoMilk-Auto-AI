@@ -220,11 +220,13 @@ Lỗi nghiệp vụ trả về `{ success: false, code, message }`; sai version 
 ```js
 function onFormSubmit(e) {
   const r = e.range.getValues()[0];
+  const thoiGianStr = r[0] ? Utilities.formatDate(new Date(r[0]), 'Asia/Ho_Chi_Minh', 'yyyy-MM-dd HH:mm:ss') : '';
   UrlFetchApp.fetch('http://<SERVER>:3000/api/webhooks/form', {
     method: 'post',
     contentType: 'application/json',
     headers: { 'x-webhook-secret': '<WEBHOOK_SECRET>' },
     payload: JSON.stringify({
+      thoiGian: thoiGianStr,
       tenUv: r[1], namSinh: r[2], trinhDo: r[3], queQuan: r[4],
       sdtZalo: String(r[5]), caLam: r[6], chiNhanh: r[7],
       kinhNghiem: r[8], xuLy: r[9], linkFb: r[10],

@@ -769,8 +769,15 @@ export function parseFormTimestamp(v: string | undefined): Date | undefined {
   const trimmed = String(v).trim();
   if (!trimmed) return undefined;
 
+  // 0. Chuỗi đã có chỉ định múi giờ rõ ràng (Z hoặc +HH:MM / -HH:MM) -> parse trực tiếp
+  // Ví dụ: "2026-08-22T02:13:19.000Z" hoặc "2026-08-22T09:13:19+07:00"
+  if (/T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})$/i.test(trimmed)) {
+    const d = new Date(trimmed);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+
   // 1. Parse DD/MM/YYYY HH:mm:ss hoặc DD/MM/YYYY (Google Form Việt Nam)
-  const vnMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  const vnMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
   if (vnMatch) {
     const [, dd, mm, yyyy, hh = '0', mi = '0', ss = '0'] = vnMatch;
     const day = Number(dd);
@@ -783,10 +790,10 @@ export function parseFormTimestamp(v: string | undefined): Date | undefined {
     }
   }
 
-  // 2. Parse YYYY-MM-DD HH:mm:ss hoặc YYYY-MM-DD
-  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2})(?::(\d{2}))?)?/);
-  if (isoMatch) {
-    const [, yyyy, mm, dd, hh = '0', mi = '0', ss = '0'] = isoMatch;
+  // 2. Parse YYYY-MM-DD HH:mm:ss hoặc YYYY-MM-DD KHÔNG CÓ múi giờ (Ví dụ: "2026-08-22 09:13:19")
+  const isoNoTzMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (isoNoTzMatch) {
+    const [, yyyy, mm, dd, hh = '0', mi = '0', ss = '0'] = isoNoTzMatch;
     const isoStr = `${yyyy}-${mm}-${dd}T${hh}:${mi}:${ss}+07:00`;
     const d = new Date(isoStr);
     if (!Number.isNaN(d.getTime())) return d;
