@@ -265,6 +265,15 @@ export default function Training() {
 
   const [scoreModalCandidate, setScoreModalCandidate] = useState<TrainingRow | null>(null);
 
+  const handleOpenScoreModal = (r: TrainingRow) => {
+    const isCompleted = r.hrDecision === 'PASS_PV' || r.hrDecision === 'PASS_HS' || r.hrDecision === 'PASS';
+    if (!isCompleted && !isAdmin) {
+      toast('error', '⚠️ Vui lòng bấm "HOÀN THÀNH PV" trước khi mở Bảng điểm phỏng vấn!');
+      return;
+    }
+    setScoreModalCandidate(r);
+  };
+
   const handleUpdateInterviewDecision = async (id: string, decision: 'PASS_PV' | 'PASS_HS' | 'FAIL', note?: string) => {
     try {
       if (decision === 'PASS_PV') {
@@ -570,15 +579,26 @@ export default function Training() {
                                 </span>
                               )}
                               <div className="flex flex-wrap items-center justify-center gap-1 pt-0.5">
-                                <button
-                                  type="button"
-                                  onClick={() => setScoreModalCandidate(r)}
-                                  className="bg-indigo-600 hover:bg-indigo-700 text-white !py-1 !px-2.5 text-[10px] font-extrabold shadow-2xs rounded-xl flex items-center gap-1 hover:scale-102 transition-all cursor-pointer"
-                                  title="Mở Phiếu Chấm Điểm Phỏng Vấn (Có KN / Không KN)"
-                                >
-                                  <FileText size={12} />
-                                  <span>📝 Bảng điểm PV</span>
-                                </button>
+                                {(() => {
+                                  const isCompletedPv = isPassPv || isPassHs || r.hrDecision === 'PASS';
+                                  const isScoreUnlocked = isCompletedPv || Boolean(isAdmin);
+                                  return (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenScoreModal(r)}
+                                      className={cn(
+                                        'text-[10px] font-extrabold shadow-2xs rounded-xl flex items-center gap-1 transition-all !py-1 !px-2.5',
+                                        isScoreUnlocked
+                                          ? 'bg-indigo-600 hover:bg-indigo-700 text-white hover:scale-102 cursor-pointer'
+                                          : 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed opacity-60'
+                                      )}
+                                      title={isScoreUnlocked ? 'Mở Phiếu Chấm Điểm Phỏng Vấn (Có KN / Không KN)' : '🔒 Khóa cho tới khi HR chốt HOÀN THÀNH PV'}
+                                    >
+                                      <FileText size={12} />
+                                      <span>📝 Bảng điểm PV</span>
+                                    </button>
+                                  );
+                                })()}
                                 <button
                                   type="button"
                                   onClick={() => handleUpdateInterviewDecision(r.id, 'PASS_PV')}
