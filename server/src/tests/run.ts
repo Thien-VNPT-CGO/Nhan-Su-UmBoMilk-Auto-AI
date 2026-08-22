@@ -163,6 +163,7 @@ async function main() {
   // ==================== CASE 4: double-click PASS -> không duplicate ====================
   console.log('\n[CASE 4] HR double-click PASS');
   const c4 = await makeCandidate(session);
+  await prisma.candidate.updateMany({ data: { phongVanAt: null } });
   const c4PvTime = new Date(Date.now() + 900000 * 3600 * 1000).toISOString();
   await api(`/candidates/${c4}/decision`, { method: 'PATCH', session, body: { decision: 'PASS_HS', interview: { phongVanAt: c4PvTime, ggMeetLink: 'https://meet.google.com/test-link' } } });
   const dup4 = await api(`/candidates/${c4}/decision`, { method: 'PATCH', session, body: { decision: 'PASS_HS', interview: { phongVanAt: c4PvTime, ggMeetLink: 'https://meet.google.com/test-link' } } });
@@ -247,6 +248,7 @@ async function main() {
   const c8 = await makeCandidate(session);
   const hashBefore = (await prisma.candidate.findUnique({ where: { id: c8 } }))?.dataHash;
   ok('C8: DATA_HASH được tạo cho Candidate', !!hashBefore);
+  await prisma.candidate.updateMany({ data: { phongVanAt: null } });
   const testPvTime8 = new Date(Date.now() + 800000 * 3600 * 1000).toISOString();
   await candidateService.makeDecision(c8, 'hr_umbomilk', 'PASS', 'test', { phongVanAt: new Date(testPvTime8), ggMeetLink: 'https://meet.google.com/test-link' });
   const hashAfter = (await prisma.candidate.findUnique({ where: { id: c8 } }))?.dataHash;

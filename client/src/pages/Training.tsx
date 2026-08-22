@@ -197,6 +197,10 @@ export default function Training() {
   };
 
   const handleSendZaloNoticeAndOpenApp = async (r: TrainingRow) => {
+    if (!r.ngayBatDauTraining && !isAdmin) {
+      toast('error', '⚠️ Vui lòng bấm nút "Chốt ca & lịch" để đặt ngày đi làm trước khi gửi Zalo Lịch Training!');
+      return;
+    }
     try {
       await notify(r.id);
       const cleanPhone = r.sdtZalo.replace(/\D/g, '');
@@ -662,8 +666,8 @@ export default function Training() {
                             </button>
                           </div>
 
-                          {/* Nút 💬 Mở App Zalo gửi Lịch Training: CHỈ HIỂN THỊ KHI HR ĐÃ HOÀN TẤT BẮM "CHỐT CA & LỊCH" (Trạng thái SAP_BAT_DAU / BAT_DAU) */}
-                          {isPassHs && (r.trangThaiTraining === 'SAP_BAT_DAU' || r.trangThaiTraining === 'BAT_DAU' || r.trangThaiTraining === 'HOAN_THANH') && (
+                          {/* Nút 💬 Mở App Zalo gửi Lịch Training: CHỈ HIỂN THỊ KHI HR ĐÃ HOÀN TẤT BẤM "CHỐT CA & LỊCH" (Có ngayBatDauTraining & trangThaiTraining = SAP_BAT_DAU / BAT_DAU / HOAN_THANH) */}
+                          {Boolean(r.ngayBatDauTraining) && isPassHs && (r.trangThaiTraining === 'SAP_BAT_DAU' || r.trangThaiTraining === 'BAT_DAU' || r.trangThaiTraining === 'HOAN_THANH') && (
                             <button
                               type="button"
                               onClick={() => handleSendZaloNoticeAndOpenApp(r)}
