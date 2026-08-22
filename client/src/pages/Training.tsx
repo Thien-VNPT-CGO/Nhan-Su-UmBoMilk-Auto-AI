@@ -202,6 +202,57 @@ export default function Training() {
       toast('error', '⚠️ Vui lòng bấm nút "Chốt ca & lịch" để đặt ngày đi làm trước khi gửi Zalo Lịch Training!');
       return;
     }
+
+    // 1. Tạo tin nhắn mẫu Lịch Training tự động theo thông tin ứng viên
+    const nameGreeting = r.tenUv.trim().toLowerCase().startsWith('sếp') ? r.tenUv.trim() : `Sếp ${r.tenUv.trim()}`;
+    const startDateStr = formatDate(r.ngayBatDauTraining) || (r.ngayBatDauTraining ? String(r.ngayBatDauTraining) : 'Theo phân công');
+
+    const msg = [
+      '🐮 [UMBO MILK] – THÔNG BÁO LỊCH TRAINING & NHẬN VIỆC 🎉',
+      '',
+      `Chào ${nameGreeting} ❤️`,
+      'Chúc mừng bạn đã trúng tuyển! UMBO MILK xin thông báo lịch nhận việc và đào tạo (Training) của bạn như sau:',
+      '',
+      '📌 THÔNG TIN NHẬN VIỆC & ĐÀO TẠO CHÍNH THỨC:',
+      `• 🏢 Chi nhánh làm việc chính thức: ${r.chiNhanh || 'Theo phân công'}`,
+      `• ⏱️ Ca làm việc chính thức: ${r.caLam || 'Theo ca chốt'}`,
+      `• 📅 Ngày bắt đầu đi làm / training: ${startDateStr}`,
+      '',
+      '📌 GIẤY TỜ HỒ SƠ CẦN CHUẨN BỊ KHI ĐI NHẬN CA:',
+      '1. Bản photo CCCD/CMND (kèm bản gốc đối chiếu)',
+      '2. Sơ yếu lý lịch / Giấy xác nhận hạnh kiểm',
+      '3. 2 ảnh thẻ 3x4',
+      '',
+      '👉 Vui lòng có mặt đúng giờ và giữ liên lạc với Quản lý chi nhánh nhé!',
+      '',
+      'UMBO MILK chúc bạn có một quá trình làm việc thuận lợi và hiệu quả! ✨',
+    ].join('\n');
+
+    // 2. Tự động Sao chép vào bộ nhớ tạm Clipboard (Dùng Ctrl + V dán trên Zalo)
+    let copied = false;
+    try {
+      await navigator.clipboard.writeText(msg);
+      copied = true;
+    } catch {
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = msg;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        copied = document.execCommand('copy');
+        document.body.removeChild(textarea);
+      } catch {
+        copied = false;
+      }
+    }
+
+    if (copied) {
+      toast('success', '📋 Đã sao chép tin nhắn Lịch Training! Nhấn (Ctrl + V) trên Zalo để dán & gửi cho ứng viên.');
+    }
+
+    // 3. Mở Zalo App / Web chat với ứng viên
     try {
       await notify(r.id);
       const cleanPhone = r.sdtZalo.replace(/\D/g, '');
