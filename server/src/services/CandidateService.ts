@@ -413,8 +413,8 @@ export class CandidateService {
 
   private async checkInterviewConflict(candidateId: string, phongVanAt: Date): Promise<void> {
     const targetMs = phongVanAt.getTime();
-    const windowStart = new Date(targetMs - 59 * 60 * 1000);
-    const windowEnd = new Date(targetMs + 59 * 60 * 1000);
+    const windowStart = new Date(targetMs - 29 * 60 * 1000);
+    const windowEnd = new Date(targetMs + 29 * 60 * 1000);
 
     const conflict = await prisma.candidate.findFirst({
       where: {
@@ -431,7 +431,7 @@ export class CandidateService {
     if (conflict && conflict.phongVanAt) {
       throw ApiError.conflict(
         'INTERVIEW_TIME_CONFLICT',
-        `Khung giờ này quá gần lịch phỏng vấn đã hẹn của Sếp ${conflict.tenUv} (${formatDateTime(conflict.phongVanAt)}). Lịch phỏng vấn giữa các ứng viên phải cách nhau ít nhất 1 tiếng.`,
+        `Khung giờ này quá gần lịch phỏng vấn đã hẹn của Sếp ${conflict.tenUv} (${formatDateTime(conflict.phongVanAt)}). Lịch phỏng vấn giữa các ứng viên phải cách nhau ít nhất 30 phút.`,
       );
     }
   }

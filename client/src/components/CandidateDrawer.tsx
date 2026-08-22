@@ -457,7 +457,7 @@ export default function CandidateDrawer({
       if (b.id === c?.id) return false;
       if (!b.phongVanAt) return false;
       const bTime = new Date(b.phongVanAt).getTime();
-      return Math.abs(selectedTimestamp - bTime) / (60 * 1000) < 60;
+      return Math.abs(selectedTimestamp - bTime) / (60 * 1000) < 30;
     });
   }, [selectedTimestamp, bookedInterviews, c?.id]);
 
@@ -470,9 +470,9 @@ export default function CandidateDrawer({
     }
 
     const standardHours = [
-      '08:00', '09:00', '10:00', '11:00',
-      '13:30', '14:30', '15:30', '16:30',
-      '17:30', '19:00', '20:00'
+      '08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
+      '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00',
+      '17:30', '18:00', '18:30', '19:00', '19:30', '20:00'
     ];
 
     return standardHours.map((timeStr) => {
@@ -482,7 +482,7 @@ export default function CandidateDrawer({
       const conflictUser = bookedInterviews.find((b) => {
         if (b.id === c?.id) return false;
         if (!b.phongVanAt) return false;
-        return Math.abs(slotTime - new Date(b.phongVanAt).getTime()) / (60 * 1000) < 60;
+        return Math.abs(slotTime - new Date(b.phongVanAt).getTime()) / (60 * 1000) < 30;
       });
 
       return {
@@ -737,20 +737,20 @@ export default function CandidateDrawer({
 
       <Modal open={interviewOpen} onClose={() => setInterviewOpen(false)} title={`${interviewEditMode ? 'Sửa lịch phỏng vấn' : 'Chấm ĐẠT & hẹn phỏng vấn'} – ${c?.tenUv ?? ''}`}>
         <div className="space-y-4">
-          <Field label="Thời gian phỏng vấn (Bắt buộc cách ứng viên khác >= 1 tiếng)">
+          <Field label="Thời gian phỏng vấn (Bắt buộc cách ứng viên khác >= 30 phút)">
             <input type="datetime-local" className="input font-semibold" value={phongVanAt} onChange={(e) => setPhongVanAt(e.target.value)} />
           </Field>
 
           {timeConflict && (
             <div className="rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs text-rose-700 font-medium space-y-1 animate-pulse">
               <div className="font-bold text-rose-800 flex items-center gap-1.5">
-                🔒 XUNG ĐỘT THỜI GIAN (CÁCH NHAU TỐI THIỂU 1 TIẾNG)
+                🔒 XUNG ĐỘT THỜI GIAN (CÁCH NHAU TỐI THIỂU 30 PHÚT)
               </div>
               <div>
                 Khung giờ này quá gần lịch đã hẹn của <b>Sếp {timeConflict.tenUv}</b> lúc <b>{formatDateTime(timeConflict.phongVanAt)}</b>.
               </div>
               <div className="text-[11px] text-rose-600 font-bold">
-                Vui lòng chọn khung giờ khác cách tối thiểu 1 tiếng!
+                Vui lòng chọn khung giờ khác cách tối thiểu 30 phút!
               </div>
             </div>
           )}
