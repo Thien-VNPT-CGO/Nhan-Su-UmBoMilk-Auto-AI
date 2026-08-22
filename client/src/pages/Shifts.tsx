@@ -76,14 +76,11 @@ export default function Shifts() {
 
   useEffect(() => {
     const socket = getSocket();
-    const refresh = debounce(() => void load(), 500);
-    socket.on('shift:updated', refresh);
-    socket.on('candidate:decision', refresh);
-    socket.on('training:updated', refresh);
+    const refresh = debounce(() => void load(), 300);
+    const events = ['shift:updated', 'candidate:decision', 'candidate:updated', 'candidate:new', 'candidate:deleted', 'training:updated'];
+    events.forEach((ev) => socket.on(ev, refresh));
     return () => {
-      socket.off('shift:updated', refresh);
-      socket.off('candidate:decision', refresh);
-      socket.off('training:updated', refresh);
+      events.forEach((ev) => socket.off(ev, refresh));
       refresh.cancel();
     };
   }, [load]);

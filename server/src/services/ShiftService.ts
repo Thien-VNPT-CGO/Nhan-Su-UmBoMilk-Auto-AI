@@ -12,7 +12,10 @@ export class ShiftService {
   async listForDates(from: string, to: string) {
     const [trainingCandidates, employeeCandidates] = await Promise.all([
       prisma.candidate.findMany({
-        where: { hrDecision: 'PASS', trangThaiTraining: { in: ['SAP_BAT_DAU', 'BAT_DAU'] } },
+        where: {
+          ngayBatDauTraining: { not: null },
+          trangThaiTraining: { notIn: ['LOAI', 'HOAN_THANH', 'NHAN_VIEN_CHINH_THUC'] },
+        },
         orderBy: { tenUv: 'asc' },
       }),
       prisma.candidate.findMany({
