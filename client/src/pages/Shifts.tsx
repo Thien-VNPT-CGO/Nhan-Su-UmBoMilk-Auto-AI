@@ -36,6 +36,15 @@ function getLockedShiftKey(caLam?: string): 'SANG' | 'CHIEU' | 'TOI' | null {
   return null;
 }
 
+function getCellShiftKey(shiftStr: string): 'SANG' | 'CHIEU' | 'TOI' | null {
+  if (!shiftStr) return null;
+  const str = shiftStr.toLowerCase();
+  if (str.includes('sang') || str.includes('7h')) return 'SANG';
+  if (str.includes('chieu') || str.includes('12h') || str.includes('trua') || str.includes('chi')) return 'CHIEU';
+  if (str.includes('toi') || str.includes('18h')) return 'TOI';
+  return null;
+}
+
 export default function Shifts() {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -59,6 +68,27 @@ export default function Shifts() {
         caLam: shiftDraft.trim() || undefined,
       });
       toast('success', 'Đã cập nhật Chi nhánh & Ca làm chính thức!');
+
+      const newLockedKey = getLockedShiftKey(shiftDraft);
+      const existingRow = [...trainingRows, ...employeeRows].find(
+        (r) => r.candidateId === editInfo.candidateId
+      );
+      if (existingRow && newLockedKey) {
+        const scheduledShiftsList = Object.entries(existingRow.shifts || {})
+          .map(([date, cell]) => ({ date, shifts: cell.shifts }))
+          .filter((s) => s.shifts && s.shifts.trim() !== '' && s.shifts !== 'OFF');
+        const mismatches = scheduledShiftsList.filter((item) => {
+          const cellKey = getCellShiftKey(item.shifts);
+          return cellKey !== null && cellKey !== newLockedKey;
+        });
+        if (mismatches.length > 0) {
+          toast(
+            'error',
+            `⚠️ Đã chốt ca! Lưu ý: Có ${mismatches.length} ca đã xếp trước đó khác với ca chốt mới. Nút Zalo đã bị khóa đến khi chỉnh lại ca.`
+          );
+        }
+      }
+
       setEditInfo(null);
       void load();
     } catch (e) {
@@ -319,30 +349,57 @@ export default function Shifts() {
                         )}
                       </div>
                       {(() => {
-                        const scheduledCount = Object.values(r.shifts || {}).filter(
-                          (s) => s && s.shifts && s.shifts.trim() !== '' && s.shifts !== 'OFF'
-                        ).length;
+                        const lockedKey = getLockedShiftKey(r.caLam);
+                        const scheduledShiftsList = Object.entries(r.shifts || {})
+                          .map(([date, cell]) => ({ date, shifts: cell.shifts }))
+                          .filter((s) => s.shifts && s.shifts.trim() !== '' && s.shifts !== 'OFF');
+                        const scheduledCount = scheduledShiftsList.length;
 
-                        if (scheduledCount >= 7) {
+                        const mismatchedShifts = scheduledShiftsList.filter((item) => {
+                          if (!lockedKey) return false;
+                          const cellKey = getCellShiftKey(item.shifts);
+                          return cellKey !== null && cellKey !== lockedKey;
+                        });
+                        const hasMismatch = lockedKey !== null && mismatchedShifts.length > 0;
+
+                        if (hasMismatch) {
                           return (
-                            <button
-                              type="button"
-                              onClick={() => handleSendAttendanceNoticeAndOpenZalo(r)}
-                              className="mt-1.5 w-full bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-extrabold px-2 py-1 rounded-lg flex items-center justify-center gap-1 shadow-2xs transition-all hover:scale-102 cursor-pointer animate-pulse"
-                              title="Click để tự động tạo tin nhắn Zalo kèm link điểm danh web & mở Zalo gửi cho ứng viên"
+                            <div className="mt-1.5 space-y-1">
+                              <div className="bg-rose-50 border border-rose-200 text-rose-700 text-[9px] font-bold px-1.5 py-1 rounded text-center leading-tight">
+                                ⚠️ Lệch {mismatchedShifts.length} ca đã xếp khác ca chốt ({r.caLam || 'Chưa chốt'})
+                              </div>
+                              <button
+                                type="button"
+                                disabled
+                                className="w-full bg-rose-100 border border-rose-300 text-rose-700 text-[10px] font-extrabold px-2 py-1 rounded-lg flex items-center justify-center gap-1 cursor-not-allowed text-center opacity-90"
+                                title="Không thể gửi Zalo do ca xếp bị lệch với ca làm chính thức. Vui lòng xếp lại ca hoặc nhờ Admin điều chỉnh!"
+                              >
+                                <span>⚠️ Ca xếp lệch ca chốt (Khóa Zalo)</span>
+                              </button>
+                            </div>
+                          );
+                        }
+
+                        if (scheduledCount < 7) {
+                          return (
+                            <div
+                              className="mt-1.5 w-full bg-slate-100 border border-slate-200 text-slate-400 text-[10px] font-bold px-2 py-1 rounded-lg flex items-center justify-center gap-1 select-none cursor-not-allowed"
+                              title="Cần xếp đủ tối thiểu 7 ngày ca làm việc để hiển thị nút gửi Zalo"
                             >
-                              <span>💬 Mở App Zalo gửi Lịch điểm danh</span>
-                            </button>
+                              <span>⏳ Chưa đủ ca ({scheduledCount}/7 ngày)</span>
+                            </div>
                           );
                         }
 
                         return (
-                          <div
-                            className="mt-1.5 w-full bg-slate-100 border border-slate-200 text-slate-400 text-[10px] font-bold px-2 py-1 rounded-lg flex items-center justify-center gap-1 select-none cursor-not-allowed"
-                            title="Cần xếp đủ tối thiểu 7 ngày ca làm việc để hiển thị nút gửi Zalo"
+                          <button
+                            type="button"
+                            onClick={() => handleSendAttendanceNoticeAndOpenZalo(r)}
+                            className="mt-1.5 w-full bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-extrabold px-2 py-1 rounded-lg flex items-center justify-center gap-1 shadow-2xs transition-all hover:scale-102 cursor-pointer animate-pulse"
+                            title="Click để tự động tạo tin nhắn Zalo kèm link điểm danh web & mở Zalo gửi cho ứng viên"
                           >
-                            <span>⏳ Chưa đủ ca ({scheduledCount}/7 ngày)</span>
-                          </div>
+                            <span>💬 Mở App Zalo gửi Lịch điểm danh</span>
+                          </button>
                         );
                       })()}
                     </td>
