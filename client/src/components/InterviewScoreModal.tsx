@@ -227,7 +227,7 @@ export default function InterviewScoreModal({
 
   const handleConfirm = (decision: 'PASS_PV' | 'PASS_HS' | 'FAIL') => {
     if (decision === 'PASS_HS' && !isPassPv) {
-      alert('⚠️ Bạn vui lòng bấm nút "Chốt ĐẠT PHỎNG VẤN (PASS PV)" trước khi chốt ĐẠT HỒ SƠ!');
+      alert('⚠️ Bạn vui lòng bấm nút "Chốt HOÀN THÀNH PV" trước khi chốt ĐẠT HỒ SƠ!');
       return;
     }
     if (decision === 'PASS_HS' && !hasAnsweredAny) {
@@ -254,14 +254,14 @@ export default function InterviewScoreModal({
           <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 text-xs font-bold flex items-center gap-2 shadow-2xs">
             <AlertTriangle size={20} className="text-amber-600 shrink-0" />
             <span>
-              🔒 <strong>Ứng viên chưa PASS PV</strong>: Vui lòng bấm nút <strong>Chốt ĐẠT PHỎNG VẤN (PASS PV)</strong> màu xanh lá bên dưới trước. Sau khi ĐẠT PHỎNG VẤN, hệ thống sẽ mở khóa 2 Bảng Tiêu Chí Chấm Điểm & Nút Chốt ĐẠT HỒ SƠ (PASS HS).
+              🔒 <strong>Ứng viên chưa HOÀN THÀNH PV</strong>: Vui lòng bấm nút <strong>Chốt HOÀN THÀNH PV</strong> màu xanh lá bên dưới trước. Sau khi HOÀN THÀNH PV, hệ thống sẽ mở khóa 2 Bảng Tiêu Chí Chấm Điểm & Nút Chốt ĐẠT HỒ SƠ (PASS HS).
             </span>
           </div>
         ) : (
           <div className="p-2.5 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-900 text-xs font-bold flex items-center gap-2 shadow-2xs">
             <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
             <span>
-              🎉 <strong>ĐÃ ĐẠT PHỎNG VẤN</strong>: 2 Bảng Tiêu Chí Chấm Điểm đã được mở khóa! Vui lòng chọn các câu hỏi đánh giá bên dưới để chốt ĐẠT HỒ SƠ (PASS HS).
+              🎉 <strong>ĐÃ HOÀN THÀNH PHỎNG VẤN</strong>: 2 Bảng Tiêu Chí Chấm Điểm đã được mở khóa! Vui lòng chọn các câu hỏi đánh giá bên dưới để chốt ĐẠT HỒ SƠ (PASS HS).
             </span>
           </div>
         )}
@@ -426,7 +426,7 @@ export default function InterviewScoreModal({
                 ? 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed opacity-50'
                 : 'bg-teal-600 hover:bg-teal-700 text-white cursor-pointer'
             )}
-            title={!isPassPv ? '🔒 Khóa: Vui lòng chốt PASS PV trước khi chốt ĐẠT HỒ SƠ' : 'Chốt ĐẠT HỒ SƠ cho ứng viên'}
+            title={!isPassPv ? '🔒 Khóa: Vui lòng chốt HOÀN THÀNH PV trước khi chốt ĐẠT HỒ SƠ' : 'Chốt ĐẠT HỒ SƠ cho ứng viên'}
           >
             <FileCheck size={14} /> Chốt ĐẠT HỒ SƠ (PASS HS) {!isPassPv && '🔒'}
           </button>
@@ -436,7 +436,7 @@ export default function InterviewScoreModal({
               onClick={() => handleConfirm('PASS_PV')}
               className="btn-success !py-2 !px-4 text-xs font-bold flex items-center gap-1 cursor-pointer shadow-2xs"
             >
-              <CheckCircle2 size={14} /> Chốt ĐẠT PHỎNG VẤN (PASS PV)
+              <CheckCircle2 size={14} /> Chốt HOÀN THÀNH PV
             </button>
           )}
         </div>

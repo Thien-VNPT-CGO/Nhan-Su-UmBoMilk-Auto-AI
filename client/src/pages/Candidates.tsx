@@ -79,7 +79,7 @@ function xepLoaiBadge(x: string | null) {
 }
 
 function decisionBadge(d: string | null) {
-  if (d === 'PASS_PV') return <Badge className="bg-emerald-100 text-emerald-700"><CheckCircle2 size={11} /> ĐẠT PV</Badge>;
+  if (d === 'PASS_PV') return <Badge className="bg-emerald-100 text-emerald-700"><CheckCircle2 size={11} /> HOÀN THÀNH PV</Badge>;
   if (d === 'PASS_HS') return <Badge className="bg-teal-100 text-teal-700"><FileCheck size={11} /> ĐẠT HS</Badge>;
   if (d === 'PASS') return <Badge className="bg-emerald-100 text-emerald-700"><CheckCircle2 size={11} /> ĐẠT</Badge>;
   if (d === 'FAIL') return <Badge className="bg-rose-100 text-rose-700"><XCircle size={11} /> LOẠI</Badge>;

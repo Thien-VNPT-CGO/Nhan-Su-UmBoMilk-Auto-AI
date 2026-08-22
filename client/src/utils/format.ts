@@ -22,7 +22,7 @@ export function shiftColor(shift: string): { bg: string; text: string; label: st
 
 export const trainingStatusLabel: Record<string, { label: string; cls: string }> = {
   CHUA_THAM_GIA: { label: '⏳ CHỜ UV XÁC NHẬN ZALO', cls: 'bg-rose-600 text-white font-bold border border-rose-700 shadow-xs animate-pulse' },
-  PASS_PV_WAITING: { label: '🎉 ĐẠT PHỎNG VẤN (Chờ chốt ca & lịch)', cls: 'bg-emerald-600 text-white font-bold border border-emerald-700 shadow-xs' },
+  PASS_PV_WAITING: { label: '🎉 HOÀN THÀNH PV (Chờ chốt ca & lịch)', cls: 'bg-emerald-600 text-white font-bold border border-emerald-700 shadow-xs' },
   PASS_HS_WAITING: { label: '📄 ĐẠT HỒ SƠ (Chờ chốt ca & lịch)', cls: 'bg-teal-600 text-white font-bold border border-teal-700 shadow-xs' },
   SAP_BAT_DAU: { label: '⚡ SẮP BẮT ĐẦU TRAINING (0/7 ngày)', cls: 'bg-indigo-600 text-white font-bold border border-indigo-700 shadow-xs' },
   BAT_DAU: { label: '🟢 ĐANG TRAINING', cls: 'bg-amber-500 text-white font-bold' },
@@ -50,7 +50,7 @@ export function getTrainingStatusInfo(r: {
     return { label: '⏳ CHỜ UV XÁC NHẬN ZALO', cls: 'bg-rose-600 text-white font-bold border border-rose-700 shadow-2xs animate-pulse' };
   }
   if (isPassPv && !isPassHs) {
-    return { label: '🎉 ĐẠT PHỎNG VẤN (Chờ chốt ca & lịch)', cls: 'bg-emerald-600 text-white font-bold border border-emerald-700 shadow-2xs' };
+    return { label: '🎉 HOÀN THÀNH PV (Chờ chốt ca & lịch)', cls: 'bg-emerald-600 text-white font-bold border border-emerald-700 shadow-2xs' };
   }
   if (isPassHs && !r.ngayBatDauTraining) {
     return { label: '📄 ĐẠT HỒ SƠ (Chờ HR bấm Chốt ca & lịch)', cls: 'bg-teal-600 text-white font-bold border border-teal-700 shadow-2xs' };
@@ -83,7 +83,7 @@ export function getTrainingStatusInfo(r: {
 
 export const decisionLabel: Record<string, { label: string; cls: string }> = {
   PASS: { label: 'ĐẠT (PASS)', cls: 'bg-emerald-100 text-emerald-700' },
-  PASS_PV: { label: 'ĐẠT PHỎNG VẤN', cls: 'bg-emerald-100 text-emerald-700' },
+  PASS_PV: { label: 'HOÀN THÀNH PV', cls: 'bg-emerald-100 text-emerald-700' },
   PASS_HS: { label: 'ĐẠT HỒ SƠ', cls: 'bg-teal-100 text-teal-700' },
   FAIL: { label: 'LOẠI (FAIL)', cls: 'bg-rose-100 text-rose-700' },
   REVIEW: { label: 'CẦN XEM LẠI', cls: 'bg-amber-100 text-amber-700' },

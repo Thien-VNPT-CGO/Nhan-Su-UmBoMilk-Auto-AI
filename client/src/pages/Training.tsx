@@ -217,7 +217,7 @@ export default function Training() {
           hrReason: note,
           interviewStatus: 'QUA_PV',
         });
-        toast('success', '🎉 Đã cập nhật ứng viên ĐẠT PHỎNG VẤN (PASS PV)! Hãy bấm PASS HS để tiếp tục chốt ca & lịch.');
+        toast('success', '🎉 Đã cập nhật ứng viên HOÀN THÀNH PV! Hãy bấm PASS HS để tiếp tục chốt ca & lịch.');
       } else if (decision === 'PASS_HS') {
         await api.patch(`/candidates/${id}/interview`, {
           hrDecision: 'PASS_HS',
@@ -468,7 +468,7 @@ export default function Training() {
                             <div className="flex flex-col items-center gap-1">
                               <div className="inline-flex items-center justify-center gap-1 px-3 py-1 rounded-xl text-xs font-black bg-emerald-600 text-white shadow-2xs">
                                 <CheckCircle2 size={15} />
-                                <span>✅ ĐẠT PHỎNG VẤN</span>
+                                <span>✅ HOÀN THÀNH PHỎNG VẤN</span>
                               </div>
                               <button
                                 type="button"
@@ -527,10 +527,10 @@ export default function Training() {
                                   type="button"
                                   onClick={() => handleUpdateInterviewDecision(r.id, 'PASS_PV')}
                                   className="btn-success !py-1 !px-2 !text-[10px] font-extrabold shadow-2xs flex items-center gap-0.5 hover:scale-102 cursor-pointer"
-                                  title="Chấm ĐẠT PHỎNG VẤN cho ứng viên"
+                                  title="Bấm HOÀN THÀNH PHỎNG VẤN cho ứng viên"
                                 >
                                   <CheckCircle2 size={12} />
-                                  <span>✅ PASS PV</span>
+                                  <span>✅ HOÀN THÀNH PV</span>
                                 </button>
                                 <button
                                   type="button"
@@ -582,7 +582,7 @@ export default function Training() {
                         ) : isPassPv && !isPassHs ? (
                           <div className="flex flex-col items-center justify-center gap-0.5">
                             <span className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold bg-emerald-600 text-white border border-emerald-700 shadow-2xs">
-                              🎉 ĐẠT PHỎNG VẤN
+                              🎉 HOÀN THÀNH PHỎNG VẤN
                             </span>
                             <span className="text-[10px] text-emerald-600 font-semibold italic text-center">⏳ Chờ chốt ca & lịch</span>
                           </div>
