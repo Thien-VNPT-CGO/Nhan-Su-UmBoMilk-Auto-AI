@@ -356,7 +356,8 @@ export default function CandidateDrawer({
       ? (c.tenUv.trim().toLowerCase().startsWith('sếp') ? c.tenUv.trim() : `Sếp ${c.tenUv.trim()}`)
       : 'bạn';
 
-    const confirmUrl = `${window.location.origin}/confirm-pv/${c.id}`;
+    const pvTs = c.phongVanAt ? new Date(c.phongVanAt).getTime() : 0;
+    const confirmUrl = `${window.location.origin}/confirm-pv/${c.id}${pvTs ? `?pvTime=${pvTs}` : ''}`;
 
     const inviteContent = [
       '🐮 [UMBO MILK] – THƯ MỜI PHỎNG VẤN 📋',

@@ -763,16 +763,38 @@ export function mapFormResponseRow(headers: string[], row: unknown[]): FormRespo
   };
 }
 
-/** Parse thời gian phản hồi dạng "15/08/2026 11:20:33" (locale VN) hoặc ISO. */
+/** Parse thời gian phản hồi dạng "15/08/2026 11:20:33" (locale VN) hoặc ISO với múi giờ chuẩn GMT+7. */
 export function parseFormTimestamp(v: string | undefined): Date | undefined {
   if (!v) return undefined;
-  const d = new Date(v);
-  if (!Number.isNaN(d.getTime())) return d;
-  const m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
-  if (m) {
-    const [, dd, mm, yyyy, hh, mi, ss = '0'] = m;
-    const parsed = new Date(Number(yyyy), Number(mm) - 1, Number(dd), Number(hh), Number(mi), Number(ss));
-    if (!Number.isNaN(parsed.getTime())) return parsed;
+  const trimmed = String(v).trim();
+  if (!trimmed) return undefined;
+
+  // 1. Parse DD/MM/YYYY HH:mm:ss hoặc DD/MM/YYYY (Google Form Việt Nam)
+  const vnMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (vnMatch) {
+    const [, dd, mm, yyyy, hh = '0', mi = '0', ss = '0'] = vnMatch;
+    const day = Number(dd);
+    const month = Number(mm);
+    const year = Number(yyyy);
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      const isoStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hh).padStart(2, '0')}:${String(mi).padStart(2, '0')}:${String(ss).padStart(2, '0')}+07:00`;
+      const d = new Date(isoStr);
+      if (!Number.isNaN(d.getTime())) return d;
+    }
   }
+
+  // 2. Parse YYYY-MM-DD HH:mm:ss hoặc YYYY-MM-DD
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2})(?::(\d{2}))?)?/);
+  if (isoMatch) {
+    const [, yyyy, mm, dd, hh = '0', mi = '0', ss = '0'] = isoMatch;
+    const isoStr = `${yyyy}-${mm}-${dd}T${hh}:${mi}:${ss}+07:00`;
+    const d = new Date(isoStr);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+
+  // 3. Fallback tiêu chuẩn
+  const d = new Date(trimmed);
+  if (!Number.isNaN(d.getTime())) return d;
+
   return undefined;
 }

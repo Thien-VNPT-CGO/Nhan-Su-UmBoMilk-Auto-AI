@@ -230,40 +230,50 @@ router.post('/:id/resolve-zalo-user-id', requireAuth, async (req: AuthedRequest,
 });
 
 const decisionSchema = z.object({
-  decision: z.enum(['PASS', 'FAIL', 'REVIEW']),
+  decision: z.enum(['PASS', 'FAIL', 'REVIEW', 'PASS_HS', 'PASS_PV']),
   reason: z.string().optional(),
   phongVanAt: z.string().optional(),
   ggMeetLink: z.string().optional(),
+  interview: z.object({
+    phongVanAt: z.string().optional(),
+    ggMeetLink: z.string().optional(),
+  }).optional(),
 });
 
 router.patch('/:id/decision', requireWrite(), async (req: AuthedRequest, res, next) => {
   try {
     const parsed = decisionSchema.safeParse(req.body);
     if (!parsed.success) throw ApiError.badRequest('INVALID_INPUT', 'Dữ liệu không hợp lệ.');
-    const { decision, reason, phongVanAt, ggMeetLink } = parsed.data;
+    const { decision, reason, phongVanAt, ggMeetLink, interview } = parsed.data;
 
-    if (decision === 'PASS' && !phongVanAt) {
+    const pvAtStr = phongVanAt || interview?.phongVanAt;
+    const meetLinkStr = ggMeetLink || interview?.ggMeetLink;
+    const isPassDecision = decision === 'PASS' || decision === 'PASS_HS' || decision === 'PASS_PV';
+
+    if (isPassDecision && !pvAtStr) {
       throw ApiError.badRequest('INTERVIEW_REQUIRED', 'Chấm PASS cần nhập thời gian phỏng vấn.');
     }
     let phongVanAtDate: Date | undefined;
-    if (phongVanAt) {
-      phongVanAtDate = parseLocalPhanVanAt(phongVanAt);
+    if (pvAtStr) {
+      phongVanAtDate = parseLocalPhanVanAt(pvAtStr);
       if (!phongVanAtDate || Number.isNaN(phongVanAtDate.getTime())) {
         throw ApiError.badRequest('INVALID_DATETIME', 'Thời gian phỏng vấn không hợp lệ.');
       }
     }
 
+    const decisionCode = isPassDecision ? 'PASS' : decision;
+
     // Link Meet: ưu tiên nhập tay > tự tạo qua Google Calendar > link mặc định chi nhánh (resolve trong service)
     const candidate = await candidateService.makeDecision(
       req.params.id,
       req.user!.username,
-      decision,
+      decisionCode,
       reason,
-      decision === 'PASS' ? { phongVanAt: phongVanAtDate, ggMeetLink } : undefined,
+      isPassDecision ? { phongVanAt: phongVanAtDate, ggMeetLink: meetLinkStr } : undefined,
     );
 
     let zalo: { ok: boolean; provider: string; messageId?: string } | null = null;
-    if (decision === 'PASS') {
+    if (isPassDecision) {
       try {
         zalo = await zaloService.sendInterviewInvite(candidate.id);
       } catch (e) {

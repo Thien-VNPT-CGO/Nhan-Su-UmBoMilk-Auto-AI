@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { CheckCircle2, XCircle, Calendar, MapPin, Clock, Video, HeartHandshake, Sparkles, Building2 } from 'lucide-react';
+import { CheckCircle2, XCircle, Calendar, MapPin, Clock, Video, HeartHandshake, Sparkles, Building2, AlertTriangle } from 'lucide-react';
 import { formatDateTime } from '../utils/date';
 
 interface CandidateInterviewInfo {
@@ -11,6 +11,7 @@ interface CandidateInterviewInfo {
   phongVanAt: string | null;
   ggMeetLink: string | null;
   trangThaiTraining: string | null;
+  isStaleLink?: boolean;
 }
 
 export default function ConfirmInterview() {
@@ -24,7 +25,11 @@ export default function ConfirmInterview() {
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    fetch(`/api/public/candidates/${id}/interview-info`)
+    const queryParams = new URLSearchParams(window.location.search);
+    const pvTime = queryParams.get('pvTime');
+    const fetchUrl = `/api/public/candidates/${id}/interview-info${pvTime ? `?pvTime=${pvTime}` : ''}`;
+
+    fetch(fetchUrl)
       .then((res) => res.json())
       .then((data) => {
         if (data.success && data.data) {
@@ -113,6 +118,19 @@ export default function ConfirmInterview() {
 
         {/* Dynamic Content Body */}
         <div className="p-6 space-y-6">
+
+          {/* Alert Cảnh báo khi Lịch cũ bị vô hiệu hóa do HR đổi lịch mới */}
+          {candidate.isStaleLink && (
+            <div className="bg-amber-950/80 border border-amber-500/50 rounded-2xl p-4 text-amber-200 text-xs font-semibold space-y-1 shadow-lg animate-pulse">
+              <div className="flex items-center gap-1.5 font-bold text-amber-300 text-sm">
+                <AlertTriangle size={18} className="text-amber-400 shrink-0" />
+                <span>LỊCH PHỎNG VẤN TRƯỚC ĐÓ ĐÃ THAY ĐỔI!</span>
+              </div>
+              <p className="text-[11px] text-amber-200/90 leading-relaxed">
+                Lịch phỏng vấn cũ trên đường link này đã hết hiệu lực. HR đã cập nhật lại lịch phỏng vấn mới nhất cho bạn. Vui lòng kiểm tra thông tin bên dưới và bấm xác nhận theo lịch mới nhất này.
+              </p>
+            </div>
+          )}
 
           {confirmedStatus === 'ACCEPT' ? (
             <div className="bg-pink-950/60 border border-pink-500/40 rounded-2xl p-5 text-center space-y-3 animate-fade-in">

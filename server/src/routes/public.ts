@@ -30,7 +30,23 @@ router.get('/candidates/:id/interview-info', async (req, res, next) => {
       throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy thông tin phỏng vấn của ứng viên.');
     }
 
-    res.json({ success: true, data: candidate });
+    const queryPvTime = req.query.pvTime ? Number(req.query.pvTime) : null;
+    let isStaleLink = false;
+
+    if (queryPvTime && !Number.isNaN(queryPvTime) && candidate.phongVanAt) {
+      const currentPvTs = candidate.phongVanAt.getTime();
+      if (Math.abs(currentPvTs - queryPvTime) > 60 * 1000) {
+        isStaleLink = true;
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        ...candidate,
+        isStaleLink,
+      },
+    });
   } catch (e) {
     next(e);
   }

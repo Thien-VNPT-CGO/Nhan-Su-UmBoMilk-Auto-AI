@@ -5,7 +5,7 @@ import { ApiError } from '../lib/errors';
 import { audit } from './AuditService';
 import { syncQueue } from './SyncQueueService';
 import { emit } from '../sockets';
-import { getGoogleSheetService } from './GoogleSheetService';
+import { getGoogleSheetService, parseFormTimestamp } from './GoogleSheetService';
 import { getSettings, saveSettings } from './SettingsService';
 import { zaloService } from './ZaloService';
 import { calendarService } from './GoogleCalendarService';
@@ -71,7 +71,8 @@ export class CandidateService {
 
     const existing = await prisma.candidate.findFirst({ where: { sdtZalo: sdt } });
     if (existing) {
-      const incoming = input.thoiGian ? new Date(input.thoiGian).getTime() : NaN;
+      const parsedTs = parseFormTimestamp(input.thoiGian);
+      const incoming = parsedTs ? parsedTs.getTime() : NaN;
       const sameTs = !Number.isNaN(incoming) &&
         Math.abs(incoming - existing.thoiGian.getTime()) < 1000;
       if (sameTs) {
@@ -99,15 +100,16 @@ export class CandidateService {
         await deleteCandidateWithCleanup(existing.id, 'SYSTEM-REPLACE', 'DELETE_CANDIDATE_REPLACE');
       } else {
         // Bản trong form cũ hơn hồ sơ đang có → đồng bộ dữ liệu + thời gian thật từ form
-        return this.updateFromForm(existing, input, new Date(input.thoiGian!));
+        return this.updateFromForm(existing, input, parsedTs ?? new Date());
       }
     }
 
+    const parsedFormTime = parseFormTimestamp(input.thoiGian) ?? new Date();
     const id = await nextCandidateId();
     const candidate = await prisma.candidate.create({
       data: {
         id,
-        thoiGian: input.thoiGian ? new Date(input.thoiGian) : new Date(),
+        thoiGian: parsedFormTime,
         tenUv: input.tenUv,
         gioiTinh: input.gioiTinh ?? '',
         namSinh: input.namSinh,

@@ -82,7 +82,8 @@ export class ZaloService {
     const nameGreeting = c.tenUv.trim().toLowerCase().startsWith('sếp') ? c.tenUv.trim() : `Sếp ${c.tenUv.trim()}`;
 
     const hostOrigin = process.env.PUBLIC_APP_URL || 'https://tuyendung.umbomilk.com';
-    const confirmUrl = `${hostOrigin.replace(/\/$/, '')}/confirm-pv/${c.id}`;
+    const pvTs = c.phongVanAt ? c.phongVanAt.getTime() : 0;
+    const confirmUrl = `${hostOrigin.replace(/\/$/, '')}/confirm-pv/${c.id}${pvTs ? `?pvTime=${pvTs}` : ''}`;
 
     const content = [
       '🐮 [UMBO MILK] – THƯ MỜI PHỎNG VẤN 📋',
