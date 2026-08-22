@@ -24,13 +24,60 @@ export const trainingStatusLabel: Record<string, { label: string; cls: string }>
   CHUA_THAM_GIA: { label: '⏳ CHỜ UV XÁC NHẬN ZALO', cls: 'bg-rose-600 text-white font-bold border border-rose-700 shadow-xs animate-pulse' },
   PASS_PV_WAITING: { label: '🎉 ĐẠT PHỎNG VẤN (Chờ chốt ca & lịch)', cls: 'bg-emerald-600 text-white font-bold border border-emerald-700 shadow-xs' },
   PASS_HS_WAITING: { label: '📄 ĐẠT HỒ SƠ (Chờ chốt ca & lịch)', cls: 'bg-teal-600 text-white font-bold border border-teal-700 shadow-xs' },
-  SAP_BAT_DAU: { label: '🚀 SẮP BẮT ĐẦU TRAINING (0/7 ngày)', cls: 'bg-indigo-600 text-white font-bold border border-indigo-700 shadow-xs' },
+  SAP_BAT_DAU: { label: '⚡ SẮP BẮT ĐẦU TRAINING (0/7 ngày)', cls: 'bg-indigo-600 text-white font-bold border border-indigo-700 shadow-xs' },
   BAT_DAU: { label: '🟢 ĐANG TRAINING', cls: 'bg-amber-500 text-white font-bold' },
   HOAN_THANH: { label: '🏆 HOÀN THÀNH TRAINING (7/7 ngày)', cls: 'bg-emerald-600 text-white font-bold' },
   KHONG_DU_NGAY: { label: '❌ KHÔNG ĐỦ NGÀY', cls: 'bg-rose-100 text-rose-700' },
   LOAI: { label: '❌ LOẠI / HỦY (Vắng mặt / Không đủ ngày)', cls: 'bg-red-600 text-white font-bold' },
   NHAN_VIEN_CHINH_THUC: { label: '🎓 NHÂN VIÊN CHÍNH THỨC', cls: 'bg-violet-600 text-white font-bold' },
 };
+
+/** Tính toán nhãn và kiểu hiển thị Trạng thái Đào tạo realtime đồng bộ 100% giữa Tab Ứng Viên và Tab Nhân Viên Training. */
+export function getTrainingStatusInfo(r: {
+  trangThaiTraining?: string | null;
+  hrDecision?: string | null;
+  phongVanAt?: string | Date | null;
+  ngayBatDauTraining?: string | Date | null;
+  soNgayDaTraining?: number;
+}): { label: string; cls: string } {
+  const trangThai = r.trangThaiTraining ?? 'CHUA_THAM_GIA';
+  const isPendingConfirm = trangThai === 'CHUA_THAM_GIA';
+  const isPassPv = r.hrDecision === 'PASS_PV';
+  const isPassHs = r.hrDecision === 'PASS_HS';
+  const isHsLocked = !isPassHs;
+
+  if (isPendingConfirm) {
+    return { label: '⏳ CHỜ UV XÁC NHẬN ZALO', cls: 'bg-rose-600 text-white font-bold border border-rose-700 shadow-2xs animate-pulse' };
+  }
+  if (isPassPv && !isPassHs) {
+    return { label: '🎉 ĐẠT PHỎNG VẤN (Chờ chốt ca & lịch)', cls: 'bg-emerald-600 text-white font-bold border border-emerald-700 shadow-2xs' };
+  }
+  if (isPassHs && !r.ngayBatDauTraining) {
+    return { label: '📄 ĐẠT HỒ SƠ (Chờ HR bấm Chốt ca & lịch)', cls: 'bg-teal-600 text-white font-bold border border-teal-700 shadow-2xs' };
+  }
+  if (isHsLocked) {
+    const pvTime = r.phongVanAt ? new Date(r.phongVanAt).getTime() : 0;
+    const now = Date.now();
+    const pvEndTime = pvTime + 30 * 60 * 1000;
+    if (pvTime > 0 && now >= pvTime && now <= pvEndTime) {
+      return { label: '🎥 ĐANG PHỎNG VẤN', cls: 'bg-amber-500 text-white font-bold border border-amber-600 shadow-2xs animate-pulse' };
+    }
+    if (pvTime > 0 && now > pvEndTime) {
+      return { label: '⏳ CHỜ HR CHỐT PASS', cls: 'bg-amber-500 text-white font-bold border border-amber-600 shadow-2xs' };
+    }
+    return { label: '⏳ CHỜ ĐẾN GIỜ PV', cls: 'bg-amber-500 text-white font-bold border border-amber-600 shadow-2xs' };
+  }
+
+  const days = r.soNgayDaTraining ?? 0;
+  if (trangThai === 'SAP_BAT_DAU') {
+    return { label: `⚡ SẮP BẮT ĐẦU TRAINING (${days}/7 ngày)`, cls: 'bg-indigo-600 text-white font-bold border border-indigo-700 shadow-2xs' };
+  }
+  if (trangThai === 'BAT_DAU') {
+    return { label: `🟢 ĐANG TRAINING (${days}/7 ngày)`, cls: 'bg-amber-500 text-white font-bold shadow-2xs' };
+  }
+
+  return trainingStatusLabel[trangThai] ?? { label: trangThai, cls: 'bg-slate-100 text-slate-700' };
+}
 
 
 

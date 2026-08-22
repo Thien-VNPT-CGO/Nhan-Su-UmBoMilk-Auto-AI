@@ -11,7 +11,7 @@ import { getSocket } from '../api/socket';
 import { Drawer, Tabs, Badge, Spinner, ConfirmDialog, Field, Skeleton, Modal } from './ui';
 import { useToast } from '../stores/Toast';
 import { useAuth } from '../stores/auth';
-import { cn, trainingStatusLabel, syncStatusStyle, decisionLabel } from '../utils/format';
+import { cn, trainingStatusLabel, getTrainingStatusInfo, syncStatusStyle, decisionLabel } from '../utils/format';
 import { formatDateTime, formatDate, toLocalDatetimeInput } from '../utils/date';
 
 
@@ -509,10 +509,11 @@ export default function CandidateDrawer({
             <Badge className="bg-slate-100 text-slate-600">{c.chiNhanh}</Badge>
             <Badge className="bg-brand-50 text-brand-700">{c.caLam}</Badge>
             {c.hrDecision === 'PASS' && <Badge className="bg-emerald-100 text-emerald-700">{decisionLabel.PASS.label}</Badge>}
-            {c.trangThaiTraining && (
-              <Badge className={trainingStatusLabel[c.trangThaiTraining]?.cls}>
-                {trainingStatusLabel[c.trangThaiTraining]?.label}
-              </Badge>
+            {(c.trangThaiTraining || c.phongVanAt || c.hrDecision) && (
+              (() => {
+                const info = getTrainingStatusInfo(c);
+                return <Badge className={info.cls}>{info.label}</Badge>;
+              })()
             )}
             <div className="flex-1" />
             <span className="text-[11px] text-slate-400">Cập nhật: {formatDateTime(c.updatedAt)} · {c.updatedBy ?? ''}</span>
@@ -701,13 +702,14 @@ export default function CandidateDrawer({
                   </div>
                 )}
 
-                {c.hrDecision === 'PASS' && (
+                {(c.hrDecision === 'PASS' || c.hrDecision === 'PASS_PV' || c.hrDecision === 'PASS_HS') && (
                   <div className="rounded-xl bg-slate-50/90 p-4 border border-slate-200/80 space-y-2">
                     <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Trạng thái xác nhận tham gia</div>
                     <div className="mt-1 flex items-center gap-2">
-                      <Badge className={trainingStatusLabel[c.trangThaiTraining ?? 'CHUA_THAM_GIA']?.cls}>
-                        {trainingStatusLabel[c.trangThaiTraining ?? 'CHUA_THAM_GIA']?.label ?? c.trangThaiTraining}
-                      </Badge>
+                      {(() => {
+                        const info = getTrainingStatusInfo(c);
+                        return <Badge className={info.cls}>{info.label}</Badge>;
+                      })()}
                     </div>
                   </div>
                 )}

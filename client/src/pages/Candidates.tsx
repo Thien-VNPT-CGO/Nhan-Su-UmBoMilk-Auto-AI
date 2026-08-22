@@ -9,7 +9,7 @@ import { Badge, Skeleton, EmptyState, Tooltip, Modal } from '../components/ui';
 import CandidateDrawer from '../components/CandidateDrawer';
 import { useToast } from '../stores/Toast';
 import { getSocket } from '../api/socket';
-import { cn, trainingStatusLabel, syncStatusStyle } from '../utils/format';
+import { cn, trainingStatusLabel, getTrainingStatusInfo, syncStatusStyle } from '../utils/format';
 import { debounce } from '../utils/debounce';
 import { formatDateTime } from '../utils/date';
 
@@ -30,6 +30,9 @@ interface CandidateRow {
   xepLoai: string | null;
   aiRecommendation: string | null;
   hrDecision: string | null;
+  phongVanAt?: string | null;
+  ngayBatDauTraining?: string | null;
+  soNgayDaTraining?: number;
   trangThaiTraining: string | null;
   aiScoredAt: string | null;
   dataVersion: number;
@@ -346,10 +349,15 @@ export default function Candidates() {
                     </td>
                     <td className="table-td">{decisionBadge(r.hrDecision)}</td>
                     <td className="table-td">
-                      {r.trangThaiTraining ? (
-                        <Badge className={trainingStatusLabel[r.trangThaiTraining]?.cls}>
-                          {trainingStatusLabel[r.trangThaiTraining]?.label ?? r.trangThaiTraining}
-                        </Badge>
+                      {r.trangThaiTraining || r.phongVanAt || r.hrDecision ? (
+                        (() => {
+                          const info = getTrainingStatusInfo(r);
+                          return (
+                            <Badge className={info.cls}>
+                              {info.label}
+                            </Badge>
+                          );
+                        })()
                       ) : (
                         <span className="text-xs text-slate-400">—</span>
                       )}

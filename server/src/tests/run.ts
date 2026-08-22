@@ -163,7 +163,7 @@ async function main() {
   // ==================== CASE 4: double-click PASS -> không duplicate ====================
   console.log('\n[CASE 4] HR double-click PASS');
   const c4 = await makeCandidate(session);
-  const c4PvTime = new Date(Date.now() + 50000 * 3600 * 1000).toISOString();
+  const c4PvTime = '2030-01-03T08:00:00.000Z';
   await api(`/candidates/${c4}/decision`, { method: 'PATCH', session, body: { decision: 'PASS_HS', interview: { phongVanAt: c4PvTime, ggMeetLink: 'https://meet.google.com/test-link' } } });
   const dup4 = await api(`/candidates/${c4}/decision`, { method: 'PATCH', session, body: { decision: 'PASS_HS', interview: { phongVanAt: c4PvTime, ggMeetLink: 'https://meet.google.com/test-link' } } });
   ok('C4: PASS lần 2 không tạo duplicate', dup4.status === 200);
@@ -247,7 +247,7 @@ async function main() {
   const c8 = await makeCandidate(session);
   const hashBefore = (await prisma.candidate.findUnique({ where: { id: c8 } }))?.dataHash;
   ok('C8: DATA_HASH được tạo cho Candidate', !!hashBefore);
-  const testPvTime8 = new Date(Date.now() + 10000 * 3600 * 1000).toISOString();
+  const testPvTime8 = '2030-01-01T08:00:00.000Z';
   await candidateService.makeDecision(c8, 'hr_umbomilk', 'PASS', 'test', { phongVanAt: new Date(testPvTime8), ggMeetLink: 'https://meet.google.com/test-link' });
   const hashAfter = (await prisma.candidate.findUnique({ where: { id: c8 } }))?.dataHash;
   ok('C8: Hash thay đổi khi dữ liệu đổi (detect mismatch)', hashBefore !== hashAfter);
@@ -257,7 +257,7 @@ async function main() {
   // ==================== TRAINING TESTS ====================
   console.log('\n[TRAINING] Chuẩn bị nhân sự');
   const c9 = await makeCandidate(session);
-  const testPvTime9 = new Date(Date.now() + 20000 * 3600 * 1000).toISOString();
+  const testPvTime9 = '2030-01-02T08:00:00.000Z';
   await api(`/candidates/${c9}/decision`, { method: 'PATCH', session, body: { decision: 'PASS_HS', interview: { phongVanAt: testPvTime9, ggMeetLink: 'https://meet.google.com/test-link' } } });
   const today = new Date();
   const todayIso = `${today.toISOString().slice(0, 10)}T00:00:00.000Z`;
@@ -308,7 +308,7 @@ async function main() {
   // ==================== TH1/TH2: nhân viên chính thức ====================
   console.log('\n[TH1/TH2] Training 7 ngày & Nhân viên chính thức');
   const cEmp = await makeCandidate(session);
-  const testPvTimeEmp = new Date(Date.now() + 30000 * 3600 * 1000).toISOString();
+  const testPvTimeEmp = '2030-01-04T08:00:00.000Z';
   await api(`/candidates/${cEmp}/decision`, { method: 'PATCH', session, body: { decision: 'PASS_HS', interview: { phongVanAt: testPvTimeEmp, ggMeetLink: 'https://meet.google.com/test-link' } } });
   const empConfirm = await api(`/training/${cEmp}/employee`, { method: 'POST', session, body: {} });
   ok('TH2: Xác nhận nhân viên chính thức thành công', empConfirm.status === 200);
