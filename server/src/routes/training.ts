@@ -24,10 +24,12 @@ router.patch('/:id', requireWrite(), async (req: AuthedRequest, res, next) => {
     const { id } = req.params;
     const body = req.body as Record<string, unknown>;
 
-    if (body.ngayBatDau !== undefined) {
-      const parsed = startSchema.safeParse(body);
-      if (!parsed.success) throw ApiError.badRequest('INVALID_INPUT', 'Dữ liệu không hợp lệ.');
-      await candidateService.startTraining(id, req.user!.username, new Date(parsed.data.ngayBatDau));
+    const rawDate = body.ngayBatDau ?? body.ngayBatDauTraining;
+    if (rawDate !== undefined && rawDate !== null && String(rawDate).trim() !== '') {
+      const dateVal = new Date(String(rawDate));
+      if (!isNaN(dateVal.getTime())) {
+        await candidateService.startTraining(id, req.user!.username, dateVal);
+      }
     }
 
     if (body.trangThaiTraining !== undefined) {

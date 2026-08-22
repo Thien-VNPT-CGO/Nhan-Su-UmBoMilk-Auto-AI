@@ -143,6 +143,7 @@ export default function Training() {
       await api.patch(`/training/${edit.id}`, {
         chiNhanh: newBranch,
         caLam: newShift,
+        ngayBatDau: startDate,
         ngayBatDauTraining: startDate,
         trangThaiTraining: 'SAP_BAT_DAU',
       });

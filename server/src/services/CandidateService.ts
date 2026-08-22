@@ -596,7 +596,7 @@ export class CandidateService {
   async startTraining(id: string, user: string, ngayBatDau: Date, expectedVersion?: number): Promise<Candidate> {
     const candidate = await prisma.candidate.findUnique({ where: { id } });
     if (!candidate) throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy ứng viên.');
-    if (candidate.hrDecision !== 'PASS') {
+    if (candidate.hrDecision !== 'PASS' && candidate.hrDecision !== 'PASS_HS' && candidate.hrDecision !== 'PASS_PV') {
       throw ApiError.badRequest('NOT_PASSED', 'Ứng viên phải PASS trước khi vào Training.');
     }
     if (expectedVersion !== undefined && candidate.dataVersion !== expectedVersion) {
