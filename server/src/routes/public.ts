@@ -7,6 +7,7 @@ import { ApiError } from '../lib/errors';
 import { audit } from '../services/AuditService';
 import { emit } from '../sockets';
 import { TRAINING_STATUS } from '../lib/constants';
+import { nextId } from '../lib/id';
 
 const router = Router();
 
@@ -165,57 +166,102 @@ router.post('/candidates/:id/attendance-checkin', async (req, res, next) => {
     const dateStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
     const timestamp = Date.now();
 
-    // Phân loại tên Chi nhánh & Ca làm việc cho cấu trúc Folder Google Drive
-    const rawBranch = candidate.chiNhanh || 'CN_CHUA_CHOT';
+    // 1. Phân loại tên Chi nhánh & Ca làm việc cho cấu trúc Folder Google Drive
+    const typeFolder = candidate.trangThaiTraining === 'NHAN_VIEN_CHINH_THUC' ? 'NHAN_VIEN_CHINH_THUC' : 'NHAN_VIEN_TRAINING';
+    const rawBranch = candidate.chiNhanh || 'CN1: 130 Vạn Kiếp, Phường 3, Quận Bình Thạnh';
     const cleanBranch = rawBranch.replace(/[\\/:*?"<>|]/g, '_').trim();
 
-    const rawShift = candidate.caLam || 'CA_CHUA_CHOT';
-    let shiftFolder = 'CA_KHAC';
-    if (rawShift.toLowerCase().includes('sang') || rawShift.includes('7h')) shiftFolder = 'CA_SANG';
-    else if (rawShift.toLowerCase().includes('chieu') || rawShift.includes('12h')) shiftFolder = 'CA_CHIEU';
-    else if (rawShift.toLowerCase().includes('toi') || rawShift.includes('18h')) shiftFolder = 'CA_TOI';
+    const rawShift = candidate.caLam || 'CA_SANG';
+    let shiftFolder = 'CA_SANG';
+    let startHour = 7;
+    let startMin = 0;
 
-    const cleanCandidateName = `${candidate.tenUv}_${candidate.sdtZalo.replace(/\D/g, '')}`.replace(/[\\/:*?"<>|]/g, '_');
+    if (rawShift.toLowerCase().includes('chieu') || rawShift.includes('12h')) {
+      shiftFolder = 'CA_CHIEU';
+      startHour = 12;
+      startMin = 0;
+    } else if (rawShift.toLowerCase().includes('toi') || rawShift.includes('18h')) {
+      shiftFolder = 'CA_TOI';
+      startHour = 18;
+      startMin = 0;
+    } else if (rawShift.toLowerCase().includes('trua')) {
+      shiftFolder = 'CA_CHIEU';
+      startHour = 12;
+      startMin = 0;
+    }
 
-    // Đường dẫn thư mục Google Drive backup chuẩn cấu trúc
+    const cleanCandidateName = `${candidate.tenUv} - ${candidate.sdtZalo.replace(/\D/g, '')}`.replace(/[\\/:*?"<>|]/g, '_');
+    const dateFolder = `Ngày ${dateStr}`;
+
+    // 2. Đường dẫn thư mục Google Drive backup chuẩn cấu trúc
     const driveBackupDir = path.join(
       process.cwd(),
       'uploads',
       'drive_backup',
+      typeFolder,
       cleanBranch,
       shiftFolder,
       cleanCandidateName,
-      dateStr
+      dateFolder
     );
 
     if (!fs.existsSync(driveBackupDir)) {
       fs.mkdirSync(driveBackupDir, { recursive: true });
     }
 
-    // 1. Lưu file ảnh chụp cửa hàng
-    const imageFileName = `CUA_HANG_${timestamp}.jpg`;
+    // 3. Lưu file ảnh chụp cửa hàng Anh_chup_cua_hang.jpg
+    const imageFileName = `Anh_chup_cua_hang.jpg`;
     const imageFilePath = path.join(driveBackupDir, imageFileName);
     const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
     fs.writeFileSync(imageFilePath, base64Data, { encoding: 'base64' });
 
-    // 2. Tạo file văn bản DIEM_DANH.txt
-    const txtContent = `====================================
-ĐIỂM DANH UMBO MILK
+    // 4. Tạo file văn bản Diem_danh.txt với nội dung "ĐIỂM DANH UBM"
+    const txtContent = `ĐIỂM DANH UBM
 ====================================
-Họ tên ứng viên: ${candidate.tenUv}
-Số điện thoại Zalo: ${candidate.sdtZalo}
-Mã ứng viên: ${candidate.id}
-Chi nhánh làm việc: ${candidate.chiNhanh || 'Chưa chốt'}
-Ca làm việc: ${candidate.caLam || 'Chưa chốt'}
-Thời gian điểm danh: ${now.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
-Nội dung xác thực: "ĐIỂM DANH UMBO MILK" ✓
-Trạng thái điểm danh: THÀNH CÔNG (Tự động lưu Google Drive)
+Họ tên: ${candidate.tenUv}
+Số điện thoại: ${candidate.sdtZalo}
+Mã UV: ${candidate.id}
+Chi nhánh: ${candidate.chiNhanh || 'Chưa chốt'}
+Ca làm: ${candidate.caLam || 'Chưa chốt'}
+Mốc điểm danh: ${now.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
 ====================================`;
 
-    const txtFilePath = path.join(driveBackupDir, 'DIEM_DANH.txt');
+    const txtFilePath = path.join(driveBackupDir, 'Diem_danh.txt');
     fs.writeFileSync(txtFilePath, txtContent, 'utf8');
 
-    // 3. Cập nhật số ngày đào tạo (+1) & trạng thái ĐANG TRAINING
+    // 5. Kiểm tra thời gian Realtime & Tính phạt trễ 50.000đ
+    const shiftStartTime = new Date(now);
+    shiftStartTime.setHours(startHour, startMin, 0, 0);
+
+    const graceEndTime = new Date(shiftStartTime.getTime() + 4 * 60 * 1000 + 59 * 1000); // Trễ tới 4m59s vẫn tính đúng giờ
+
+    let isLate = false;
+    let lateMinutes = 0;
+    let fineAmount = 0;
+
+    if (now > graceEndTime) {
+      isLate = true;
+      lateMinutes = Math.max(5, Math.floor((now.getTime() - shiftStartTime.getTime()) / (60 * 1000)));
+      fineAmount = 50000;
+    }
+
+    // Ghi nhận sự kiện AttendanceEvent
+    await prisma.attendanceEvent.create({
+      data: {
+        id: nextId('ATT'),
+        candidateId: candidate.id,
+        date: dateStr,
+        shift: shiftFolder,
+        checkinAt: now,
+        method: 'PUBLIC_WEB',
+        valid: true,
+        reason: isLate ? `TRE_PHAT_50K_${lateMinutes}M` : 'VALID_ON_TIME',
+        lat: null,
+        lng: null,
+      },
+    });
+
+    // 6. Cập nhật số ngày đào tạo (+1) & trạng thái ĐANG TRAINING
     const newVersion = candidate.dataVersion + 1;
     const newDaysDone = Math.min(7, candidate.soNgayDaTraining + 1);
 
@@ -235,7 +281,7 @@ Trạng thái điểm danh: THÀNH CÔNG (Tự động lưu Google Drive)
       entity: 'candidate',
       entityId: candidate.id,
       oldValue: `soNgay: ${candidate.soNgayDaTraining}`,
-      newValue: `soNgay: ${newDaysDone}, photo: ${imageFileName}`,
+      newValue: `soNgay: ${newDaysDone}, isLate: ${isLate}, fine: ${fineAmount}`,
       version: newVersion,
     });
 
@@ -248,8 +294,13 @@ Trạng thái điểm danh: THÀNH CÔNG (Tự động lưu Google Drive)
         candidateId: candidate.id,
         candidateName: candidate.tenUv,
         soNgayDaTraining: newDaysDone,
-        backupFolder: `${cleanBranch}/${shiftFolder}/${cleanCandidateName}/${dateStr}`,
-        message: 'Đã điểm danh ca làm & lưu hồ sơ vào Google Drive thành công!',
+        isLate,
+        lateMinutes,
+        fineAmount,
+        backupFolder: `${typeFolder}/${cleanBranch}/${shiftFolder}/${cleanCandidateName}/${dateFolder}`,
+        message: isLate
+          ? `⚠️ Bạn đã điểm danh trễ ${lateMinutes} phút - Hệ thống ghi nhận PHẠT 50.000đ!`
+          : '🎉 Điểm danh thành công (ĐÚNG GIỜ)!',
       },
     });
   } catch (e) {

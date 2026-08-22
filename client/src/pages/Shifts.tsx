@@ -12,6 +12,7 @@ import { debounce } from '../utils/debounce';
 interface RowData {
   candidateId: string;
   tenUv: string;
+  sdtZalo?: string;
   chiNhanh: string;
   caLam: string;
   shifts: Record<string, { shifts: string }>;
@@ -51,6 +52,64 @@ export default function Shifts() {
     } catch (e) {
       toast('error', e instanceof ApiError ? e.message : 'Thao tác thất bại.');
     }
+  };
+
+  const handleSendAttendanceNoticeAndOpenZalo = async (r: RowData) => {
+    const origin = window.location.origin;
+    const checkinUrl = `${origin}/public/attendance/${r.candidateId}`;
+    const nameGreeting = r.tenUv ? `ứng viên ${r.tenUv}` : 'bạn';
+
+    const msg = [
+      '🐮 [UMBO MILK] – THÔNG BÁO LỊCH ĐIỂM DANH & LỊCH LÀM VIỆC 📋',
+      '',
+      `Chào ${nameGreeting} ❤️`,
+      'UMBO MILK xin gửi bạn link web điểm danh hàng ngày và thông tin lịch làm việc của bạn như sau:',
+      '',
+      '📌 THÔNG TIN NHẬN CA:',
+      `• 🏢 Chi nhánh chính thức: ${r.chiNhanh || 'Theo phân công'}`,
+      `• ⏱️ Ca làm việc chính thức: ${r.caLam || 'Theo ca chốt'}`,
+      '',
+      '🔗 ĐƯỜNG DẪN ĐIỂM DANH HÀNG NGÀY TRÊN WEB:',
+      checkinUrl,
+      '',
+      '📌 HƯỚNG DẪN ĐIỂM DANH MỖI CA:',
+      '1. Truy cập link trên trước giờ ca làm 30 phút.',
+      '2. Chụp 1 tấm ảnh cửa hàng + nhập chữ "ĐIỂM DANH UBM".',
+      '3. Bấm Gửi để hệ thống tự động ghi nhận điểm danh.',
+      '⚠️ Lưu ý: Điểm danh trễ từ 5 phút trở lên hệ thống sẽ tự động phạt 50.000đ.',
+      '',
+      'UMBO MILK chúc bạn có những ngày làm việc hiệu quả và thuận lợi! ✨',
+    ].join('\n');
+
+    let copied = false;
+    try {
+      await navigator.clipboard.writeText(msg);
+      copied = true;
+    } catch {
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = msg;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        copied = document.execCommand('copy');
+        document.body.removeChild(textarea);
+      } catch {
+        copied = false;
+      }
+    }
+
+    if (copied) {
+      toast('success', '📋 Đã tạo & sao chép Lịch Điểm Danh! Hãy bấm Ctrl + V trên Zalo để gửi cho ứng viên.');
+    } else {
+      toast('error', '⚠️ Vui lòng sao chép thủ công nội dung gửi Zalo.');
+    }
+
+    const cleanPhone = (r.sdtZalo || '').replace(/\D/g, '');
+    const zaloUrl = cleanPhone ? `https://zalo.me/${cleanPhone}` : 'https://chat.zalo.me';
+    window.open(zaloUrl, '_blank');
   };
 
 
@@ -247,6 +306,14 @@ export default function Shifts() {
                           </button>
                         )}
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => handleSendAttendanceNoticeAndOpenZalo(r)}
+                        className="mt-1.5 w-full bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-extrabold px-2 py-1 rounded-lg flex items-center justify-center gap-1 shadow-2xs transition-all hover:scale-102 cursor-pointer"
+                        title="Click để tự động tạo tin nhắn Zalo kèm link điểm danh web & mở Zalo gửi cho ứng viên"
+                      >
+                        <span>💬 Mở App Zalo gửi Lịch điểm danh</span>
+                      </button>
                     </td>
 
                     {dates.map((d) => {

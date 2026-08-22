@@ -56,14 +56,20 @@ export default function PublicAttendance() {
     reader.readAsDataURL(file);
   };
 
+  const [submitResult, setSubmitResult] = useState<{ isLate: boolean; lateMinutes: number; fineAmount: number; backupFolder: string; message: string } | null>(null);
+
   const handleCheckinSubmit = async () => {
     if (!id || !imageSrc) return;
     setIsSubmitting(true);
     try {
-      await api.post(`/public/candidates/${id}/attendance-checkin`, {
-        image: imageSrc,
-        note: 'ĐIỂM DANH UMBO MILK',
-      });
+      const data = await api.post<{ isLate: boolean; lateMinutes: number; fineAmount: number; backupFolder: string; message: string }>(
+        `/public/candidates/${id}/attendance-checkin`,
+        {
+          image: imageSrc,
+          note: 'ĐIỂM DANH UBM',
+        }
+      );
+      setSubmitResult(data);
       setSubmitSuccess(true);
       setIsSubmitting(false);
     } catch (e) {
@@ -149,17 +155,34 @@ export default function PublicAttendance() {
 
       {/* Màn Hình Điểm Danh Thành Công */}
       {submitSuccess ? (
-        <div className="w-full max-w-md bg-emerald-950/90 border border-emerald-600 mt-4 p-6 rounded-3xl text-center space-y-3 shadow-2xl animate-fade-in">
-          <CheckCircle2 size={56} className="text-emerald-400 mx-auto animate-bounce" />
-          <h2 className="text-xl font-black text-emerald-300">ĐIỂM DANH THÀNH CÔNG!</h2>
-          <p className="text-xs text-emerald-200 leading-relaxed">
-            Hệ thống đã ghi nhận ảnh chụp cửa hàng & tự động lưu hồ sơ điểm danh ngày <strong>{todayStr}</strong> vào Google Drive.
-          </p>
-          <div className="bg-emerald-900/60 p-3 rounded-xl border border-emerald-700/60 text-xs text-emerald-100 font-mono font-bold">
-            CHỮ ĐIỂM DANH: "ĐIỂM DANH UMBO MILK" ✓
+        submitResult?.isLate ? (
+          <div className="w-full max-w-md bg-rose-950/90 border-2 border-rose-500 mt-4 p-6 rounded-3xl text-center space-y-3 shadow-2xl animate-fade-in">
+            <AlertCircle size={56} className="text-rose-400 mx-auto animate-bounce" />
+            <h2 className="text-xl font-black text-rose-300">ĐIỂM DANH TRỄ – PHẠT 50.000Đ</h2>
+            <div className="bg-rose-900/80 p-3.5 rounded-xl border border-rose-700/80 text-xs text-rose-100 font-bold space-y-1">
+              <p className="text-sm font-black text-rose-200">⚠️ Bạn đã điểm danh trễ {submitResult.lateMinutes} phút!</p>
+              <p className="text-xs text-rose-300 leading-relaxed">
+                Hệ thống tự động ghi nhận mức <strong>PHẠT 50.000đ</strong> trực tiếp vào hồ sơ chấm công trên web.
+              </p>
+            </div>
+            <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-700 text-xs text-slate-200 font-mono font-bold">
+              NỘI DUNG XÁC THỰC: "ĐIỂM DANH UBM" ✓ (Đã lưu Google Drive)
+            </div>
+            <p className="text-[11px] text-slate-400">Vui lòng rút kinh nghiệm có mặt đúng giờ ở các ca tiếp theo!</p>
           </div>
-          <p className="text-[11px] text-slate-400">Chúc bạn có một buổi làm việc và đào tạo hiệu quả tại Umbo Milk!</p>
-        </div>
+        ) : (
+          <div className="w-full max-w-md bg-emerald-950/90 border-2 border-emerald-500 mt-4 p-6 rounded-3xl text-center space-y-3 shadow-2xl animate-fade-in">
+            <CheckCircle2 size={56} className="text-emerald-400 mx-auto animate-bounce" />
+            <h2 className="text-xl font-black text-emerald-300">ĐIỂM DANH THÀNH CÔNG (ĐÚNG GIỜ)!</h2>
+            <p className="text-xs text-emerald-200 leading-relaxed">
+              Hệ thống đã ghi nhận ảnh chụp cửa hàng & tự động lưu hồ sơ điểm danh ngày <strong>{todayStr}</strong> vào Google Drive.
+            </p>
+            <div className="bg-emerald-900/60 p-3 rounded-xl border border-emerald-700/60 text-xs text-emerald-100 font-mono font-bold">
+              NỘI DUNG XÁC THỰC: "ĐIỂM DANH UBM" ✓
+            </div>
+            <p className="text-[11px] text-slate-400">Chúc bạn có một buổi làm việc và đào tạo hiệu quả tại Umbo Milk!</p>
+          </div>
+        )
       ) : (
         /* Màn Hình Chụp Hình & Điểm Danh */
         <div className="w-full max-w-md bg-slate-900 mt-4 p-4 rounded-3xl border border-slate-800 space-y-4 shadow-xl">

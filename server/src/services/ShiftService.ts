@@ -31,7 +31,7 @@ export class ShiftService {
       if (!byCandidate.has(s.candidateId)) byCandidate.set(s.candidateId, new Map());
       byCandidate.get(s.candidateId)!.set(s.date, s);
     });
-    const mapRow = (c: { id: string; tenUv: string; chiNhanh: string; caLam: string }) => {
+    const mapRow = (c: { id: string; tenUv: string; sdtZalo: string; chiNhanh: string; caLam: string }) => {
       const shifts: Record<string, { shifts: string }> = {};
       byCandidate.get(c.id)?.forEach((s) => {
         shifts[s.date] = { shifts: s.shifts };
@@ -39,6 +39,7 @@ export class ShiftService {
       return {
         candidateId: c.id,
         tenUv: c.tenUv,
+        sdtZalo: c.sdtZalo,
         chiNhanh: c.chiNhanh,
         caLam: c.caLam,
         shifts,
