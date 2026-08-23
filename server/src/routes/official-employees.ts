@@ -22,23 +22,32 @@ officialEmployeesRouter.get('/', async (req: Request, res: Response, next: NextF
     }
 
     if (chiNhanh && typeof chiNhanh === 'string' && chiNhanh !== 'ALL') {
-      whereClause.chiNhanh = chiNhanh;
+      whereClause.chiNhanh = { contains: chiNhanh };
     }
 
     if (caLam && typeof caLam === 'string' && caLam !== 'ALL') {
-      whereClause.caLam = caLam;
+      whereClause.caLam = { contains: caLam };
     }
 
-    const employees = await prisma.candidate.findMany({
-      where: whereClause,
-      include: {
-        attendanceEvents: {
-          where: { valid: true },
-          orderBy: { createdAt: 'desc' },
+    const [allOfficial, employees] = await Promise.all([
+      prisma.candidate.findMany({
+        where: { trangThaiTraining: 'NHAN_VIEN_CHINH_THUC' },
+        select: { chiNhanh: true, caLam: true },
+      }),
+      prisma.candidate.findMany({
+        where: whereClause,
+        include: {
+          attendanceEvents: {
+            where: { valid: true },
+            orderBy: { createdAt: 'desc' },
+          },
         },
-      },
-      orderBy: { updatedAt: 'desc' },
-    });
+        orderBy: { updatedAt: 'desc' },
+      }),
+    ]);
+
+    const uniqueBranches = Array.from(new Set(allOfficial.map((c) => c.chiNhanh).filter(Boolean)));
+    const uniqueShifts = Array.from(new Set(allOfficial.map((c) => c.caLam).filter(Boolean)));
 
     const result = employees.map((c) => {
       const attended = c.attendanceEvents;
@@ -65,6 +74,7 @@ officialEmployeesRouter.get('/', async (req: Request, res: Response, next: NextF
         tongTienPhat: totalFine,
         lichSuDiemDanhMoiNhat: latestStatusStr,
         trangThai: 'DANG_LAM_VIEC',
+        dataVersion: c.dataVersion,
         updatedAt: c.updatedAt,
       };
     });
@@ -72,6 +82,8 @@ officialEmployeesRouter.get('/', async (req: Request, res: Response, next: NextF
     res.json({
       items: result,
       total: result.length,
+      branches: uniqueBranches,
+      shifts: uniqueShifts,
       summary: {
         totalEmployees: result.length,
         totalShifts: result.reduce((sum, r) => sum + r.tongSoCaDaLam, 0),

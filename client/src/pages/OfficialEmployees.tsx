@@ -3,7 +3,6 @@ import {
   UserCheck,
   Search,
   RefreshCw,
-  Phone,
   MessageCircle,
   MapPin,
   Clock,
@@ -11,9 +10,11 @@ import {
   Coins,
   CheckCircle2,
   Filter,
+  Edit2,
+  Save,
 } from 'lucide-react';
 import { api, ApiError } from '../api/client';
-import { Badge, Tooltip } from '../components/ui';
+import { Badge, Tooltip, Modal, Spinner } from '../components/ui';
 import { useToast } from '../stores/Toast';
 
 interface OfficialEmployeeItem {
@@ -28,6 +29,7 @@ interface OfficialEmployeeItem {
   tongTienPhat: number;
   lichSuDiemDanhMoiNhat: string;
   trangThai: string;
+  dataVersion: number;
   updatedAt: string;
 }
 
@@ -41,6 +43,8 @@ interface SummaryStats {
 export function OfficialEmployees() {
   const { toast } = useToast();
   const [items, setItems] = useState<OfficialEmployeeItem[]>([]);
+  const [branches, setBranches] = useState<string[]>([]);
+  const [shifts, setShifts] = useState<string[]>([]);
   const [summary, setSummary] = useState<SummaryStats>({
     totalEmployees: 0,
     totalShifts: 0,
@@ -52,6 +56,12 @@ export function OfficialEmployees() {
   const [chiNhanhFilter, setChiNhanhFilter] = useState('ALL');
   const [caLamFilter, setCaLamFilter] = useState('ALL');
 
+  // Edit Modal State
+  const [editItem, setEditItem] = useState<OfficialEmployeeItem | null>(null);
+  const [editBranch, setEditBranch] = useState('');
+  const [editShift, setEditShift] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+
   const loadData = async () => {
     setLoading(true);
     try {
@@ -62,13 +72,24 @@ export function OfficialEmployees() {
 
       const res = await api.get<{
         items: OfficialEmployeeItem[];
+        branches: string[];
+        shifts: string[];
         summary: SummaryStats;
       }>(`/official-employees?${queryParams.toString()}`);
 
       setItems(res.items);
+      setBranches(res.branches || []);
+      setShifts(res.shifts || []);
       setSummary(res.summary);
     } catch (e: unknown) {
-      toast('error', e instanceof ApiError ? e.message : e instanceof Error ? e.message : 'Không thể tải danh sách nhân viên chính thức.');
+      toast(
+        'error',
+        e instanceof ApiError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : 'Không thể tải danh sách nhân viên chính thức.',
+      );
     } finally {
       setLoading(false);
     }
@@ -80,6 +101,33 @@ export function OfficialEmployees() {
     }, 300);
     return () => clearTimeout(t);
   }, [search, chiNhanhFilter, caLamFilter]);
+
+  const openEdit = (emp: OfficialEmployeeItem) => {
+    setEditItem(emp);
+    setEditBranch(emp.chiNhanh);
+    setEditShift(emp.caLam);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editItem) return;
+    setSavingEdit(true);
+    try {
+      await api.patch<{ success: boolean }>(`/candidates/${editItem.id}`, {
+        version: editItem.dataVersion,
+        patch: {
+          chiNhanh: editBranch,
+          caLam: editShift,
+        },
+      });
+      toast('success', `Đã cập nhật Chi nhánh & Ca làm cho ${editItem.tenUv}`);
+      setEditItem(null);
+      void loadData();
+    } catch (e: unknown) {
+      toast('error', e instanceof ApiError ? e.message : 'Lỗi khi cập nhật thông tin nhân viên.');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
 
   const shiftBadgeStyle = (shift: string) => {
     switch (shift?.toUpperCase()) {
@@ -193,17 +241,19 @@ export function OfficialEmployees() {
           />
         </div>
 
-        <div className="flex items-center gap-2">
-          <Filter size={14} className="text-slate-400" />
+        <div className="flex items-center gap-2 flex-wrap">
+          <Filter size={14} className="text-slate-400 shrink-0" />
           <select
             value={chiNhanhFilter}
             onChange={(e) => setChiNhanhFilter(e.target.value)}
-            className="input-field text-xs !py-2"
+            className="input-field text-xs !py-2 max-w-[200px]"
           >
-            <option value="ALL">Tất cả chi nhánh</option>
-            <option value="CN1: 130 Vạn Kiếp, Phường 3, Quận Bình Thạnh">CN1: 130 Vạn Kiếp</option>
-            <option value="CN2: 363 Lê Văn Thọ, Phường 9, Gò Vấp">CN2: 363 Lê Văn Thọ</option>
-            <option value="CN3: 204 Bùi Thị Xuân, Phường 3, Tân Bình">CN3: 204 Bùi Thị Xuân</option>
+            <option value="ALL">Tất cả chi nhánh ({branches.length})</option>
+            {branches.map((b) => (
+              <option key={b} value={b}>
+                {b}
+              </option>
+            ))}
           </select>
 
           <select
@@ -215,6 +265,13 @@ export function OfficialEmployees() {
             <option value="SÁNG">Ca SÁNG</option>
             <option value="CHIỀU">Ca CHIỀU</option>
             <option value="TỐI">Ca TỐI</option>
+            {shifts
+              .filter((s) => !['SÁNG', 'CHIỀU', 'TỐI', 'SANG', 'CHIEU', 'TOI'].includes(s.toUpperCase()))
+              .map((s) => (
+                <option key={s} value={s}>
+                  Ca {s}
+                </option>
+              ))}
           </select>
         </div>
       </div>
@@ -236,21 +293,22 @@ export function OfficialEmployees() {
                 <th className="table-th text-right">TIỀN PHẠT</th>
                 <th className="table-th">ĐIỂM DANH GẦN NHẤT</th>
                 <th className="table-th text-center">TRẠNG THÁI</th>
+                <th className="table-th text-center">THAO TÁC</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {loading ? (
                 <tr>
-                  <td colSpan={11} className="py-12 text-center text-slate-400">
+                  <td colSpan={12} className="py-12 text-center text-slate-400">
                     <RefreshCw className="mx-auto mb-2 animate-spin" size={24} />
                     Đang tải dữ liệu nhân viên chính thức...
                   </td>
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="py-12 text-center text-slate-400">
+                  <td colSpan={12} className="py-12 text-center text-slate-400">
                     <UserCheck className="mx-auto mb-2 text-slate-300 dark:text-slate-600" size={36} />
-                    Chưa có nhân viên chính thức nào trong danh sách.
+                    Chưa có nhân viên chính thức nào khớp với bộ lọc.
                   </td>
                 </tr>
               ) : (
@@ -280,7 +338,7 @@ export function OfficialEmployees() {
                     <td className="table-td text-xs text-slate-600 dark:text-slate-400">
                       <div className="flex items-center gap-1">
                         <MapPin size={12} className="text-slate-400 shrink-0" />
-                        <span className="truncate max-w-[160px]">{r.chiNhanh || '—'}</span>
+                        <span className="truncate max-w-[180px] font-medium">{r.chiNhanh || '—'}</span>
                       </div>
                     </td>
                     <td className="table-td">
@@ -321,6 +379,14 @@ export function OfficialEmployees() {
                         ĐANG LÀM VIỆC
                       </Badge>
                     </td>
+                    <td className="table-td text-center">
+                      <button
+                        onClick={() => openEdit(r)}
+                        className="btn-secondary !py-1 !px-2 text-xs flex items-center gap-1 mx-auto"
+                      >
+                        <Edit2 size={12} /> Sửa
+                      </button>
+                    </td>
                   </tr>
                 ))
               )}
@@ -328,6 +394,66 @@ export function OfficialEmployees() {
           </table>
         </div>
       </div>
+
+      {/* Edit Branch & Shift Modal */}
+      <Modal
+        open={!!editItem}
+        onClose={() => setEditItem(null)}
+        title={`✏️ Cập Nhật Thông Tin – ${editItem?.tenUv ?? ''}`}
+      >
+        <div className="space-y-4">
+          <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600 space-y-1 dark:bg-slate-800 dark:text-slate-300">
+            <div>
+              <span className="font-bold">Mã NV:</span> {editItem?.id}
+            </div>
+            <div>
+              <span className="font-bold">SĐT Zalo:</span> {editItem?.sdtZalo}
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+              Chi nhánh làm việc chính thức:
+            </label>
+            <input
+              type="text"
+              value={editBranch}
+              onChange={(e) => setEditBranch(e.target.value)}
+              className="input-field text-xs"
+              placeholder="VD: CN1: 130 Vạn Kiếp, Phường 3, Quận Bình Thạnh"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+              Ca làm việc chính thức:
+            </label>
+            <select
+              value={editShift}
+              onChange={(e) => setEditShift(e.target.value)}
+              className="input-field text-xs"
+            >
+              <option value="SÁNG">Ca SÁNG (06h45 - 12h00)</option>
+              <option value="CHIỀU">Ca CHIỀU (11h45 - 18h00)</option>
+              <option value="TỐI">Ca TỐI (17h45 - 22h00)</option>
+            </select>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+            <button className="btn-secondary text-xs" onClick={() => setEditItem(null)}>
+              Hủy
+            </button>
+            <button
+              className="btn-primary text-xs flex items-center gap-1 font-bold"
+              onClick={() => void handleSaveEdit()}
+              disabled={savingEdit}
+            >
+              {savingEdit ? <Spinner size={14} /> : <Save size={14} />}
+              Lưu & Đồng Bộ Realtime
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
