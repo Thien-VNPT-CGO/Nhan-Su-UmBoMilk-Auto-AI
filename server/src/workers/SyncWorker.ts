@@ -533,6 +533,7 @@ export class SyncWorker {
             await sheet.syncScore(candidate);
             // HO_SO_NV chỉ ghi khi ứng viên ĐÃ CÓ LỊCH TRAINING (tránh gọi API thừa)
             if (candidate.ngayBatDauTraining) await sheet.syncTraining(candidate);
+            if (candidate.trangThaiTraining === 'NHAN_VIEN_CHINH_THUC') await sheet.syncOfficialEmployee(candidate);
           }
           break;
         }
@@ -544,6 +545,7 @@ export class SyncWorker {
         case 'training': {
           if (!candidate) throw new Error(`Candidate ${job.entityId} không tồn tại`);
           await sheet.syncTraining(candidate);
+          if (candidate.trangThaiTraining === 'NHAN_VIEN_CHINH_THUC') await sheet.syncOfficialEmployee(candidate);
           break;
         }
         case 'attendance': {
@@ -554,6 +556,7 @@ export class SyncWorker {
         case 'decision': {
           if (!candidate) throw new Error(`Candidate ${job.entityId} không tồn tại`);
           await sheet.syncCandidate(candidate);
+          if (candidate.trangThaiTraining === 'NHAN_VIEN_CHINH_THUC') await sheet.syncOfficialEmployee(candidate);
           break;
         }
         case 'conflict-resolve': {

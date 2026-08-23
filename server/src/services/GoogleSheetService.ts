@@ -29,6 +29,12 @@ export const HO_SO_NV_COLS = [
   'SO_NGAY_DA_TRAINING', 'TRANG_THAI_TRAINING', 'UPDATED_AT', 'UPDATED_BY', 'DATA_VERSION', 'SYNC_STATUS',
 ];
 
+export const NHAN_VIEN_CHINH_THUC_COLS = [
+  'CANDIDATE_ID', 'TEN_NV', 'SDT_ZALO', 'CHI_NHANH', 'CA_LAM', 'NGAY_CHINH_THUC',
+  'TONG_SO_CA_DA_LAM', 'TONG_SO_CA_TRE', 'TONG_TIEN_PHAT',
+  'LICH_SU_DIEM_DANH_MOI_NHAT', 'TRANG_THAI', 'UPDATED_AT', 'UPDATED_BY',
+];
+
 export interface SheetConfig {
   spreadsheetId: string;
   email: string;
@@ -37,6 +43,7 @@ export interface SheetConfig {
   locHoSo: string;
   diemUv: string;
   hoSoNv: string;
+  nhanVienChinhThuc: string;
 }
 
 export interface ProvisionResult {
@@ -48,6 +55,7 @@ const SHEET_DEFS = [
   { name: 'locHoSo', cols: LOC_HO_SO_COLS },
   { name: 'diemUv', cols: DIEM_UV_COLS },
   { name: 'hoSoNv', cols: HO_SO_NV_COLS },
+  { name: 'nhanVienChinhThuc', cols: NHAN_VIEN_CHINH_THUC_COLS },
 ] as const;
 
 export class GoogleSheetService {
@@ -114,6 +122,7 @@ export class GoogleSheetService {
         locHoSo: String(sheets.locHoSo || cfg.locHoSo),
         diemUv: String(sheets.diemUv || cfg.diemUv),
         hoSoNv: String(sheets.hoSoNv || cfg.hoSoNv),
+        nhanVienChinhThuc: String(sheets.nhanVienChinhThuc || cfg.nhanVienChinhThuc || 'NHAN_VIEN_CHINH_THUC'),
       };
     } catch {
       // giữ cấu hình .env
@@ -125,11 +134,12 @@ export class GoogleSheetService {
     return this.ready && !!this.cfg?.spreadsheetId;
   }
 
-  get sheetNames(): { locHoSo: string; diemUv: string; hoSoNv: string } {
+  get sheetNames(): { locHoSo: string; diemUv: string; hoSoNv: string; nhanVienChinhThuc: string } {
     return {
       locHoSo: this.cfg?.locHoSo ?? env.sheetNameLocHoSo,
       diemUv: this.cfg?.diemUv ?? env.sheetNameDiemUv,
       hoSoNv: this.cfg?.hoSoNv ?? env.sheetNameHoSoNv,
+      nhanVienChinhThuc: this.cfg?.nhanVienChinhThuc ?? 'NHAN_VIEN_CHINH_THUC',
     };
   }
 
@@ -160,10 +170,15 @@ export class GoogleSheetService {
     return (res.data.values as string[][] | null) ?? null;
   }
 
-  /** Xóa hẳn dòng ứng viên ở cả 3 sheet theo CANDIDATE_ID (không để lại dòng trống). */
+  /** Xóa hẳn dòng ứng viên/nhân viên ở tất cả các sheet theo CANDIDATE_ID (không để lại dòng trống). */
   async deleteCandidateRows(candidateId: string): Promise<void> {
     if (!this.configured) return;
-    for (const title of [this.sheetNames.locHoSo, this.sheetNames.diemUv, this.sheetNames.hoSoNv]) {
+    for (const title of [
+      this.sheetNames.locHoSo,
+      this.sheetNames.diemUv,
+      this.sheetNames.hoSoNv,
+      this.sheetNames.nhanVienChinhThuc,
+    ]) {
       try {
         const res = await this.sheets!.spreadsheets.values.get({
           spreadsheetId: this.id,
@@ -471,6 +486,7 @@ export class GoogleSheetService {
       await this.syncCandidate(c);
       await this.syncScore(c);
       await this.syncTraining(c);
+      await this.syncOfficialEmployee(c);
     }
     return { candidates: candidates.length };
   }
@@ -757,9 +773,60 @@ export class GoogleSheetService {
     await this.upsert(this.sheetNames.hoSoNv, row, c.id, true);
   }
 
+  // ================= SYNC OFFICIAL EMPLOYEE -> NHAN_VIEN_CHINH_THUC =================
+  // QUY TẮC: chỉ ứng viên ĐÃ THÀNH NHÂN VIÊN CHÍNH THỨC mới nằm trong sheet này.
+  // Chưa thành NV chính thức → xóa dòng cũ nếu có.
+  async syncOfficialEmployee(c: Candidate): Promise<void> {
+    await this.ensureHeaders(this.sheetNames.nhanVienChinhThuc, NHAN_VIEN_CHINH_THUC_COLS);
+    if (c.trangThaiTraining !== 'NHAN_VIEN_CHINH_THUC') {
+      try {
+        const found = await this.findByCandidateId(this.sheetNames.nhanVienChinhThuc, c.id);
+        if (found) await this.clearRows(this.sheetNames.nhanVienChinhThuc, [found.rowIndex]);
+      } catch {
+        // tab lỗi → bỏ qua
+      }
+      return;
+    }
+    const attended = await prisma.attendanceEvent.findMany({
+      where: { candidateId: c.id, valid: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const totalShifts = attended.length;
+    const lateEvents = attended.filter((a) => a.isLate);
+    const totalLate = lateEvents.length;
+    const totalFine = lateEvents.reduce((sum, a) => sum + (a.fineAmount ?? 50000), 0);
+
+    const latestEvent = attended[0];
+    const latestStatusStr = latestEvent
+      ? `${formatDateTime(latestEvent.createdAt)} - ${latestEvent.isLate ? 'TRỄ (' + (latestEvent.fineAmount ?? 50000).toLocaleString('vi-VN') + 'đ)' : 'ĐÚNG GIỜ'}`
+      : 'CHƯA ĐIỂM DANH';
+
+    const row: (string | number)[] = NHAN_VIEN_CHINH_THUC_COLS.map((col) => {
+      switch (col) {
+        case 'CANDIDATE_ID': return c.id;
+        case 'TEN_NV': return c.tenUv;
+        case 'SDT_ZALO': return c.sdtZalo;
+        case 'CHI_NHANH': return c.chiNhanh;
+        case 'CA_LAM': return c.caLam;
+        case 'NGAY_CHINH_THUC': return formatDate(c.updatedAt);
+        case 'TONG_SO_CA_DA_LAM': return totalShifts;
+        case 'TONG_SO_CA_TRE': return totalLate;
+        case 'TONG_TIEN_PHAT': return totalFine;
+        case 'LICH_SU_DIEM_DANH_MOI_NHAT': return latestStatusStr;
+        case 'TRANG_THAI': return 'DANG_LAM_VIEC';
+        case 'UPDATED_AT': return formatDateTime(c.updatedAt);
+        case 'UPDATED_BY': return c.updatedBy ?? '';
+        default: return '';
+      }
+    });
+    await this.upsert(this.sheetNames.nhanVienChinhThuc, row, c.id, true);
+  }
+
   async syncAttendance(c: Candidate): Promise<void> {
-    // attendance synced as part of training record (tick markers + soNgayDaTraining)
+    // attendance synced as part of training record & official employee record
     await this.syncTraining(c);
+    await this.syncOfficialEmployee(c);
   }
 
   /** Hàng đợi tuần tự theo (sheet, candidateId): 2 luồng cùng sync 1 ứng viên sẽ không bao giờ append 2 dòng. */

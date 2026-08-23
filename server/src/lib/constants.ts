@@ -139,6 +139,7 @@ export const DEFAULT_SETTINGS = {
       locHoSo: 'LOC_HO_SO_PV',
       diemUv: 'DIEM_UV',
       hoSoNv: 'HO_SO_NHAN_VIEN_UNG_TUYEN',
+      nhanVienChinhThuc: 'NHAN_VIEN_CHINH_THUC',
     },
   },
   zalo: {
