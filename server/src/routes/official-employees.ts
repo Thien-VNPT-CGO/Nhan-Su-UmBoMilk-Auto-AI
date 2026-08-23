@@ -80,15 +80,18 @@ officialEmployeesRouter.get('/', async (req: Request, res: Response, next: NextF
     });
 
     res.json({
-      items: result,
-      total: result.length,
-      branches: uniqueBranches,
-      shifts: uniqueShifts,
-      summary: {
-        totalEmployees: result.length,
-        totalShifts: result.reduce((sum, r) => sum + r.tongSoCaDaLam, 0),
-        totalLate: result.reduce((sum, r) => sum + r.tongSoCaTre, 0),
-        totalFine: result.reduce((sum, r) => sum + r.tongTienPhat, 0),
+      success: true,
+      data: {
+        items: result,
+        total: result.length,
+        branches: uniqueBranches,
+        shifts: uniqueShifts,
+        summary: {
+          totalEmployees: result.length,
+          totalShifts: result.reduce((sum, r) => sum + r.tongSoCaDaLam, 0),
+          totalLate: result.reduce((sum, r) => sum + r.tongSoCaTre, 0),
+          totalFine: result.reduce((sum, r) => sum + r.tongTienPhat, 0),
+        },
       },
     });
   } catch (err) {

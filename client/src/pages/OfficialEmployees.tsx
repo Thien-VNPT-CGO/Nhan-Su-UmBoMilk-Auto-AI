@@ -77,10 +77,12 @@ export function OfficialEmployees() {
         summary: SummaryStats;
       }>(`/official-employees?${queryParams.toString()}`);
 
-      setItems(res.items);
-      setBranches(res.branches || []);
-      setShifts(res.shifts || []);
-      setSummary(res.summary);
+      if (res) {
+        setItems(res.items ?? []);
+        setBranches(res.branches ?? []);
+        setShifts(res.shifts ?? []);
+        if (res.summary) setSummary(res.summary);
+      }
     } catch (e: unknown) {
       toast(
         'error',
