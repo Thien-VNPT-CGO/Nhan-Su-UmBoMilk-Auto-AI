@@ -25,7 +25,10 @@ export default function Login() {
       if (result.needsTwoFactor && result.twoFactorToken) {
         setTwoFactorToken(result.twoFactorToken);
       } else {
-        navigate('/dashboard');
+        const userRole = result.user?.role;
+        const allowedTabs = Array.isArray(result.user?.allowedTabs) ? result.user.allowedTabs : [];
+        const targetPath = userRole === 'VIEWER' && !allowedTabs.includes('/dashboard') ? '/shifts' : '/dashboard';
+        navigate(targetPath);
       }
     } catch (err) {
       toast('error', err instanceof ApiError ? err.message : 'Đăng nhập thất bại.');

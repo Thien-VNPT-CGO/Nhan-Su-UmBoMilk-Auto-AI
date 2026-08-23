@@ -1514,12 +1514,12 @@ export default function Settings() {
                     </Badge>
                     {u.twoFactorEnabled && <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">2FA</Badge>}
                     {!u.active && <Badge className="bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300">BỊ KHÓA</Badge>}
-                    {isAdmin && u.role === 'HR' && (
+                    {isAdmin && (u.role === 'HR' || u.role === 'VIEWER') && (
                       <button
                         type="button"
                         onClick={() => openTabPermissionModal(u)}
                         className="btn-secondary !py-1 !px-2.5 text-xs flex items-center gap-1 shrink-0 font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800"
-                        title="Click để phân quyền chọn các tab cho phép HR xem"
+                        title={`Click để phân quyền chọn các tab cho phép tài khoản ${u.role} xem`}
                       >
                         <ShieldCheck size={14} className="text-purple-600" />
                         <span>Phân quyền Tab</span>
@@ -1647,17 +1647,28 @@ export default function Settings() {
         <div className="space-y-4">
           <div className="rounded-xl bg-purple-50 border border-purple-200 p-3 text-xs text-purple-900 space-y-1 dark:bg-purple-950/40 dark:border-purple-800 dark:text-purple-200">
             <p className="font-bold flex items-center gap-1">
-              👑 Quyền hiển thị & truy cập Menu Sidebar cho tài khoản HR:
+              👑 Quyền hiển thị & truy cập Menu Sidebar cho tài khoản {tabPermissionUser?.role === 'VIEWER' ? 'VIEWER' : 'HR'}:
             </p>
             <p className="text-[11px] leading-relaxed opacity-90">
-              • 5 Tab mặc định HR (Tổng quan, Ứng viên, AI chấm hồ sơ, Nhân viên training, Lịch làm việc) luôn khả dụng.<br/>
-              • Tích chọn bên dưới để mở quyền truy cập các Tab bổ sung cho nhân sự HR này.
+              {tabPermissionUser?.role === 'VIEWER' ? (
+                <>
+                  • Tab <b>Lịch làm việc</b> mặc định khả dụng (Chỉ xem).<br/>
+                  • Tích chọn bên dưới để mở quyền truy cập các Tab bổ sung cho tài khoản Viewer này.
+                </>
+              ) : (
+                <>
+                  • 5 Tab mặc định HR (Tổng quan, Ứng viên, AI chấm hồ sơ, Nhân viên training, Lịch làm việc) luôn khả dụng.<br/>
+                  • Tích chọn bên dưới để mở quyền truy cập các Tab bổ sung cho nhân sự HR này.
+                </>
+              )}
             </p>
           </div>
 
           <div className="grid grid-cols-2 gap-2 max-h-72 overflow-y-auto p-1">
             {ALL_PERMISSION_TABS.map((tItem) => {
-              const isDefault = tItem.defaultHR;
+              const isDefault = tabPermissionUser?.role === 'VIEWER'
+                ? tItem.path === '/shifts'
+                : tItem.defaultHR;
               const isChecked = isDefault || (tabPermissionUser?.allowedTabs ?? []).includes(tItem.path);
 
               return (
@@ -1681,7 +1692,9 @@ export default function Settings() {
                   />
                   <span className="flex-1 leading-snug">{tItem.label}</span>
                   {isDefault && (
-                    <span className="text-[9px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-bold dark:bg-slate-700 dark:text-slate-300">Mặc định</span>
+                    <span className="text-[9px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-bold dark:bg-slate-700 dark:text-slate-300">
+                      Mặc định {tabPermissionUser?.role}
+                    </span>
                   )}
                 </label>
               );

@@ -17,6 +17,7 @@ import { debounce } from '../utils/debounce';
 import { formatDate, weekdayVi } from '../utils/date';
 
 export const DEFAULT_HR_TABS = ['/dashboard', '/candidates', '/scoring', '/training', '/shifts'];
+export const DEFAULT_VIEWER_TABS = ['/shifts'];
 
 function useI18nNav(user: User | null) {
   const { t } = useI18n();
@@ -38,8 +39,9 @@ function useI18nNav(user: User | null) {
   if (!user) return [];
   if (user.role === 'ADMIN') return allNavItems;
 
+  const baseTabs = user.role === 'VIEWER' ? DEFAULT_VIEWER_TABS : DEFAULT_HR_TABS;
   const allowedSet = new Set([
-    ...DEFAULT_HR_TABS,
+    ...baseTabs,
     ...(Array.isArray(user.allowedTabs) ? user.allowedTabs : []),
   ]);
 
@@ -193,15 +195,21 @@ export default function AppLayout() {
     if (!user) return;
     if (user.role === 'ADMIN') return;
 
+    const baseTabs = user.role === 'VIEWER' ? DEFAULT_VIEWER_TABS : DEFAULT_HR_TABS;
     const allowedSet = new Set([
-      ...DEFAULT_HR_TABS,
+      ...baseTabs,
       ...(Array.isArray(user.allowedTabs) ? user.allowedTabs : []),
     ]);
     const path = location.pathname;
     if (path === '/' || path.startsWith('/public')) return;
     if (!allowedSet.has(path)) {
+      const fallbackPath = allowedSet.has('/dashboard')
+        ? '/dashboard'
+        : allowedSet.has('/shifts')
+          ? '/shifts'
+          : Array.from(allowedSet)[0] || '/shifts';
       toast('error', '⚠️ Bạn chưa được cấp quyền truy cập tab này. Vui lòng liên hệ Admin!');
-      navigate('/dashboard', { replace: true });
+      navigate(fallbackPath, { replace: true });
     }
   }, [user, location.pathname, navigate, toast]);
 
