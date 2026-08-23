@@ -78,6 +78,7 @@ export class GoogleSheetService {
       locHoSo: env.sheetNameLocHoSo,
       diemUv: env.sheetNameDiemUv,
       hoSoNv: env.sheetNameHoSoNv,
+      nhanVienChinhThuc: 'NHAN_VIEN_CHINH_THUC',
     };
   }
 
@@ -793,13 +794,14 @@ export class GoogleSheetService {
     });
 
     const totalShifts = attended.length;
-    const lateEvents = attended.filter((a) => a.isLate);
+    const isEventLate = (a: { reason: string | null }) => !!(a.reason && (a.reason.includes('TRE') || a.reason.includes('TRỄ')));
+    const lateEvents = attended.filter(isEventLate);
     const totalLate = lateEvents.length;
-    const totalFine = lateEvents.reduce((sum, a) => sum + (a.fineAmount ?? 50000), 0);
+    const totalFine = totalLate * 50000;
 
     const latestEvent = attended[0];
     const latestStatusStr = latestEvent
-      ? `${formatDateTime(latestEvent.createdAt)} - ${latestEvent.isLate ? 'TRỄ (' + (latestEvent.fineAmount ?? 50000).toLocaleString('vi-VN') + 'đ)' : 'ĐÚNG GIỜ'}`
+      ? `${formatDateTime(latestEvent.createdAt)} - ${isEventLate(latestEvent) ? 'TRỄ (50.000đ)' : 'ĐÚNG GIỜ'}`
       : 'CHƯA ĐIỂM DANH';
 
     const row: (string | number)[] = NHAN_VIEN_CHINH_THUC_COLS.map((col) => {
