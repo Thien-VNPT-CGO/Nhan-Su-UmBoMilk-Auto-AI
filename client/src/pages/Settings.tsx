@@ -124,6 +124,7 @@ export default function Settings() {
     { path: '/candidates', label: 'Ứng viên', defaultHR: true },
     { path: '/scoring', label: 'AI chấm hồ sơ', defaultHR: true },
     { path: '/training', label: 'Nhân Viên Training', defaultHR: true },
+    { path: '/official-employees', label: 'Nhân viên chính thức', defaultHR: true },
     { path: '/shifts', label: 'Lịch làm việc', defaultHR: true },
     { path: '/attendance', label: 'Điểm danh', defaultHR: false },
     { path: '/zalo', label: 'Zalo', defaultHR: false },

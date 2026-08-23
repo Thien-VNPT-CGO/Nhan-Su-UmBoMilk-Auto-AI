@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import Candidates from './pages/Candidates';
 import Scoring from './pages/Scoring';
 import Training from './pages/Training';
+import { OfficialEmployees } from './pages/OfficialEmployees';
 import Shifts from './pages/Shifts';
 import Attendance from './pages/Attendance';
 import Zalo from './pages/Zalo';
@@ -52,6 +53,7 @@ export default function App() {
           <Route path="candidates" element={<Candidates />} />
           <Route path="scoring" element={<Scoring />} />
           <Route path="training" element={<Training />} />
+          <Route path="official-employees" element={<OfficialEmployees />} />
           <Route path="shifts" element={<Shifts />} />
           <Route path="attendance" element={<Attendance />} />
           <Route path="zalo" element={<Zalo />} />

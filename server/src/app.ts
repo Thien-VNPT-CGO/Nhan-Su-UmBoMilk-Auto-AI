@@ -32,6 +32,7 @@ import elearningRoutes from './routes/elearning';
 import notificationRoutes from './routes/notifications';
 import backupRoutes from './routes/backup';
 import publicRoutes from './routes/public';
+import { officialEmployeesRouter } from './routes/official-employees';
 
 export function createApp() {
   const app = express();
@@ -69,6 +70,7 @@ export function createApp() {
   app.use('/api/auth', authLimiter, authRoutes);
   app.use('/api/dashboard', apiLimiter, dashboardRoutes);
   app.use('/api/candidates', apiLimiter, candidateRoutes);
+  app.use('/api/official-employees', apiLimiter, officialEmployeesRouter);
   app.use('/api/training', apiLimiter, trainingRoutes);
   app.use('/api/shifts', apiLimiter, shiftRoutes);
   app.use('/api/attendance', apiLimiter, attendanceRoutes);

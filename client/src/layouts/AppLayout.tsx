@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard, Users, BrainCircuit, GraduationCap, CalendarDays, ClipboardCheck,
+  LayoutDashboard, Users, BrainCircuit, GraduationCap, UserCheck, CalendarDays, ClipboardCheck,
   MessageCircle, RefreshCw, FileSpreadsheet, ScrollText, Settings as SettingsIcon,
   LogOut, Milk, Wifi, WifiOff, Database, Circle, Bell, Sun, Moon, Languages, BookOpen, BarChart3,
 } from 'lucide-react';
@@ -16,7 +16,7 @@ import { cn } from '../utils/format';
 import { debounce } from '../utils/debounce';
 import { formatDate, weekdayVi } from '../utils/date';
 
-export const DEFAULT_HR_TABS = ['/dashboard', '/candidates', '/scoring', '/training', '/shifts'];
+export const DEFAULT_HR_TABS = ['/dashboard', '/candidates', '/scoring', '/training', '/official-employees', '/shifts'];
 export const DEFAULT_VIEWER_TABS = ['/shifts'];
 
 function useI18nNav(user: User | null) {
@@ -26,6 +26,7 @@ function useI18nNav(user: User | null) {
     { to: '/candidates', label: t('nav.candidates'), icon: Users },
     { to: '/scoring', label: t('nav.scoring'), icon: BrainCircuit },
     { to: '/training', label: t('nav.training'), icon: GraduationCap },
+    { to: '/official-employees', label: 'Nhân viên chính thức', icon: UserCheck },
     { to: '/shifts', label: t('nav.shifts'), icon: CalendarDays },
     { to: '/attendance', label: t('nav.attendance'), icon: ClipboardCheck },
     { to: '/zalo', label: t('nav.zalo'), icon: MessageCircle },
