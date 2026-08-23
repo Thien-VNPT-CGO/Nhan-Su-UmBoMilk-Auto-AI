@@ -19,7 +19,7 @@ router.get('/', async (_req, res, next) => {
     const settings = await getSettings();
     const sheet = getGoogleSheetService();
     const users = await prisma.user.findMany({
-      select: { id: true, username: true, fullName: true, role: true, active: true, twoFactorEnabled: true, branchScope: true },
+      select: { id: true, username: true, fullName: true, role: true, active: true, twoFactorEnabled: true, branchScope: true, allowedTabs: true },
     });
     const conflicts = await prisma.conflict.findMany({ where: { status: 'OPEN' }, orderBy: { createdAt: 'desc' } });
     res.json({
@@ -37,12 +37,13 @@ router.get('/', async (_req, res, next) => {
   }
 });
 
-/** Cập nhật tài khoản: vai trò, trạng thái, phạm vi chi nhánh (phân quyền theo chi nhánh). */
+/** Cập nhật tài khoản: vai trò, trạng thái, phạm vi chi nhánh (phân quyền theo chi nhánh), phân quyền tab. */
 const updateUserSchema = z.object({
   fullName: z.string().min(1).optional(),
   role: z.enum(['ADMIN', 'HR', 'VIEWER']).optional(),
   active: z.boolean().optional(),
   branchScope: z.array(z.string()).nullable().optional(),
+  allowedTabs: z.array(z.string()).nullable().optional(),
 });
 
 router.post('/users/:id', requireRole('ADMIN'), async (req: AuthedRequest, res, next) => {
@@ -66,6 +67,12 @@ router.post('/users/:id', requireRole('ADMIN'), async (req: AuthedRequest, res, 
             : parsed.data.branchScope === null
               ? Prisma.JsonNull
               : parsed.data.branchScope,
+        allowedTabs:
+          parsed.data.allowedTabs === undefined
+            ? undefined
+            : parsed.data.allowedTabs === null
+              ? Prisma.JsonNull
+              : parsed.data.allowedTabs,
       },
     });
     await audit({
@@ -73,7 +80,7 @@ router.post('/users/:id', requireRole('ADMIN'), async (req: AuthedRequest, res, 
       action: 'UPDATE_USER',
       entity: 'user',
       entityId: user.id,
-      newValue: { role: updated.role, active: updated.active, branchScope: updated.branchScope },
+      newValue: { role: updated.role, active: updated.active, branchScope: updated.branchScope, allowedTabs: updated.allowedTabs },
     });
     res.json({
       success: true,
@@ -85,6 +92,7 @@ router.post('/users/:id', requireRole('ADMIN'), async (req: AuthedRequest, res, 
         active: updated.active,
         twoFactorEnabled: updated.twoFactorEnabled,
         branchScope: updated.branchScope,
+        allowedTabs: updated.allowedTabs,
       },
     });
   } catch (e) {

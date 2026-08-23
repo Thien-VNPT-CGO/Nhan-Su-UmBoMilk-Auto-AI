@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState, useMemo } from 'react';
+import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, BrainCircuit, GraduationCap, CalendarDays, ClipboardCheck,
   MessageCircle, RefreshCw, FileSpreadsheet, ScrollText, Settings as SettingsIcon,
   LogOut, Milk, Wifi, WifiOff, Database, Circle, Bell, Sun, Moon, Languages, BookOpen, BarChart3,
 } from 'lucide-react';
-import { useAuth } from '../stores/auth';
+import { useAuth, User } from '../stores/auth';
 import { useToast } from '../stores/Toast';
 import { useI18n } from '../utils/i18n';
 import { useTheme } from '../utils/theme';
@@ -16,9 +16,11 @@ import { cn } from '../utils/format';
 import { debounce } from '../utils/debounce';
 import { formatDate, weekdayVi } from '../utils/date';
 
-function useI18nNav() {
+export const DEFAULT_HR_TABS = ['/dashboard', '/candidates', '/scoring', '/training', '/shifts'];
+
+function useI18nNav(user: User | null) {
   const { t } = useI18n();
-  return [
+  const allNavItems = [
     { to: '/dashboard', label: t('nav.dashboard'), icon: LayoutDashboard },
     { to: '/candidates', label: t('nav.candidates'), icon: Users },
     { to: '/scoring', label: t('nav.scoring'), icon: BrainCircuit },
@@ -32,6 +34,16 @@ function useI18nNav() {
     { to: '/audit', label: t('nav.audit'), icon: ScrollText },
     { to: '/settings', label: t('nav.settings'), icon: SettingsIcon },
   ];
+
+  if (!user) return [];
+  if (user.role === 'ADMIN') return allNavItems;
+
+  const allowedSet = new Set([
+    ...DEFAULT_HR_TABS,
+    ...(Array.isArray(user.allowedTabs) ? user.allowedTabs : []),
+  ]);
+
+  return allNavItems.filter((item) => allowedSet.has(item.to));
 }
 
 interface SyncCounts {
@@ -170,11 +182,28 @@ export default function AppLayout() {
   const { t, lang, setLang } = useI18n();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
+  const location = useLocation();
   const now = useClock();
   const counts = useSyncCounts();
   const health = useHealth();
-  const NAV = useI18nNav();
+  const NAV = useI18nNav(user);
   const notif = useNotifications();
+
+  useEffect(() => {
+    if (!user) return;
+    if (user.role === 'ADMIN') return;
+
+    const allowedSet = new Set([
+      ...DEFAULT_HR_TABS,
+      ...(Array.isArray(user.allowedTabs) ? user.allowedTabs : []),
+    ]);
+    const path = location.pathname;
+    if (path === '/' || path.startsWith('/public')) return;
+    if (!allowedSet.has(path)) {
+      toast('error', '⚠️ Bạn chưa được cấp quyền truy cập tab này. Vui lòng liên hệ Admin!');
+      navigate('/dashboard', { replace: true });
+    }
+  }, [user, location.pathname, navigate, toast]);
 
   const pendingTotal = (counts?.PENDING ?? 0) + (counts?.RETRY ?? 0) + (counts?.PROCESSING ?? 0);
   const syncError = (counts?.FAILED ?? 0) > 0;

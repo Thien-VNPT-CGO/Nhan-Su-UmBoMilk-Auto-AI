@@ -18,6 +18,7 @@ export function toSafeUser(u: {
   role: string;
   twoFactorEnabled?: boolean;
   branchScope?: unknown;
+  allowedTabs?: unknown;
 }) {
   return {
     id: u.id,
@@ -26,6 +27,7 @@ export function toSafeUser(u: {
     role: u.role,
     twoFactorEnabled: !!u.twoFactorEnabled,
     branchScope: Array.isArray(u.branchScope) ? (u.branchScope as string[]) : null,
+    allowedTabs: Array.isArray(u.allowedTabs) ? (u.allowedTabs as string[]) : null,
   };
 }
 

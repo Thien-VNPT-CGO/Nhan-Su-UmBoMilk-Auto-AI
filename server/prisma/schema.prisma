@@ -20,6 +20,7 @@ model User {
   twoFactorSecret  String?   // TOTP secret (2FA)
   twoFactorEnabled Boolean   @default(false)
   branchScope      Json?     // string[] — chi nhánh được phép xem (null/[] = tất cả)
+  allowedTabs      Json?     // string[] — các tab được phép truy cập bổ sung (cho HR). null/[] = default
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   sessions         Session[]

@@ -8,6 +8,7 @@ export interface User {
   role: 'ADMIN' | 'HR' | 'VIEWER';
   twoFactorEnabled?: boolean;
   branchScope?: string[] | null;
+  allowedTabs?: string[] | null;
 }
 
 export interface LoginResult {

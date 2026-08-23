@@ -76,7 +76,7 @@ interface SettingsData {
   };
   googleSheetConfigured: boolean;
   demoMode: boolean;
-  users: { id: string; username: string; fullName: string; role: string; active: boolean; twoFactorEnabled?: boolean; branchScope?: string[] | null }[];
+  users: { id: string; username: string; fullName: string; role: string; active: boolean; twoFactorEnabled?: boolean; branchScope?: string[] | null; allowedTabs?: string[] | null }[];
   conflicts: {
     id: string; entityId: string; field: string; webValue: string; sheetValue: string;
     webVersion: number; sheetVersion: number | null; createdAt: string;
@@ -117,6 +117,57 @@ export default function Settings() {
   // Đổi mật khẩu
   const [pwdForm, setPwdForm] = useState({ oldPassword: '', newPassword: '', totpCode: '' });
   const [pwdBusy, setPwdBusy] = useState(false);
+
+  // Phân quyền Tab cho HR
+  const ALL_PERMISSION_TABS = [
+    { path: '/dashboard', label: 'Tổng quan', defaultHR: true },
+    { path: '/candidates', label: 'Ứng viên', defaultHR: true },
+    { path: '/scoring', label: 'AI chấm hồ sơ', defaultHR: true },
+    { path: '/training', label: 'Nhân Viên Training', defaultHR: true },
+    { path: '/shifts', label: 'Lịch làm việc', defaultHR: true },
+    { path: '/attendance', label: 'Điểm danh', defaultHR: false },
+    { path: '/zalo', label: 'Zalo', defaultHR: false },
+    { path: '/reports', label: 'Báo cáo', defaultHR: false },
+    { path: '/elearning', label: 'E-learning', defaultHR: false },
+    { path: '/sync', label: 'Đồng bộ dữ liệu', defaultHR: false },
+    { path: '/audit', label: 'Nhật ký', defaultHR: false },
+    { path: '/settings', label: 'Cài đặt', defaultHR: false },
+  ];
+
+  const [tabPermissionUser, setTabPermissionUser] = useState<{ id: string; fullName: string; role: string; allowedTabs: string[] } | null>(null);
+
+  const openTabPermissionModal = (u: NonNullable<SettingsData['users']>[0]) => {
+    const currentAllowed = Array.isArray(u.allowedTabs) ? u.allowedTabs : [];
+    setTabPermissionUser({
+      id: u.id,
+      fullName: u.fullName,
+      role: u.role,
+      allowedTabs: [...currentAllowed],
+    });
+  };
+
+  const togglePermissionTab = (path: string) => {
+    if (!tabPermissionUser) return;
+    const exists = tabPermissionUser.allowedTabs.includes(path);
+    const nextTabs = exists
+      ? tabPermissionUser.allowedTabs.filter((p) => p !== path)
+      : [...tabPermissionUser.allowedTabs, path];
+    setTabPermissionUser({ ...tabPermissionUser, allowedTabs: nextTabs });
+  };
+
+  const saveTabPermissions = async () => {
+    if (!tabPermissionUser) return;
+    try {
+      await api.post(`/settings/users/${tabPermissionUser.id}`, {
+        allowedTabs: tabPermissionUser.allowedTabs,
+      });
+      toast('success', `Đã cập nhật phân quyền Tab cho nhân sự ${tabPermissionUser.fullName}!`);
+      setTabPermissionUser(null);
+      void load();
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Thao tác thất bại.');
+    }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -1463,6 +1514,17 @@ export default function Settings() {
                     </Badge>
                     {u.twoFactorEnabled && <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">2FA</Badge>}
                     {!u.active && <Badge className="bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300">BỊ KHÓA</Badge>}
+                    {isAdmin && u.role === 'HR' && (
+                      <button
+                        type="button"
+                        onClick={() => openTabPermissionModal(u)}
+                        className="btn-secondary !py-1 !px-2.5 text-xs flex items-center gap-1 shrink-0 font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800"
+                        title="Click để phân quyền chọn các tab cho phép HR xem"
+                      >
+                        <ShieldCheck size={14} className="text-purple-600" />
+                        <span>Phân quyền Tab</span>
+                      </button>
+                    )}
                   </div>
                   {isAdmin && u.id !== user?.id && (
                     <div className="flex items-center gap-2">
@@ -1572,6 +1634,64 @@ export default function Settings() {
               }}
             >
               {resetting ? <Spinner size={14} /> : <Trash2 size={14} />} Xác nhận reset
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={!!tabPermissionUser}
+        onClose={() => setTabPermissionUser(null)}
+        title={`🔒 Phân Quyền Truy Cập Tab – ${tabPermissionUser?.fullName ?? ''}`}
+      >
+        <div className="space-y-4">
+          <div className="rounded-xl bg-purple-50 border border-purple-200 p-3 text-xs text-purple-900 space-y-1 dark:bg-purple-950/40 dark:border-purple-800 dark:text-purple-200">
+            <p className="font-bold flex items-center gap-1">
+              👑 Quyền hiển thị & truy cập Menu Sidebar cho tài khoản HR:
+            </p>
+            <p className="text-[11px] leading-relaxed opacity-90">
+              • 5 Tab mặc định HR (Tổng quan, Ứng viên, AI chấm hồ sơ, Nhân viên training, Lịch làm việc) luôn khả dụng.<br/>
+              • Tích chọn bên dưới để mở quyền truy cập các Tab bổ sung cho nhân sự HR này.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 max-h-72 overflow-y-auto p-1">
+            {ALL_PERMISSION_TABS.map((tItem) => {
+              const isDefault = tItem.defaultHR;
+              const isChecked = isDefault || (tabPermissionUser?.allowedTabs ?? []).includes(tItem.path);
+
+              return (
+                <label
+                  key={tItem.path}
+                  className={cn(
+                    'flex items-center gap-2.5 p-2.5 rounded-xl border transition-all select-none text-xs font-semibold',
+                    isDefault
+                      ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed opacity-80 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400'
+                      : isChecked
+                        ? 'bg-brand-50/80 border-brand-300 text-brand-700 shadow-2xs dark:bg-brand-950/40 dark:border-brand-800 dark:text-brand-300 cursor-pointer'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300 cursor-pointer'
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    disabled={isDefault}
+                    checked={isChecked}
+                    onChange={() => togglePermissionTab(tItem.path)}
+                    className="rounded text-brand-600 focus:ring-brand-500 w-4 h-4 cursor-pointer disabled:cursor-not-allowed"
+                  />
+                  <span className="flex-1 leading-snug">{tItem.label}</span>
+                  {isDefault && (
+                    <span className="text-[9px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-bold dark:bg-slate-700 dark:text-slate-300">Mặc định</span>
+                  )}
+                </label>
+              );
+            })}
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <button className="btn-secondary" onClick={() => setTabPermissionUser(null)}>Hủy</button>
+            <button className="btn-primary font-bold" onClick={saveTabPermissions}>
+              Lưu Phân Quyền Tab
             </button>
           </div>
         </div>
