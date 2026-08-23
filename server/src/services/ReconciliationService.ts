@@ -85,38 +85,14 @@ export class ReconciliationService {
 
         if (sheetHash && sheetHash === localHash) continue;
 
-        // Mismatch detected
+        // Mismatch detected -> auto sync 1:1 from Web to Sheet to ensure consistency
         mismatches++;
         const full = await prisma.candidate.findUnique({ where: { id: candidateId } });
-        if (!full) continue;
-        if (!sheetHash) {
-          // web created but sheet row stale -> repair by writing web data
+        if (full) {
           await sheet.syncCandidate(full);
+          await sheet.syncScore(full);
+          await sheet.syncTraining(full);
           repaired++;
-        } else {
-          // both have data but differ -> compare field-by-field
-          const sheetVersion = versionCol !== -1 ? Number(row[versionCol]) || 0 : 0;
-          if (sheetVersion >= full.dataVersion) {
-            // sheet is newer -> likely admin edited sheet; conflict for admin, no silent overwrite
-            conflicts++;
-            await prisma.conflict.create({
-              data: {
-                id: nextId('CFL'),
-                entity: 'candidate',
-                entityId: candidateId,
-                field: 'DATA_MISMATCH',
-                webValue: localHash,
-                sheetValue: sheetHash,
-                webVersion: full.dataVersion,
-                sheetVersion,
-                status: 'OPEN',
-              },
-            }).catch(() => undefined);
-          } else {
-            // web is newer -> repair sheet from web
-            await sheet.syncCandidate(full);
-            repaired++;
-          }
         }
       }
 

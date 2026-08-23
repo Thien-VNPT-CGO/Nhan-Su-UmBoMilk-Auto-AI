@@ -617,7 +617,6 @@ export default function Settings() {
     { key: 'notifications', label: 'Thông báo', icon: Bell },
     { key: 'security', label: 'Bảo mật', icon: KeyRound },
     { key: 'backup', label: 'Sao lưu', icon: DatabaseBackup },
-    { key: 'conflicts', label: 'Xung đột', icon: AlertTriangle },
     { key: 'users', label: 'Tài khoản', icon: UsersIcon },
     ...(user?.role === 'ADMIN'
       ? [{ key: 'system', label: 'Hệ thống', icon: Settings2 }]
@@ -1459,37 +1458,6 @@ export default function Settings() {
                   </tbody>
                 </table>
               </div>
-            </div>
-          )}
-
-          {tab === 'conflicts' && (
-            <div className="space-y-3">
-              {data.conflicts.length === 0 && (
-                <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Không có xung đột nào đang mở.</div>
-              )}
-              {data.conflicts.map((c) => (
-                <div key={c.id} className="rounded-xl bg-slate-50 p-4 dark:bg-slate-800/60">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300">XUNG ĐỘT</Badge>
-                    <span className="font-mono text-xs">{c.entityId}</span>
-                    <span className="text-xs text-slate-400 ml-auto">field: {c.field} · web v{c.webVersion} / sheet v{c.sheetVersion}</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 mb-3">
-                    <div className="rounded-lg bg-white border border-slate-200 p-3 dark:bg-slate-900 dark:border-slate-700">
-                      <div className="label">WEB</div>
-                      <div className="text-xs font-mono text-slate-700 break-words dark:text-slate-300">{c.webValue || '—'}</div>
-                    </div>
-                    <div className="rounded-lg bg-white border border-slate-200 p-3 dark:bg-slate-900 dark:border-slate-700">
-                      <div className="label">GOOGLE SHEET</div>
-                      <div className="text-xs font-mono text-slate-700 break-words dark:text-slate-300">{c.sheetValue || '—'}</div>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button className="btn-success !py-1.5 text-xs" onClick={() => resolveConflict(c.id, 'WEB')}>GIỮ DỮ LIỆU WEB</button>
-                    <button className="btn-primary !py-1.5 text-xs" onClick={() => resolveConflict(c.id, 'SHEET')}>GIỮ DỮ LIỆU SHEET</button>
-                  </div>
-                </div>
-              ))}
             </div>
           )}
 

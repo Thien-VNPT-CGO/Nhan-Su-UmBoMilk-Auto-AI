@@ -305,13 +305,11 @@ export default function AppLayout() {
           >
             <FileSpreadsheet size={13} />
             {t('header.sheet')}
-            {syncConflict
-              ? `● ${t('header.conflict')}`
-              : syncError
-                ? `● ${t('header.syncError')}`
-                : pendingTotal > 0
-                  ? `● ${pendingTotal} ${t('header.pending')}`
-                  : `● ${t('header.synced')}`}
+            {syncError
+              ? `● ${t('header.syncError')}`
+              : pendingTotal > 0
+                ? `● ${pendingTotal} ${t('header.pending')}`
+                : `● ${t('header.synced')}`}
           </button>
 
           {/* Desktop Web Push Notification Manager */}

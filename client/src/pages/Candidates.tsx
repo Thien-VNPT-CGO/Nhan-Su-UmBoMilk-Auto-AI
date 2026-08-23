@@ -363,11 +363,7 @@ export default function Candidates() {
                       )}
                     </td>
                     <td className="table-td">
-                      {r._count && r._count.conflicts > 0 ? (
-                        <Badge className="bg-purple-100 text-purple-700">XUNG ĐỘT</Badge>
-                      ) : (
-                        <Badge className={syncStatusStyle.SYNCED.cls}>{syncStatusStyle.SYNCED.label}</Badge>
-                      )}
+                      <Badge className={syncStatusStyle.SYNCED.cls}>{syncStatusStyle.SYNCED.label}</Badge>
                     </td>
                     <td className="table-td">
                       <div className="flex items-center gap-1.5">

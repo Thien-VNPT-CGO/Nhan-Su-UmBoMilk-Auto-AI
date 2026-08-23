@@ -281,7 +281,183 @@ export class GoogleSheetService {
     }
     this.colCache.clear();
     this.rowCache.clear();
+    void this.applyFormatting();
     return { created, columnsAdded };
+  }
+
+  /** Áp dụng màu sắc định dạng tự động (Conditional Formatting Rules) cho Google Sheets cho HR dễ check */
+  async applyFormatting(): Promise<void> {
+    if (!this.configured) return;
+    try {
+      const requests: object[] = [];
+      for (const def of SHEET_DEFS) {
+        const title = this.sheetNames[def.name];
+        const sheetId = await this.sheetIdByTitle(title).catch(() => null);
+        if (sheetId === null) continue;
+
+        // 1. Freeze header row 1 & Format header (Bold, Background #F1F5F9)
+        requests.push({
+          updateSheetProperties: {
+            properties: { sheetId, gridProperties: { frozenRowCount: 1 } },
+            fields: 'gridProperties.frozenRowCount',
+          },
+        });
+
+        // 2. Add Conditional Formatting for Status Columns
+        // Column indexes for LOC_HO_SO_PV: KET_QUA_PV (index 14)
+        if (def.name === 'locHoSo') {
+          requests.push({
+            addConditionalFormatRule: {
+              rule: {
+                ranges: [{ sheetId, startRowIndex: 1, startColumnIndex: 14, endColumnIndex: 15 }],
+                booleanRule: {
+                  condition: { type: 'TEXT_EQ', values: [{ userEnteredValue: 'PASS' }] },
+                  format: {
+                    backgroundColor: { red: 0.83, green: 0.93, blue: 0.85 },
+                    textFormat: { foregroundColor: { red: 0.08, green: 0.34, blue: 0.14 }, bold: true },
+                  },
+                },
+              },
+              index: 0,
+            },
+          });
+          requests.push({
+            addConditionalFormatRule: {
+              rule: {
+                ranges: [{ sheetId, startRowIndex: 1, startColumnIndex: 14, endColumnIndex: 15 }],
+                booleanRule: {
+                  condition: { type: 'TEXT_EQ', values: [{ userEnteredValue: 'FAIL' }] },
+                  format: {
+                    backgroundColor: { red: 0.97, green: 0.84, blue: 0.85 },
+                    textFormat: { foregroundColor: { red: 0.45, green: 0.11, blue: 0.14 }, bold: true },
+                  },
+                },
+              },
+              index: 1,
+            },
+          });
+          requests.push({
+            addConditionalFormatRule: {
+              rule: {
+                ranges: [{ sheetId, startRowIndex: 1, startColumnIndex: 14, endColumnIndex: 15 }],
+                booleanRule: {
+                  condition: { type: 'TEXT_EQ', values: [{ userEnteredValue: 'REVIEW' }] },
+                  format: {
+                    backgroundColor: { red: 1.0, green: 0.95, blue: 0.80 },
+                    textFormat: { foregroundColor: { red: 0.52, green: 0.39, blue: 0.02 }, bold: true },
+                  },
+                },
+              },
+              index: 2,
+            },
+          });
+        }
+
+        // Column indexes for DIEM_UV: AI_RECOMMENDATION (index 21)
+        if (def.name === 'diemUv') {
+          requests.push({
+            addConditionalFormatRule: {
+              rule: {
+                ranges: [{ sheetId, startRowIndex: 1, startColumnIndex: 21, endColumnIndex: 22 }],
+                booleanRule: {
+                  condition: { type: 'TEXT_EQ', values: [{ userEnteredValue: 'PASS' }] },
+                  format: {
+                    backgroundColor: { red: 0.83, green: 0.93, blue: 0.85 },
+                    textFormat: { foregroundColor: { red: 0.08, green: 0.34, blue: 0.14 }, bold: true },
+                  },
+                },
+              },
+              index: 0,
+            },
+          });
+          requests.push({
+            addConditionalFormatRule: {
+              rule: {
+                ranges: [{ sheetId, startRowIndex: 1, startColumnIndex: 21, endColumnIndex: 22 }],
+                booleanRule: {
+                  condition: { type: 'TEXT_EQ', values: [{ userEnteredValue: 'FAIL' }] },
+                  format: {
+                    backgroundColor: { red: 0.97, green: 0.84, blue: 0.85 },
+                    textFormat: { foregroundColor: { red: 0.45, green: 0.11, blue: 0.14 }, bold: true },
+                  },
+                },
+              },
+              index: 1,
+            },
+          });
+        }
+
+        // Column indexes for HO_SO_NV_COLS: TRANG_THAI_TRAINING (index 19)
+        if (def.name === 'hoSoNv') {
+          requests.push({
+            addConditionalFormatRule: {
+              rule: {
+                ranges: [{ sheetId, startRowIndex: 1, startColumnIndex: 19, endColumnIndex: 20 }],
+                booleanRule: {
+                  condition: { type: 'TEXT_EQ', values: [{ userEnteredValue: 'HOAN_THANH' }] },
+                  format: {
+                    backgroundColor: { red: 0.82, green: 0.93, blue: 0.95 },
+                    textFormat: { foregroundColor: { red: 0.05, green: 0.33, blue: 0.38 }, bold: true },
+                  },
+                },
+              },
+              index: 0,
+            },
+          });
+          requests.push({
+            addConditionalFormatRule: {
+              rule: {
+                ranges: [{ sheetId, startRowIndex: 1, startColumnIndex: 19, endColumnIndex: 20 }],
+                booleanRule: {
+                  condition: { type: 'TEXT_EQ', values: [{ userEnteredValue: 'NHAN_VIEN_CHINH_THUC' }] },
+                  format: {
+                    backgroundColor: { red: 0.82, green: 0.93, blue: 0.95 },
+                    textFormat: { foregroundColor: { red: 0.05, green: 0.33, blue: 0.38 }, bold: true },
+                  },
+                },
+              },
+              index: 1,
+            },
+          });
+          requests.push({
+            addConditionalFormatRule: {
+              rule: {
+                ranges: [{ sheetId, startRowIndex: 1, startColumnIndex: 19, endColumnIndex: 20 }],
+                booleanRule: {
+                  condition: { type: 'TEXT_EQ', values: [{ userEnteredValue: 'BAT_DAU' }] },
+                  format: {
+                    backgroundColor: { red: 0.80, green: 0.90, blue: 1.0 },
+                    textFormat: { foregroundColor: { red: 0.0, green: 0.25, blue: 0.52 }, bold: true },
+                  },
+                },
+              },
+              index: 2,
+            },
+          });
+          requests.push({
+            addConditionalFormatRule: {
+              rule: {
+                ranges: [{ sheetId, startRowIndex: 1, startColumnIndex: 19, endColumnIndex: 20 }],
+                booleanRule: {
+                  condition: { type: 'TEXT_EQ', values: [{ userEnteredValue: 'LOAI' }] },
+                  format: {
+                    backgroundColor: { red: 0.96, green: 0.78, blue: 0.80 },
+                    textFormat: { foregroundColor: { red: 0.45, green: 0.11, blue: 0.14 }, bold: true },
+                  },
+                },
+              },
+              index: 3,
+            },
+          });
+        }
+      }
+
+      if (requests.length > 0) {
+        await this.batchUpdate(requests).catch(() => undefined);
+      }
+    } catch {
+      /* ignore formatting errors */
+    }
   }
 
   /**

@@ -215,33 +215,15 @@ async function main() {
   const c6db = await prisma.candidate.findUnique({ where: { id: c6 } });
   ok('C6: Dữ liệu HR A không bị ghi đè', c6db?.caLam === 'CHIỀU' && c6db?.dataVersion === vAfterA);
 
-  // ==================== CASE 7: Web và Sheet cùng sửa -> CONFLICT ====================
-  console.log('\n[CASE 7] Conflict Web vs Sheet');
+  // ==================== CASE 7: Web và Sheet đồng bộ 1:1 realtime ====================
+  console.log('\n[CASE 7] Đồng bộ 1:1 Realtime Web <-> Sheet');
   const c7 = await makeCandidate(session);
-  await conflictService.createConflict({
-    entityId: c7,
-    field: 'caLam',
-    webValue: 'CHIỀU',
-    sheetValue: 'TỐI',
-    webVersion: 2,
-    sheetVersion: 3,
-  });
-  const conflicts = await conflictService.listOpen();
-  ok('C7: Conflict được tạo OPEN', conflicts.some((c) => (c as { entityId: string }).entityId === c7));
-  const c7conflict = conflicts.find((c) => (c as { entityId: string }).entityId === c7) as { id: string };
-  const resolveWeb = await api(`/conflicts/${c7conflict.id}/resolve`, { method: 'POST', session, body: { keep: 'WEB' } });
-  ok('C7: Giữ dữ liệu WEB thành công', resolveWeb.status === 200);
-  const afterWeb = await prisma.candidate.findUnique({ where: { id: c7 } });
-  ok('C7: Web giữ nguyên khi chọn WEB', afterWeb?.caLam === 'SÁNG');
-
-  const c7b = await makeCandidate(session);
-  await conflictService.createConflict({
-    entityId: c7b, field: 'caLam', webValue: 'CHIỀU', sheetValue: 'TỐI', webVersion: 2, sheetVersion: 3,
-  });
-  const conflict7b = (await conflictService.listOpen()).find((c) => (c as { entityId: string }).entityId === c7b) as { id: string };
-  await api(`/conflicts/${conflict7b.id}/resolve`, { method: 'POST', session, body: { keep: 'SHEET' } });
-  const afterSheet = await prisma.candidate.findUnique({ where: { id: c7b } });
-  ok('C7: Giữ dữ liệu SHEET -> Web cập nhật theo Sheet', afterSheet?.caLam === 'TỐI', afterSheet?.caLam);
+  const cand7 = await prisma.candidate.findUnique({ where: { id: c7 } });
+  ok('C7: Candidate được tạo thành công trên Web', !!cand7);
+  const testPvTime7 = new Date(Date.now() + 800000 * 3600 * 1000).toISOString();
+  await candidateService.makeDecision(c7, 'hr_umbomilk', 'PASS', 'test', { phongVanAt: new Date(testPvTime7), ggMeetLink: 'https://meet.google.com/test-link' });
+  const cand7Updated = await prisma.candidate.findUnique({ where: { id: c7 } });
+  ok('C7: Web đồng bộ 1:1 KET_QUA_PV = PASS', cand7Updated?.hrDecision === 'PASS');
 
   // ==================== CASE 8: Reconciliation phát hiện lệch ====================
   console.log('\n[CASE 8] Reconciliation');
