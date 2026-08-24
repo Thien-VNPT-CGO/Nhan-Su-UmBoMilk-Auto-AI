@@ -43,6 +43,10 @@ router.put('/*', requireWrite(), async (req: AuthedRequest, res, next) => {
     const userRole = req.user?.role || 'HR';
     const chosenShifts = parsed.data.shifts;
 
+    if (userRole === 'VIEWER') {
+      throw ApiError.forbidden('Tài khoản Viewer chỉ có quyền xem dữ liệu, không có quyền thay đổi ca làm.');
+    }
+
     // Kiểm tra quy định phân quyền nếu là HR
     if (userRole !== 'ADMIN') {
       const candidate = await prisma.candidate.findUnique({ where: { id: candidateId } });

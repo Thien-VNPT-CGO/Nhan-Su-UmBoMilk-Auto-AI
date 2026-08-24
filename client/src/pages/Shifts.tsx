@@ -51,6 +51,7 @@ export default function Shifts() {
   const { toast } = useToast();
   const { user } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
+  const isViewer = user?.role === 'VIEWER';
   const [tab, setTab] = useState<'training' | 'employees'>('training');
   const [trainingRows, setTrainingRows] = useState<RowData[]>([]);
   const [employeeRows, setEmployeeRows] = useState<RowData[]>([]);
@@ -123,8 +124,9 @@ export default function Shifts() {
 
   const activeRows = tab === 'training' ? trainingRows : employeeRows;
 
-  // Kiểm tra ca nào HR được phép bấm chọn (HR chỉ được chọn OFF hoặc ca Gốc)
+  // Kiểm tra ca nào user được phép bấm chọn (VIEWER: 0 ca, HR: OFF + ca Gốc, ADMIN: tất cả)
   const isShiftKeyAllowedForUser = (shiftKey: string, caLamStr?: string) => {
+    if (isViewer) return false; // VIEWER không được phép chọn bất kỳ ca nào
     if (isAdmin) return true; // ADMIN được chọn tất cả
     if (shiftKey === 'OFF') return true; // HR được chọn Nghỉ OFF
     const lockedKey = getLockedShiftKey(caLamStr);
@@ -133,6 +135,10 @@ export default function Shifts() {
   };
 
   const toggleSelect = (val: string) => {
+    if (isViewer) {
+      toast('error', '🔒 Tài khoản VIEWER chỉ có quyền xem dữ liệu, không có quyền xếp lịch ca làm!');
+      return;
+    }
     if (edit && !isShiftKeyAllowedForUser(val, edit.caLam)) {
       toast('error', '🔒 Tài khoản HR chỉ được phép cập nhật Nghỉ OFF hoặc ca Gốc!');
       return;
@@ -283,7 +289,9 @@ export default function Shifts() {
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
             {formatDate(dates[0])} &rarr; {formatDate(dates[6])} &middot;{' '}
-            {!isAdmin ? (
+            {isViewer ? (
+              <span className="text-slate-600 font-bold">🔒 Tài khoản VIEWER chỉ có quyền xem dữ liệu lịch làm việc.</span>
+            ) : !isAdmin ? (
               <span className="text-blue-700 font-bold">ℹ️ Tài khoản HR được cập nhật Nghỉ OFF cho ứng viên. Để đổi ca khác cần quyền ADMIN.</span>
             ) : (
               'Click ô ca làm chưa đến giờ để xếp lịch ca.'
@@ -675,7 +683,17 @@ export default function Shifts() {
               )}
             </div>
 
-            {!isAdmin ? (
+            {isViewer ? (
+              <div className="bg-slate-100 border border-slate-300 text-slate-700 p-3.5 rounded-xl text-xs flex items-start gap-2.5 shadow-xs">
+                <ShieldAlert size={20} className="text-slate-500 shrink-0 mt-0.5" />
+                <div>
+                  <h5 className="font-extrabold text-slate-900 text-xs mb-0.5">🔒 QUYỀN HẠN TÀI KHOẢN VIEWER</h5>
+                  <p className="text-[11px] leading-relaxed text-slate-600">
+                    Tài khoản Viewer chỉ có quyền xem dữ liệu lịch làm việc. Không được phép chỉnh sửa hoặc chọn ca.
+                  </p>
+                </div>
+              </div>
+            ) : !isAdmin ? (
               <div className="bg-blue-50 border border-blue-200 text-blue-800 p-3.5 rounded-xl text-xs flex items-start gap-2.5 shadow-sm">
                 <Clock size={20} className="text-blue-600 shrink-0 mt-0.5" />
                 <div>
@@ -701,7 +719,7 @@ export default function Shifts() {
                   const isSel = selected.includes(k);
                   const isLockedShift = getLockedShiftKey(edit.caLam) === k;
                   const isAllowed = isShiftKeyAllowedForUser(k, edit.caLam);
-                  const isBtnDisabled = isEditModalDisabled || !isAllowed;
+                  const isBtnDisabled = isViewer || isEditModalDisabled || !isAllowed;
 
                   return (
                     <button
@@ -747,10 +765,10 @@ export default function Shifts() {
               </button>
               <button
                 onClick={handleSave}
-                disabled={saving || isEditModalDisabled}
+                disabled={saving || isEditModalDisabled || isViewer}
                 className={cn(
                   'px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm',
-                  isEditModalDisabled
+                  isEditModalDisabled || isViewer
                     ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none'
                     : 'bg-brand-600 hover:bg-brand-700 text-white cursor-pointer'
                 )}
