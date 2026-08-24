@@ -197,6 +197,23 @@ export class SyncWorker {
     try {
       const settings = await getSettings();
       const minutes = settings.notifications?.queueAlertMinutes ?? 15;
+
+      // 1. Tự động đánh dấu FAILED các job mắc kẹt > 120 phút để tránh nghẽn vô hạn
+      const timeoutCutoff = new Date(Date.now() - 120 * 60_000);
+      const timedOutJobs = await prisma.syncJob.updateMany({
+        where: {
+          status: { in: ['PENDING', 'RETRY', 'PROCESSING'] },
+          createdAt: { lt: timeoutCutoff },
+        },
+        data: {
+          status: 'FAILED',
+          lastError: 'Tự động hủy job do treo quá 120 phút (quá mốc timeout)',
+        },
+      });
+      if (timedOutJobs.count > 0) {
+        console.log(`[SyncWorker] auto-resolved ${timedOutJobs.count} job treo > 120 phút`);
+      }
+
       const oldest = await prisma.syncJob.findFirst({
         where: { status: { in: ['PENDING', 'RETRY', 'PROCESSING'] } },
         orderBy: { createdAt: 'asc' },

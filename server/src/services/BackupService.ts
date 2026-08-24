@@ -189,13 +189,24 @@ export class BackupService {
     });
     const drive = google.drive({ version: 'v3', auth });
     const fileMeta: { name: string; parents?: string[] } = { name: fileName };
-    if (env.backupDriveFolder) fileMeta.parents = [env.backupDriveFolder];
-    const res = await drive.files.create({
-      requestBody: fileMeta,
-      media: { mimeType: 'application/json', body: content },
-      fields: 'id',
-    });
-    return res.data.id ?? null;
+    const folderId = env.backupDriveFolder || (settings as any).googleSheet?.driveFolderId || (settings as any).googleDriveFolderId;
+    if (folderId) fileMeta.parents = [folderId];
+    try {
+      const res = await drive.files.create({
+        requestBody: fileMeta,
+        media: { mimeType: 'application/json', body: content },
+        fields: 'id',
+      });
+      return res.data.id ?? null;
+    } catch (e) {
+      const errStr = e instanceof Error ? e.message : String(e);
+      if (errStr.includes('storage quota') || errStr.includes('Service Accounts do not have storage quota')) {
+        console.warn('[Backup] upload Drive: Service Account cần Folder ID chia sẻ (Shared Folder) để lưu file backup. Đã lưu backup an toàn trong CSDL.');
+      } else {
+        console.warn('[Backup] upload Drive:', errStr);
+      }
+      return null;
+    }
   }
 }
 
