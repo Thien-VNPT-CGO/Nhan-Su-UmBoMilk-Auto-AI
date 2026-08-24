@@ -7,6 +7,7 @@ import { ApiError } from '../lib/errors';
 import { audit } from '../services/AuditService';
 import { nextId } from '../lib/id';
 import { TRAINING_STATUS } from '../lib/constants';
+import { formatDateTime } from '../lib/date';
 
 const router = Router();
 
@@ -146,7 +147,7 @@ router.get('/candidates/:id/attendance-info', async (req, res, next) => {
       throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy thông tin điểm danh của ứng viên.');
     }
 
-    const { vnNow, year, month, day } = getVietnamNowParts();
+    const { vnNow, year, month, day, dateStr } = getVietnamNowParts();
     const normShift = (candidate.caLam || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u066f]/g, '');
 
     let startHour = 7;
@@ -169,10 +170,32 @@ router.get('/candidates/:id/attendance-info', async (req, res, next) => {
     const shiftStartTime = new Date(year, month, day, startHour, startMin, 0);
     const allowedEarlyTime = new Date(shiftStartTime.getTime() - 30 * 60 * 1000);
 
+    const shiftEndTime = new Date(year, month, day, endHour, endMin, 0);
+    const allowedCheckoutTime = new Date(shiftEndTime.getTime() - 30 * 60 * 1000);
+
     const isTooEarly = vnNow < allowedEarlyTime;
     const earlyMinutes = isTooEarly ? Math.ceil((allowedEarlyTime.getTime() - vnNow.getTime()) / (60 * 1000)) : 0;
     const allowedTimeStr = `${String(allowedEarlyTime.getHours()).padStart(2, '0')}:${String(allowedEarlyTime.getMinutes()).padStart(2, '0')}`;
     const shiftTimeRangeStr = `${String(startHour).padStart(2, '0')}:00 - ${String(endHour).padStart(2, '0')}:00`;
+
+    // Kiểm tra lịch sử sự kiện điểm danh hôm nay
+    const todayEvents = await prisma.attendanceEvent.findMany({
+      where: {
+        candidateId: candidate.id,
+        date: dateStr,
+        valid: true,
+      },
+    });
+
+    const checkinEvent = todayEvents.find(
+      (e) => !e.reason?.includes('CHECK_OUT') && !e.reason?.includes('RA_SOM')
+    );
+    const checkoutEvent = todayEvents.find(
+      (e) => e.reason?.includes('CHECK_OUT') || e.reason?.includes('RA_SOM')
+    );
+
+    const hasCheckedInToday = !!checkinEvent;
+    const hasCheckedOutToday = !!checkoutEvent;
 
     res.json({
       success: true,
@@ -182,6 +205,13 @@ router.get('/candidates/:id/attendance-info', async (req, res, next) => {
         earlyMinutes,
         allowedTimeStr,
         shiftTimeRangeStr,
+        hasCheckedInToday,
+        hasCheckedOutToday,
+        checkinTimeStr: checkinEvent ? formatDateTime(checkinEvent.createdAt) : null,
+        checkoutTimeStr: checkoutEvent ? formatDateTime(checkoutEvent.createdAt) : null,
+        isCheckoutTooEarly: vnNow < allowedCheckoutTime,
+        allowedCheckoutTimeStr: `${String(allowedCheckoutTime.getHours()).padStart(2, '0')}:${String(allowedCheckoutTime.getMinutes()).padStart(2, '0')}`,
+        shiftEndTimeStr: `${String(endHour).padStart(2, '0')}:00`,
       },
     });
   } catch (e) {
@@ -211,7 +241,31 @@ router.post('/candidates/:id/attendance-checkin', async (req, res, next) => {
     const { image, type } = parsed.data;
     const { vnNow, year, month, day, dateStr } = getVietnamNowParts();
 
-    // 1. Phân loại tên Chi nhánh & Ca làm việc cho cấu trúc Folder Google Drive
+    // Lấy sự kiện điểm danh hôm nay để khóa trùng lặp
+    const todayEvents = await prisma.attendanceEvent.findMany({
+      where: {
+        candidateId: candidate.id,
+        date: dateStr,
+        valid: true,
+      },
+    });
+
+    const hasCheckedInToday = todayEvents.some(
+      (e) => !e.reason?.includes('CHECK_OUT') && !e.reason?.includes('RA_SOM')
+    );
+    const hasCheckedOutToday = todayEvents.some(
+      (e) => e.reason?.includes('CHECK_OUT') || e.reason?.includes('RA_SOM')
+    );
+
+    if (type === 'CHECK_IN' && hasCheckedInToday) {
+      throw ApiError.badRequest('ALREADY_CHECKED_IN', 'Bạn đã hoàn tất điểm danh vào ca cho hôm nay rồi!');
+    }
+
+    if (type === 'CHECK_OUT' && hasCheckedOutToday) {
+      throw ApiError.badRequest('ALREADY_CHECKED_OUT', 'Bạn đã hoàn tất xác nhận ra ca cho hôm nay rồi!');
+    }
+
+    // 1. Phân loại tên Chi nhánh & Ca làm việc
     const typeFolder = candidate.trangThaiTraining === 'NHAN_VIEN_CHINH_THUC' ? 'NHAN_VIEN_CHINH_THUC' : 'NHAN_VIEN_TRAINING';
     const rawBranch = candidate.chiNhanh || 'CN1: 130 Vạn Kiếp, Phường 3, Quận Bình Thạnh';
     const cleanBranch = rawBranch.replace(/[\\/:*?"<>|]/g, '_').trim();
@@ -240,7 +294,7 @@ router.post('/candidates/:id/attendance-checkin', async (req, res, next) => {
     const shiftStartTime = new Date(year, month, day, startHour, startMin, 0);
     const shiftEndTime = new Date(year, month, day, endHour, endMin, 0);
 
-    // 2. KHI VÀO CA (CHECK-IN): RÀNG BUỘC KHUNG GIỜ
+    // 2. KHI VÀO CA (CHECK-IN): RÀNG BUỘC KHUNG GIỜ MỞ ĐIỂM DANH (TRƯỚC CA 30 PHÚT)
     if (type === 'CHECK_IN') {
       const allowedEarlyTime = new Date(shiftStartTime.getTime() - 30 * 60 * 1000);
       if (vnNow < allowedEarlyTime) {
@@ -253,10 +307,23 @@ router.post('/candidates/:id/attendance-checkin', async (req, res, next) => {
       }
     }
 
+    // 3. KHI RA CA (CHECK-OUT): RÀNG BUỘC KHUNG GIỜ MỞ CHECK-OUT (TRƯỚC HẾT CA 30 PHÚT)
+    if (type === 'CHECK_OUT') {
+      const allowedCheckoutTime = new Date(shiftEndTime.getTime() - 30 * 60 * 1000);
+      if (vnNow < allowedCheckoutTime) {
+        const earlyMins = Math.ceil((allowedCheckoutTime.getTime() - vnNow.getTime()) / (60 * 1000));
+        const allowedCheckoutStr = `${String(allowedCheckoutTime.getHours()).padStart(2, '0')}:${String(allowedCheckoutTime.getMinutes()).padStart(2, '0')}`;
+        throw ApiError.badRequest(
+          'CHECKOUT_TOO_EARLY',
+          `Chưa đến khung giờ Check-out! Bạn đang mở quá sớm ${earlyMins} phút. Khung giờ cho phép Check-out ca làm này mở từ ${allowedCheckoutStr} trở đi (trước giờ hết ca 30 phút).`
+        );
+      }
+    }
+
     const cleanCandidateName = `${candidate.tenUv} - ${candidate.sdtZalo.replace(/\D/g, '')}`.replace(/[\\/:*?"<>|]/g, '_');
     const actionFolder = type === 'CHECK_OUT' ? `RaCa_Ngay_${dateStr}` : `VaoCa_Ngay_${dateStr}`;
 
-    // 3. Thư mục Google Drive backup
+    // 4. Thư mục Google Drive backup
     const driveBackupDir = path.join(
       process.cwd(),
       'uploads',
@@ -272,13 +339,13 @@ router.post('/candidates/:id/attendance-checkin', async (req, res, next) => {
       fs.mkdirSync(driveBackupDir, { recursive: true });
     }
 
-    // 4. Lưu file ảnh chụp cửa hàng Anh_chup_cua_hang.jpg
+    // 5. Lưu file ảnh chụp cửa hàng Anh_chup_cua_hang.jpg
     const imageFileName = `Anh_chup_cua_hang.jpg`;
     const imageFilePath = path.join(driveBackupDir, imageFileName);
     const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
     fs.writeFileSync(imageFilePath, base64Data, { encoding: 'base64' });
 
-    // 5. Tạo file văn bản Diem_danh.txt
+    // 6. Tạo file văn bản Diem_danh.txt
     const txtContent = `${type === 'CHECK_OUT' ? 'XÁC NHẬN RA CA UBM' : 'ĐIỂM DANH UBM'}
 ====================================
 Họ tên: ${candidate.tenUv}
@@ -293,7 +360,7 @@ Mốc thời gian: ${vnNow.toLocaleString('vi-VN')}
     const txtFilePath = path.join(driveBackupDir, 'Diem_danh.txt');
     fs.writeFileSync(txtFilePath, txtContent, 'utf8');
 
-    // 6. Tính toán Vi phạm & Tiền phạt theo QUY CHẾ LÀM VIỆC (25.500đ/1h)
+    // 7. Tính toán Vi phạm & Tiền phạt theo QUY CHẾ LÀM VIỆC (25.500đ/1h)
     let isLate = false;
     let isEarlyLeave = false;
     let lateMinutes = 0;
@@ -328,15 +395,18 @@ Mốc thời gian: ${vnNow.toLocaleString('vi-VN')}
         }
       }
     } else if (type === 'CHECK_OUT') {
-      // RA CA SỚM: Phạt 50.000 đ / lần nếu ra sớm trước ca > 5 phút
-      const allowedCheckOutTime = new Date(shiftEndTime.getTime() - 5 * 60 * 1000);
-      if (vnNow < allowedCheckOutTime) {
+      // RÀNG BUỘC REALTIME CHECK-OUT:
+      // - Nếu ra ca trước giờ kết thúc ca (vnNow < shiftEndTime): PHẠT 50.000đ / lần (RA SOM)
+      // - Nếu ra ca đúng giờ trở đi (vnNow >= shiftEndTime): KHÔNG BỊ PHẠT (Phạt 0đ)
+      if (vnNow < shiftEndTime) {
         isEarlyLeave = true;
         earlyLeaveMinutes = Math.ceil((shiftEndTime.getTime() - vnNow.getTime()) / (60 * 1000));
-        fineAmount = 50000;
+        fineAmount = 50000; // Phạt 50.000đ / lần theo quy chế RA SOM
         errCode = `RA_SOM_50K_${earlyLeaveMinutes}M`;
         fineLabel = `RA CA SỚM ${earlyLeaveMinutes} PHÚT (PHẠT 50.000Đ/LẦN)`;
       } else {
+        isEarlyLeave = false;
+        fineAmount = 0; // Ra ca đúng giờ hoặc sau ca -> 0đ phạt
         errCode = 'CHECK_OUT_ON_TIME';
         fineLabel = 'RA CA ĐÚNG GIỜ';
       }
@@ -358,7 +428,7 @@ Mốc thời gian: ${vnNow.toLocaleString('vi-VN')}
       },
     });
 
-    // 7. Cập nhật số ngày đào tạo (+1 khi Check-in) & trạng thái ĐANG TRAINING
+    // 8. Cập nhật số ngày đào tạo (+1 khi Check-in) & trạng thái ĐANG TRAINING
     let newDaysDone = candidate.soNgayDaTraining;
     if (type === 'CHECK_IN') {
       newDaysDone = Math.min(7, candidate.soNgayDaTraining + 1);

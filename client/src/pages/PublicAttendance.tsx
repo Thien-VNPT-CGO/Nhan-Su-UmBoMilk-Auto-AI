@@ -12,6 +12,7 @@ import {
   User,
   LogIn,
   LogOut,
+  Clock,
 } from 'lucide-react';
 import { api, ApiError } from '../api/client';
 import { Spinner } from '../components/ui';
@@ -28,6 +29,13 @@ interface CandidateAttendanceInfo {
   earlyMinutes?: number;
   allowedTimeStr?: string;
   shiftTimeRangeStr?: string;
+  hasCheckedInToday?: boolean;
+  hasCheckedOutToday?: boolean;
+  checkinTimeStr?: string | null;
+  checkoutTimeStr?: string | null;
+  isCheckoutTooEarly?: boolean;
+  allowedCheckoutTimeStr?: string;
+  shiftEndTimeStr?: string;
 }
 
 export default function PublicAttendance() {
@@ -43,7 +51,7 @@ export default function PublicAttendance() {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => {
+  const fetchAttendanceInfo = () => {
     if (!id) return;
     setLoading(true);
     api
@@ -51,11 +59,19 @@ export default function PublicAttendance() {
       .then((data) => {
         setCandidate(data);
         setLoading(false);
+        // Tự động chuyển tab sang CHECK_OUT nếu đã điểm danh vào ca hôm nay
+        if (data.hasCheckedInToday && !data.hasCheckedOutToday) {
+          setAttendanceType('CHECK_OUT');
+        }
       })
       .catch((e) => {
         setError(e instanceof ApiError ? e.message : 'Không tìm thấy thông tin ứng viên.');
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    fetchAttendanceInfo();
   }, [id]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -120,8 +136,20 @@ export default function PublicAttendance() {
 
   const handleCheckinSubmit = async () => {
     if (!id || !imageSrc) return;
+    if (attendanceType === 'CHECK_IN' && candidate?.hasCheckedInToday) {
+      alert('Bạn đã điểm danh vào ca hôm nay rồi!');
+      return;
+    }
+    if (attendanceType === 'CHECK_OUT' && candidate?.hasCheckedOutToday) {
+      alert('Bạn đã xác nhận ra ca hôm nay rồi!');
+      return;
+    }
     if (attendanceType === 'CHECK_IN' && candidate?.isTooEarly) {
       alert(`Chưa đến khung giờ điểm danh! Khung giờ cho phép mở điểm danh bắt đầu từ ${candidate.allowedTimeStr} (trước ca 30 phút).`);
+      return;
+    }
+    if (attendanceType === 'CHECK_OUT' && candidate?.isCheckoutTooEarly) {
+      alert(`Chưa đến khung giờ Check-out! Khung giờ cho phép Check-out ca này mở từ ${candidate.allowedCheckoutTimeStr} trở đi (trước giờ hết ca 30 phút).`);
       return;
     }
 
@@ -145,6 +173,8 @@ export default function PublicAttendance() {
       setSubmitResult(data);
       setSubmitSuccess(true);
       setIsSubmitting(false);
+      // Tải lại thông tin trạng thái sau khi điểm danh
+      fetchAttendanceInfo();
     } catch (e) {
       alert(e instanceof ApiError ? e.message : 'Điểm danh thất bại, vui lòng thử lại.');
       setIsSubmitting(false);
@@ -307,21 +337,68 @@ export default function PublicAttendance() {
           </div>
         </div>
 
-        {/* TOO EARLY WARNING ALERT BOX FOR CHECK-IN */}
-        {attendanceType === 'CHECK_IN' && candidate?.isTooEarly && (
-          <div className="bg-amber-950/90 border-2 border-amber-500/80 p-4 sm:p-5 rounded-3xl text-center space-y-2 shadow-2xl backdrop-blur-xl animate-pulse">
-            <div className="w-12 h-12 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto text-amber-400">
-              <AlertCircle size={28} />
+        {/* CẢNH BÁO / THÔNG BÁO CHO TAB VÀO CA (CHECK-IN) */}
+        {attendanceType === 'CHECK_IN' && (
+          candidate.hasCheckedInToday ? (
+            <div className="bg-emerald-950/80 border border-emerald-500/60 p-4 rounded-2xl text-center space-y-1 shadow-lg backdrop-blur-xl">
+              <div className="flex items-center justify-center gap-2 text-emerald-300 font-black text-sm">
+                <CheckCircle2 size={18} />
+                <span>BẠN ĐÃ ĐIỂM DANH VÀO CA HÔM NAY</span>
+              </div>
+              {candidate.checkinTimeStr && (
+                <p className="text-[11px] text-emerald-200/90">
+                  Mốc thời gian ghi nhận: <strong className="font-mono text-white">{candidate.checkinTimeStr}</strong>
+                </p>
+              )}
             </div>
-            <h3 className="text-base font-black text-amber-300">⚠️ CHƯA ĐẾN KHUNG GIỜ ĐIỂM DANH!</h3>
-            <p className="text-xs text-amber-100 leading-relaxed">
-              Bạn đang mở trang quá sớm <strong className="font-mono text-white font-black">{candidate.earlyMinutes} phút</strong>.
-              Khung giờ điểm danh cho ca <strong className="text-amber-300 font-bold">{candidate.caLam || 'SÁNG'}</strong> chỉ mở từ <strong className="font-mono text-white font-extrabold">{candidate.allowedTimeStr}</strong> trở đi (trước ca 30 phút).
-            </p>
-            <p className="text-[11px] text-amber-300/80 italic font-medium">
-              * Nút xác nhận điểm danh đã được khóa cho đến khi vào đúng khung giờ.
-            </p>
-          </div>
+          ) : candidate.isTooEarly ? (
+            <div className="bg-amber-950/90 border-2 border-amber-500/80 p-4 sm:p-5 rounded-3xl text-center space-y-2 shadow-2xl backdrop-blur-xl animate-pulse">
+              <div className="w-12 h-12 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto text-amber-400">
+                <AlertCircle size={28} />
+              </div>
+              <h3 className="text-base font-black text-amber-300">⚠️ CHƯA ĐẾN KHUNG GIỜ ĐIỂM DANH!</h3>
+              <p className="text-xs text-amber-100 leading-relaxed">
+                Bạn đang mở trang quá sớm <strong className="font-mono text-white font-black">{candidate.earlyMinutes} phút</strong>.
+                Khung giờ điểm danh ca <strong className="text-amber-300 font-bold">{candidate.caLam || 'SÁNG'}</strong> chỉ mở từ <strong className="font-mono text-white font-extrabold">{candidate.allowedTimeStr}</strong> trở đi (trước ca 30 phút).
+              </p>
+            </div>
+          ) : null
+        )}
+
+        {/* CẢNH BÁO / THÔNG BÁO CHO TAB RA CA (CHECK-OUT) */}
+        {attendanceType === 'CHECK_OUT' && (
+          candidate.hasCheckedOutToday ? (
+            <div className="bg-emerald-950/80 border border-emerald-500/60 p-4 rounded-2xl text-center space-y-1 shadow-lg backdrop-blur-xl">
+              <div className="flex items-center justify-center gap-2 text-emerald-300 font-black text-sm">
+                <CheckCircle2 size={18} />
+                <span>BẠN ĐÃ XÁC NHẬN RA CA HÔM NAY</span>
+              </div>
+              {candidate.checkoutTimeStr && (
+                <p className="text-[11px] text-emerald-200/90">
+                  Mốc thời gian ra ca: <strong className="font-mono text-white">{candidate.checkoutTimeStr}</strong>
+                </p>
+              )}
+            </div>
+          ) : candidate.isCheckoutTooEarly ? (
+            <div className="bg-amber-950/90 border-2 border-amber-500/80 p-4 sm:p-5 rounded-3xl text-center space-y-2 shadow-2xl backdrop-blur-xl animate-pulse">
+              <div className="w-12 h-12 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto text-amber-400">
+                <Clock size={28} />
+              </div>
+              <h3 className="text-base font-black text-amber-300">⏳ CHƯA ĐẾN KHUNG GIỜ CHECK-OUT!</h3>
+              <p className="text-xs text-amber-100 leading-relaxed">
+                Khung giờ cho phép Check-out ca làm này bắt đầu từ <strong className="font-mono text-white font-extrabold">{candidate.allowedCheckoutTimeStr}</strong> trở đi (trước giờ hết ca 30 phút).
+              </p>
+            </div>
+          ) : (
+            <div className="bg-blue-950/80 border border-blue-500/60 p-3.5 rounded-2xl text-center space-y-1 shadow-lg backdrop-blur-xl">
+              <p className="text-xs font-bold text-blue-200">
+                ⏰ Khung giờ Check-out đã mở! (Giờ hết ca: <span className="font-mono text-white font-black">{candidate.shiftEndTimeStr}</span>)
+              </p>
+              <p className="text-[10px] text-amber-300 font-medium">
+                * Ra ca trước {candidate.shiftEndTimeStr} tính là Ra Sớm (phạt 50k). Ra ca từ {candidate.shiftEndTimeStr} trở đi KHÔNG bị phạt.
+              </p>
+            </div>
+          )
         )}
 
         {/* Result Cards OR Upload Form */}
@@ -336,7 +413,7 @@ export default function PublicAttendance() {
               <div>
                 <h2 className="text-xl font-black text-rose-300">⚠️ RA CA SỚM – PHẠT 50.000Đ/LẦN</h2>
                 <p className="text-xs text-rose-200/90 mt-1">
-                  Bạn đã check-out ra ca sớm <strong className="font-mono text-white font-extrabold">{submitResult.earlyLeaveMinutes} phút</strong> trước khi ca làm kết thúc!
+                  Bạn đã check-out ra ca sớm <strong className="font-mono text-white font-extrabold">{submitResult.earlyLeaveMinutes} phút</strong> trước giờ hết ca ({candidate.shiftEndTimeStr})!
                 </p>
               </div>
 
@@ -517,11 +594,17 @@ export default function PublicAttendance() {
             {/* Submit Button */}
             <button
               type="button"
-              disabled={!imageSrc || isSubmitting || (attendanceType === 'CHECK_IN' && candidate?.isTooEarly)}
+              disabled={
+                !imageSrc ||
+                isSubmitting ||
+                (attendanceType === 'CHECK_IN' && (candidate?.hasCheckedInToday || candidate?.isTooEarly)) ||
+                (attendanceType === 'CHECK_OUT' && (candidate?.hasCheckedOutToday || candidate?.isCheckoutTooEarly))
+              }
               onClick={handleCheckinSubmit}
               className={`w-full py-4 px-4 rounded-full font-black text-sm transition-all shadow-2xl flex items-center justify-center gap-2 cursor-pointer ${
-                attendanceType === 'CHECK_IN' && candidate?.isTooEarly
-                  ? 'bg-amber-950/80 text-amber-400 border border-amber-500/50 cursor-not-allowed shadow-none'
+                (attendanceType === 'CHECK_IN' && (candidate?.hasCheckedInToday || candidate?.isTooEarly)) ||
+                (attendanceType === 'CHECK_OUT' && (candidate?.hasCheckedOutToday || candidate?.isCheckoutTooEarly))
+                  ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/60 shadow-none'
                   : imageSrc && !isSubmitting
                     ? attendanceType === 'CHECK_OUT'
                       ? 'bg-gradient-to-r from-rose-600 via-pink-600 to-purple-600 hover:from-rose-500 hover:to-pink-500 text-white shadow-rose-600/40 animate-pulse active:scale-[0.98]'
@@ -529,10 +612,25 @@ export default function PublicAttendance() {
                     : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/60'
               }`}
             >
-              {attendanceType === 'CHECK_IN' && candidate?.isTooEarly ? (
+              {attendanceType === 'CHECK_IN' && candidate?.hasCheckedInToday ? (
+                <>
+                  <CheckCircle2 size={18} className="text-emerald-400" />
+                  <span>✓ ĐÃ ĐIỂM DANH VÀO CA HÔM NAY</span>
+                </>
+              ) : attendanceType === 'CHECK_IN' && candidate?.isTooEarly ? (
                 <>
                   <AlertCircle size={18} />
                   <span>⏳ CHƯA ĐẾN GIỜ (MỞ TỪ {candidate.allowedTimeStr})</span>
+                </>
+              ) : attendanceType === 'CHECK_OUT' && candidate?.hasCheckedOutToday ? (
+                <>
+                  <CheckCircle2 size={18} className="text-emerald-400" />
+                  <span>✓ ĐÃ XÁC NHẬN RA CA HÔM NAY</span>
+                </>
+              ) : attendanceType === 'CHECK_OUT' && candidate?.isCheckoutTooEarly ? (
+                <>
+                  <Clock size={18} />
+                  <span>⏳ CHƯA ĐẾN GIỜ CHECK-OUT (MỞ TỪ {candidate.allowedCheckoutTimeStr})</span>
                 </>
               ) : isSubmitting ? (
                 <>
