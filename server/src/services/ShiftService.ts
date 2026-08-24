@@ -64,6 +64,12 @@ export class ShiftService {
       const candidateShifts = byCandidateShifts.get(c.id);
       const candidateAttendance = byCandidateAttendance.get(c.id);
 
+      // Xác định giờ bắt đầu ca làm đăng ký của ứng viên (7h / 12h / 18h)
+      const normCa = (c.caLam || '').toLowerCase();
+      let startH = 7;
+      if (normCa.includes('chieu') || normCa.includes('12h')) startH = 12;
+      else if (normCa.includes('toi') || normCa.includes('18h')) startH = 18;
+
       candidateShifts?.forEach((s) => {
         const att = candidateAttendance?.get(s.date);
         let status: 'ON_TIME' | 'LATE_5P' | 'LATE_30P' | 'LATE_60P' | 'ABSENT' | null = null;
@@ -78,11 +84,6 @@ export class ShiftService {
           // Tính số phút đi trễ từ mốc điểm danh
           if (att.checkinAt) {
             const attDate = new Date(att.checkinAt);
-            let startH = 7;
-            const norm = (c.caLam || '').toLowerCase();
-            if (norm.includes('chieu') || norm.includes('12h')) startH = 12;
-            else if (norm.includes('toi') || norm.includes('18h')) startH = 18;
-
             const shiftStart = new Date(attDate);
             shiftStart.setHours(startH, 0, 0, 0);
 
@@ -115,7 +116,7 @@ export class ShiftService {
           lateMinutes: lateMins,
           fineAmount: fine,
           reason: att?.reason ?? null,
-          isLocked: !!att, // Ô đã điểm danh -> Khóa không cho HR sửa ca
+          isLocked: !!att, // Ô đã điểm danh -> Khóa tuyệt đối
         };
       });
 
@@ -145,12 +146,25 @@ export class ShiftService {
     const candidate = await prisma.candidate.findUnique({ where: { id: input.candidateId } });
     if (!candidate) throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy ứng viên.');
 
+    const todayStr = dateKey(new Date());
+    const vnNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
+    const currentVnHour = vnNow.getHours();
+
+    const normCa = (candidate.caLam || '').toLowerCase();
+    let startH = 7;
+    if (normCa.includes('chieu') || normCa.includes('12h')) startH = 12;
+    else if (normCa.includes('toi') || normCa.includes('18h')) startH = 18;
+
     // RÀNG BUỘC: Không cho phép đổi ca khi đã điểm danh
     const existingAtt = await prisma.attendanceEvent.findFirst({
       where: { candidateId: input.candidateId, date: input.date, valid: true },
     });
+
     if (existingAtt) {
-      throw ApiError.badRequest('SHIFT_LOCKED', 'Ca làm này đã được AI tự động chấm công. Không thể thay đổi ca.');
+      throw ApiError.badRequest(
+        'SHIFT_LOCKED',
+        'Ca làm việc này đã được AI tự động chấm công. Không thể thay đổi ca làm.'
+      );
     }
 
     const valid = input.shifts.split('|').filter(Boolean);

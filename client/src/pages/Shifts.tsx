@@ -69,6 +69,7 @@ export default function Shifts() {
     lateMinutes: number;
     fineAmount: number;
     reason: string;
+    isOngoingOrPastNoAtt?: boolean;
   } | null>(null);
 
   const [selected, setSelected] = useState<string[]>([]);
@@ -187,6 +188,23 @@ export default function Shifts() {
 
   const isToday = (dStr: string) => dStr === startOfToday();
 
+  // Kiểm tra ca làm việc ở modal xem có bị khóa không
+  const isEditModalDisabled = useMemo(() => {
+    if (!edit) return false;
+    const todayStr = startOfToday();
+    if (edit.date < todayStr) return true;
+    if (edit.date === todayStr) {
+      const normCa = (edit.caLam || '').toLowerCase();
+      let startH = 7;
+      if (normCa.includes('chieu') || normCa.includes('12h')) startH = 12;
+      else if (normCa.includes('toi') || normCa.includes('18h')) startH = 18;
+
+      const currentVnHour = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' })).getHours();
+      if (currentVnHour >= startH) return true;
+    }
+    return false;
+  }, [edit]);
+
   return (
     <div className="space-y-4">
       {/* Header Bar */}
@@ -196,7 +214,7 @@ export default function Shifts() {
             <CalendarDays className="text-brand-600" size={24} /> Lịch làm việc
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            {formatDate(dates[0])} &rarr; {formatDate(dates[6])} &middot; Click ô chưa điểm danh để đổi ca. Ô đã điểm danh được khóa tự động bởi AI.
+            {formatDate(dates[0])} &rarr; {formatDate(dates[6])} &middot; Click ô chưa đến giờ để đổi ca. Ô đã đến giờ/đã chấm công được khóa tự động bởi AI.
           </p>
         </div>
 
@@ -328,7 +346,18 @@ export default function Shifts() {
                         const colors = shifts.map((s) => shiftBadgeColors[s] || 'bg-slate-100 text-slate-600 border-slate-200');
                         const attStatus = cellObj?.attendanceStatus;
                         const checkinTime = cellObj?.checkinTime;
-                        const isAttended = cellObj?.isLocked || !!attStatus;
+
+                        // RÀNG BUỘC KHOÁ REALTIME DƯỚI CLIENT:
+                        const todayStr = startOfToday();
+                        const normCa = (r.caLam || '').toLowerCase();
+                        let startH = 7;
+                        if (normCa.includes('chieu') || normCa.includes('12h')) startH = 12;
+                        else if (normCa.includes('toi') || normCa.includes('18h')) startH = 18;
+
+                        const currentVnHour = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' })).getHours();
+                        const isPastOrOngoing = d < todayStr || (d === todayStr && currentVnHour >= startH);
+
+                        const isAttendedOrLocked = cellObj?.isLocked || !!attStatus || isPastOrOngoing;
 
                         let attBadge = null;
                         if (attStatus === 'ON_TIME') {
@@ -367,19 +396,20 @@ export default function Shifts() {
                           <td key={d} className="border-r border-slate-100 p-1 text-center">
                             <button
                               onClick={() => {
-                                if (isAttended) {
-                                  // NÚT KHÓA: Xem chi tiết chấm công AI, không cho HR sửa
+                                if (isAttendedOrLocked) {
+                                  // KHOÁ KHÔNG CHO HR SỬA CA KHI ĐÃ ĐẾN/QUA GIỜ CA HOẶC ĐÃ CHẤM CÔNG
                                   setViewAttDetail({
                                     candidateId: r.candidateId,
                                     tenUv: r.tenUv,
                                     date: d,
                                     chiNhanh: r.chiNhanh,
                                     caLam: r.caLam,
-                                    attendanceStatus: attStatus || 'ON_TIME',
-                                    checkinTime: checkinTime || 'N/A',
+                                    attendanceStatus: attStatus || (isPastOrOngoing && !attStatus ? 'ABSENT' : 'ON_TIME'),
+                                    checkinTime: checkinTime || 'Chưa ghi nhận',
                                     lateMinutes: cellObj?.lateMinutes || 0,
                                     fineAmount: cellObj?.fineAmount || 0,
                                     reason: cellObj?.reason || '',
+                                    isOngoingOrPastNoAtt: !attStatus && isPastOrOngoing,
                                   });
                                   return;
                                 }
@@ -396,16 +426,16 @@ export default function Shifts() {
                                 attStatus === 'LATE_30P' && '!bg-rose-100 border border-rose-300',
                                 attStatus === 'LATE_60P' && '!bg-purple-100 border border-purple-300',
                                 attStatus === 'ABSENT' && '!bg-slate-200/80 border border-slate-300',
-                                isAttended && 'cursor-default'
+                                isAttendedOrLocked && 'cursor-default opacity-90'
                               )}
                               title={
-                                isAttended
-                                  ? `${r.tenUv} – ${d}\n🔒 CA NÀY ĐÃ CHẤM CÔNG AI (Lịch đã bị khóa)\nĐiểm danh lúc: ${checkinTime || ''}`
-                                  : `${r.tenUv} – ${d}: ${shifts.join(' + ') || 'Chưa xếp'}`
+                                isAttendedOrLocked
+                                  ? `${r.tenUv} – ${formatDate(d)}\n🔒 CA LÀM NÀY ĐÃ ĐẾN/QUA GIỜ HOẶC ĐÃ ĐƯỢC AI CHẤM CÔNG (Lịch đã bị khóa)\nCheck-in: ${checkinTime || 'Chưa nhận'}`
+                                  : `${r.tenUv} – ${formatDate(d)}: ${shifts.join(' + ') || 'Chưa xếp'}`
                               }
                             >
-                              {/* Biểu tượng khóa cho ca đã chấm công */}
-                              {isAttended && (
+                              {/* Biểu tượng khóa cho ca đã bị khóa */}
+                              {isAttendedOrLocked && (
                                 <span className="absolute top-1 right-1 text-slate-500 opacity-60 group-hover:opacity-100 transition-opacity">
                                   <Lock size={10} />
                                 </span>
@@ -459,7 +489,7 @@ export default function Shifts() {
                 Chi nhánh: <span className="font-semibold text-slate-100">{viewAttDetail.chiNhanh || 'Chưa chốt'}</span>
               </p>
               <p className="text-xs text-slate-300">
-                Ca làm đăng ký: <span className="font-bold text-amber-300">{viewAttDetail.caLam || 'Ca SÁNG'}</span>
+                Ca làm đăng ký cố định: <span className="font-bold text-amber-300">{viewAttDetail.caLam || 'Ca SÁNG'}</span>
               </p>
             </div>
 
@@ -470,18 +500,23 @@ export default function Shifts() {
               </h4>
 
               <div className="flex items-center justify-between text-xs border-b border-slate-200 pb-2">
-                <span className="text-slate-600">Ngày điểm danh:</span>
+                <span className="text-slate-600">Ngày làm việc:</span>
                 <span className="font-bold font-mono text-slate-800">{formatDate(viewAttDetail.date)}</span>
               </div>
 
               <div className="flex items-center justify-between text-xs border-b border-slate-200 pb-2">
-                <span className="text-slate-600">Thời gian chụp ảnh ghi nhận:</span>
+                <span className="text-slate-600">Thời gian ghi nhận điểm danh:</span>
                 <span className="font-bold font-mono text-brand-700">{viewAttDetail.checkinTime}</span>
               </div>
 
               {/* Trạng thái vi phạm & Tiền phạt */}
               <div className="p-3 rounded-xl border space-y-1">
-                {viewAttDetail.attendanceStatus === 'ON_TIME' ? (
+                {viewAttDetail.isOngoingOrPastNoAtt ? (
+                  <div className="flex items-center gap-2 text-rose-700 font-bold text-xs">
+                    <XCircle size={16} />
+                    <span>⚠️ QUÁ GIỜ ĐẦU CA NHƯNG CHƯA ĐIỂM DANH (Hệ thống tính Vắng/Trễ)</span>
+                  </div>
+                ) : viewAttDetail.attendanceStatus === 'ON_TIME' ? (
                   <div className="flex items-center gap-2 text-emerald-700 font-bold text-xs">
                     <CheckCircle2 size={16} />
                     <span>✅ VÀO CA ĐÚNG GIỜ (Mức phạt: 0đ)</span>
@@ -519,7 +554,7 @@ export default function Shifts() {
                 ) : (
                   <div className="flex items-center gap-2 text-slate-700 font-bold text-xs">
                     <XCircle size={16} />
-                    <span>❌ VẮNG MẶT</span>
+                    <span>❌ VẮNG MẶT (Không điểm danh)</span>
                   </div>
                 )}
               </div>
@@ -529,7 +564,7 @@ export default function Shifts() {
             <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-xl text-xs flex items-start gap-2">
               <Lock size={16} className="text-amber-600 shrink-0 mt-0.5" />
               <div>
-                <strong>Lưu ý dành cho HR:</strong> Ca làm việc ngày <span className="font-bold">{formatDate(viewAttDetail.date)}</span> đã được hệ thống AI tự động chấm công. Theo quy chế bảo mật chấm công, tài khoản HR <strong>không thể chỉnh sửa ca</strong> của ngày đã phát sinh dữ liệu điểm danh.
+                <strong>Lưu ý dành cho HR:</strong> Ca làm việc ngày <span className="font-bold">{formatDate(viewAttDetail.date)}</span> đã đến/qua giờ bắt đầu ca làm hoặc đã được hệ thống AI tự động chấm công. Theo quy chế bảo mật chấm công, tài khoản HR <strong>không thể chỉnh sửa ca</strong> của ngày này.
               </div>
             </div>
 
@@ -546,7 +581,7 @@ export default function Shifts() {
         </Modal>
       )}
 
-      {/* Modal Chỉnh Sửa Lịch Đổi Ca (Chỉ mở cho các ô chưa điểm danh) */}
+      {/* Modal Chỉnh Sửa Lịch Đổi Ca (Chỉ mở cho các ô tương lai CHƯA ĐẾN GIỜ CA) */}
       {edit && (
         <Modal open={!!edit} onClose={() => setEdit(null)} title={`Xếp lịch ngày ${formatDate(edit.date)}`}>
           <div className="space-y-4">
@@ -555,13 +590,22 @@ export default function Shifts() {
               <div className="text-xs text-slate-500">Mã: {edit.candidateId}</div>
               {edit.caLam && (
                 <div className="text-xs text-amber-700 font-semibold mt-1">
-                  Ca đăng ký chính thức: {edit.caLam}
+                  Ca đăng ký chính thức cố định: {edit.caLam}
                 </div>
               )}
             </div>
 
+            {isEditModalDisabled && (
+              <div className="bg-rose-50 border border-rose-200 text-rose-800 p-3 rounded-xl text-xs flex items-start gap-2">
+                <Lock size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                <div>
+                  <strong>CẢNH BÁO KHÓA LỊCH:</strong> Ca làm việc ngày <span className="font-bold">{formatDate(edit.date)}</span> đã đến/qua giờ ca làm ({edit.caLam}). Theo quy chế làm việc, tài khoản HR <strong>không thể thay đổi ca</strong> của ngày hôm nay/quá khứ.
+                </div>
+              </div>
+            )}
+
             <div>
-              <label className="text-xs font-bold text-slate-600 block mb-2">Chọn ca cho ngày này:</label>
+              <label className="text-xs font-bold text-slate-600 block mb-2">Chọn ca làm việc:</label>
               <div className="grid grid-cols-2 gap-2">
                 {SHIFT_KEYS.map((k) => {
                   const isSel = selected.includes(k);
@@ -571,12 +615,16 @@ export default function Shifts() {
                     <button
                       key={k}
                       type="button"
-                      onClick={() => toggleSelect(k)}
+                      disabled={isEditModalDisabled}
+                      onClick={() => !isEditModalDisabled && toggleSelect(k)}
                       className={cn(
-                        'p-3 rounded-xl font-bold text-xs border text-left flex items-center justify-between transition-all cursor-pointer',
-                        isSel
+                        'p-3 rounded-xl font-bold text-xs border text-left flex items-center justify-between transition-all',
+                        isEditModalDisabled ? 'cursor-not-allowed opacity-60 bg-slate-100 border-slate-200 text-slate-400' : 'cursor-pointer',
+                        isSel && !isEditModalDisabled
                           ? 'border-brand-600 bg-brand-50 text-brand-700 ring-2 ring-brand-300'
-                          : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                          : isSel && isEditModalDisabled
+                            ? 'border-pink-400 bg-pink-50 text-pink-700 ring-1 ring-pink-300'
+                            : 'border-slate-200 hover:bg-slate-50 text-slate-700'
                       )}
                     >
                       <span>
@@ -605,8 +653,13 @@ export default function Shifts() {
               </button>
               <button
                 onClick={handleSave}
-                disabled={saving}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-brand-600 hover:bg-brand-700 text-white flex items-center gap-1.5 shadow-sm cursor-pointer"
+                disabled={saving || isEditModalDisabled}
+                className={cn(
+                  'px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm',
+                  isEditModalDisabled
+                    ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                    : 'bg-brand-600 hover:bg-brand-700 text-white cursor-pointer'
+                )}
               >
                 {saving ? <Spinner size={14} /> : 'Lưu thay đổi'}
               </button>
