@@ -446,9 +446,9 @@ export default function PublicAttendance() {
 
               <div>
                 <h2 className="text-xl font-black text-rose-300">
-                  {submitResult.errCode?.includes('VAO_TRE_5P')
+                  {submitResult.lateMinutes >= 5 && submitResult.lateMinutes < 30
                     ? 'ĐIỂM DANH TRỄ 5P – PHẠT 30.000Đ'
-                    : submitResult.errCode?.includes('VAO_TRE_30P')
+                    : submitResult.lateMinutes >= 30 && submitResult.lateMinutes < 60
                       ? 'ĐIỂM DANH TRỄ 30P – PHẠT 50% LƯƠNG CA'
                       : 'ĐIỂM DANH TRỄ ≥ 60P – PHẠT 100% LƯƠNG CA'}
                 </h2>
@@ -459,7 +459,13 @@ export default function PublicAttendance() {
 
               <div className="bg-rose-900/60 p-4 rounded-2xl border border-rose-700/60 text-xs text-rose-100 space-y-2">
                 <p className="font-bold text-rose-200">
-                  ⚠️ Mức phạt theo Quy chế: <span className="text-amber-300 font-extrabold">{submitResult.fineLabel || `${submitResult.fineAmount.toLocaleString('vi-VN')}đ`}</span> đã được tự động ghi nhận vào Web chấm công.
+                  ⚠️ Mức phạt theo Quy chế làm việc:{' '}
+                  <span className="text-amber-300 font-extrabold">
+                    {submitResult.lateMinutes >= 5 && submitResult.lateMinutes < 30
+                      ? 'VÀO TRỄ 5P: PHẠT 30.000Đ'
+                      : submitResult.fineLabel || `${submitResult.fineAmount.toLocaleString('vi-VN')}đ`}
+                  </span>{' '}
+                  đã được hệ thống tự động ghi nhận trực tiếp vào Web chấm công.
                 </p>
                 <p className="text-[11px] text-rose-300 opacity-90 leading-relaxed">
                   Ảnh chụp cửa hàng & xác thực chữ <strong>"ĐIỂM DANH UBM"</strong> đã lưu an toàn vào Google Drive.
