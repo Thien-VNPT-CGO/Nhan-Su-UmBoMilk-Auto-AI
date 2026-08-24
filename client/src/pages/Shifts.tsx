@@ -206,6 +206,10 @@ export default function Shifts() {
   const isToday = (dStr: string) => dStr === startOfToday();
 
   const handleSendAttendanceZaloLink = async (r: RowData) => {
+    if (isViewer) {
+      toast('error', '🔒 Tài khoản VIEWER chỉ có quyền xem dữ liệu, không được phép gửi link Zalo!');
+      return;
+    }
     const origin = window.location.origin;
     const attendanceLink = `${origin}/diemdanh/${encodeURIComponent(r.candidateId)}`;
     const msg = [
@@ -414,9 +418,15 @@ export default function Shifts() {
                         </div>
                         <button
                           type="button"
+                          disabled={isViewer}
                           onClick={() => handleSendAttendanceZaloLink(r)}
-                          className="mt-2 text-[10px] font-bold bg-[#0068ff] hover:bg-[#0052cc] text-white px-2.5 py-1.5 rounded-xl flex items-center gap-1 shadow-2xs transition-transform active:scale-95 cursor-pointer"
-                          title="Sao chép tin nhắn kèm Link điểm danh & Mở Zalo 1-1 với ứng viên"
+                          className={cn(
+                            'mt-2 text-[10px] font-bold px-2.5 py-1.5 rounded-xl flex items-center gap-1 shadow-2xs transition-transform',
+                            isViewer
+                              ? 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed opacity-60'
+                              : 'bg-[#0068ff] hover:bg-[#0052cc] text-white active:scale-95 cursor-pointer'
+                          )}
+                          title={isViewer ? 'Tài khoản Viewer không có quyền gửi Zalo' : 'Sao chép tin nhắn kèm Link điểm danh & Mở Zalo 1-1 với ứng viên'}
                         >
                           <span>💬 Mở App Zalo gửi Link điểm danh</span>
                         </button>
