@@ -8,6 +8,7 @@ import { audit } from '../services/AuditService';
 import { nextId } from '../lib/id';
 import { TRAINING_STATUS } from '../lib/constants';
 import { formatDateTime } from '../lib/date';
+import { googleDriveUploadService } from '../services/GoogleDriveUploadService';
 
 const router = Router();
 
@@ -432,6 +433,17 @@ ${savedLateReason ? `Lý do đi trễ chính đáng: ${savedLateReason}` : ''}
 
     const txtFilePath = path.join(driveBackupDir, 'Diem_danh.txt');
     fs.writeFileSync(txtFilePath, txtContent, 'utf8');
+
+    // Tự động đẩy file ảnh và Diem_danh.txt lên Google Drive (nếu đã cấu hình Folder ID)
+    void googleDriveUploadService.uploadAttendanceFiles({
+      typeFolder,
+      cleanBranch,
+      shiftFolder,
+      cleanCandidateName,
+      actionFolder,
+      imageFilePath,
+      txtFilePath,
+    });
 
     // Ghi nhận sự kiện AttendanceEvent
     await prisma.attendanceEvent.create({

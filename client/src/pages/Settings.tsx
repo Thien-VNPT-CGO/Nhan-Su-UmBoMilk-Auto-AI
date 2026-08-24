@@ -57,6 +57,7 @@ interface SettingsData {
       serviceAccountEmail: string;
       privateKey: string;
       formResponsesId: string;
+      driveFolderId?: string;
       sheets: { locHoSo: string; diemUv: string; hoSoNv: string };
     };
     zalo: { oaId: string; accessToken: string; refreshToken: string; autoReply: boolean };
@@ -697,6 +698,26 @@ export default function Settings() {
               <div>
                 <label className="label">Private Key (-----BEGIN PRIVATE KEY-----...)</label>
                 <textarea className="input min-h-[90px] font-mono text-[11px]" value={s.googleSheet.privateKey} onChange={(e) => patch(['googleSheet', 'privateKey'], e.target.value)} placeholder="-----BEGIN PRIVATE KEY-----&#10;MIIEvQIBADANBgkqh...&#10;-----END PRIVATE KEY-----" />
+              </div>
+              <div className="rounded-xl border border-sky-200 bg-sky-50/50 p-4 space-y-3 dark:bg-slate-800/80 dark:border-sky-900">
+                <div className="flex items-center gap-2 text-sky-900 font-bold text-sm dark:text-sky-300">
+                  <DatabaseBackup size={18} className="text-sky-600" />
+                  <span>Cấu hình Thư mục Google Drive Backup (Ảnh & File Điểm danh)</span>
+                </div>
+                <div>
+                  <label className="label font-bold text-xs">ID Thư mục Google Drive Backup</label>
+                  <input
+                    className="input font-mono text-xs"
+                    value={s.googleSheet.driveFolderId || ''}
+                    onChange={(e) => patch(['googleSheet', 'driveFolderId'], e.target.value)}
+                    placeholder="VD: 1Abc...XYZ (Lấy ID từ URL Google Drive)"
+                  />
+                </div>
+                <div className="text-[11px] text-slate-600 dark:text-slate-400 space-y-1.5 leading-relaxed">
+                  <div>• <b>Vị trí lưu tại máy chủ:</b> <code>uploads/drive_backup/[Loại NV]/[Chi nhánh]/[Ca làm]/[Tên UV]/[Hành động]/</code> (Hệ thống tự động lưu toàn bộ ảnh & file <code>Diem_danh.txt</code> trên máy chủ).</div>
+                  <div>• <b>Đồng bộ Cloud Google Drive:</b> Nếu điền ID thư mục trên, hệ thống sẽ tự động tạo cây thư mục tương ứng và đẩy <code>Anh_chup_cua_hang.jpg</code> & <code>Diem_danh.txt</code> trực tiếp lên Google Drive của bạn.</div>
+                  <div>• <b>Cách lấy Folder ID:</b> Mở thư mục trên Google Drive → Nút <b>Chia sẻ</b> → Thêm <b>{s.googleSheet.serviceAccountEmail || 'Service Account Email'}</b> (Quyền Người chỉnh sửa / Editor) → Copy ID từ thanh địa chỉ trình duyệt (chuỗi ký tự sau <code>/folders/</code>).</div>
+                </div>
               </div>
               <div className="rounded-xl border border-dashed border-brand-200 bg-brand-50/40 p-3.5">
                 <div className="text-xs font-semibold text-brand-700 mb-1">
