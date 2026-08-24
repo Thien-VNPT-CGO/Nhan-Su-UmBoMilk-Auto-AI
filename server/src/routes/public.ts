@@ -10,6 +10,36 @@ import { TRAINING_STATUS } from '../lib/constants';
 
 const router = Router();
 
+// Helper lấy mốc thời gian chuẩn Việt Nam (Asia/Ho_Chi_Minh GMT+7) bất kể server ở múi giờ UTC nào
+function getVietnamNowParts() {
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(now);
+  const getPart = (type: string) => parts.find((p) => p.type === type)?.value || '0';
+
+  const year = parseInt(getPart('year'), 10);
+  const month = parseInt(getPart('month'), 10) - 1;
+  const day = parseInt(getPart('day'), 10);
+  let hour = parseInt(getPart('hour'), 10);
+  if (hour === 24) hour = 0;
+  const minute = parseInt(getPart('minute'), 10);
+  const second = parseInt(getPart('second'), 10);
+
+  const vnNow = new Date(year, month, day, hour, minute, second);
+  const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+  return { vnNow, year, month, day, hour, minute, second, dateStr };
+}
+
 // Endpoint lấy thông tin ứng viên phỏng vấn từ Web công khai
 router.get('/candidates/:id/interview-info', async (req, res, next) => {
   try {
@@ -116,31 +146,31 @@ router.get('/candidates/:id/attendance-info', async (req, res, next) => {
       throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy thông tin điểm danh của ứng viên.');
     }
 
-    const now = new Date();
-    const rawShift = candidate.caLam || 'CA_SANG';
+    const { vnNow, year, month, day } = getVietnamNowParts();
+    const normShift = (candidate.caLam || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u066f]/g, '');
+
     let startHour = 7;
     let startMin = 0;
     let endHour = 12;
     let endMin = 0;
 
-    if (rawShift.toLowerCase().includes('chieu') || rawShift.includes('12h') || rawShift.toLowerCase().includes('trua')) {
+    if (normShift.includes('chieu') || normShift.includes('12h') || normShift.includes('trua') || normShift.includes('ca 2')) {
       startHour = 12;
       startMin = 0;
       endHour = 18;
       endMin = 0;
-    } else if (rawShift.toLowerCase().includes('toi') || rawShift.includes('18h')) {
+    } else if (normShift.includes('toi') || normShift.includes('18h') || normShift.includes('ca 3') || normShift.includes('dem')) {
       startHour = 18;
       startMin = 0;
       endHour = 23;
       endMin = 0;
     }
 
-    const shiftStartTime = new Date(now);
-    shiftStartTime.setHours(startHour, startMin, 0, 0);
+    const shiftStartTime = new Date(year, month, day, startHour, startMin, 0);
     const allowedEarlyTime = new Date(shiftStartTime.getTime() - 30 * 60 * 1000);
 
-    const isTooEarly = now < allowedEarlyTime;
-    const earlyMinutes = isTooEarly ? Math.ceil((allowedEarlyTime.getTime() - now.getTime()) / (60 * 1000)) : 0;
+    const isTooEarly = vnNow < allowedEarlyTime;
+    const earlyMinutes = isTooEarly ? Math.ceil((allowedEarlyTime.getTime() - vnNow.getTime()) / (60 * 1000)) : 0;
     const allowedTimeStr = `${String(allowedEarlyTime.getHours()).padStart(2, '0')}:${String(allowedEarlyTime.getMinutes()).padStart(2, '0')}`;
     const shiftTimeRangeStr = `${String(startHour).padStart(2, '0')}:00 - ${String(endHour).padStart(2, '0')}:00`;
 
@@ -179,28 +209,27 @@ router.post('/candidates/:id/attendance-checkin', async (req, res, next) => {
     }
 
     const { image, type } = parsed.data;
-    const now = new Date();
-    const dateStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
+    const { vnNow, year, month, day, dateStr } = getVietnamNowParts();
 
     // 1. Phân loại tên Chi nhánh & Ca làm việc cho cấu trúc Folder Google Drive
     const typeFolder = candidate.trangThaiTraining === 'NHAN_VIEN_CHINH_THUC' ? 'NHAN_VIEN_CHINH_THUC' : 'NHAN_VIEN_TRAINING';
     const rawBranch = candidate.chiNhanh || 'CN1: 130 Vạn Kiếp, Phường 3, Quận Bình Thạnh';
     const cleanBranch = rawBranch.replace(/[\\/:*?"<>|]/g, '_').trim();
 
-    const rawShift = candidate.caLam || 'CA_SANG';
+    const normShift = (candidate.caLam || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u066f]/g, '');
     let shiftFolder = 'CA_SANG';
     let startHour = 7;
     let startMin = 0;
     let endHour = 12;
     let endMin = 0;
 
-    if (rawShift.toLowerCase().includes('chieu') || rawShift.includes('12h') || rawShift.toLowerCase().includes('trua')) {
+    if (normShift.includes('chieu') || normShift.includes('12h') || normShift.includes('trua') || normShift.includes('ca 2')) {
       shiftFolder = 'CA_CHIEU';
       startHour = 12;
       startMin = 0;
       endHour = 18;
       endMin = 0;
-    } else if (rawShift.toLowerCase().includes('toi') || rawShift.includes('18h')) {
+    } else if (normShift.includes('toi') || normShift.includes('18h') || normShift.includes('ca 3') || normShift.includes('dem')) {
       shiftFolder = 'CA_TOI';
       startHour = 18;
       startMin = 0;
@@ -208,17 +237,14 @@ router.post('/candidates/:id/attendance-checkin', async (req, res, next) => {
       endMin = 0;
     }
 
-    const shiftStartTime = new Date(now);
-    shiftStartTime.setHours(startHour, startMin, 0, 0);
-
-    const shiftEndTime = new Date(now);
-    shiftEndTime.setHours(endHour, endMin, 0, 0);
+    const shiftStartTime = new Date(year, month, day, startHour, startMin, 0);
+    const shiftEndTime = new Date(year, month, day, endHour, endMin, 0);
 
     // 2. KHI VÀO CA (CHECK-IN): RÀNG BUỘC KHUNG GIỜ
     if (type === 'CHECK_IN') {
       const allowedEarlyTime = new Date(shiftStartTime.getTime() - 30 * 60 * 1000);
-      if (now < allowedEarlyTime) {
-        const earlyMins = Math.ceil((allowedEarlyTime.getTime() - now.getTime()) / (60 * 1000));
+      if (vnNow < allowedEarlyTime) {
+        const earlyMins = Math.ceil((allowedEarlyTime.getTime() - vnNow.getTime()) / (60 * 1000));
         const allowedTimeStr = `${String(allowedEarlyTime.getHours()).padStart(2, '0')}:${String(allowedEarlyTime.getMinutes()).padStart(2, '0')}`;
         throw ApiError.badRequest(
           'CHECKIN_TOO_EARLY',
@@ -261,7 +287,7 @@ Mã UV: ${candidate.id}
 Chi nhánh: ${candidate.chiNhanh || 'Chưa chốt'}
 Ca làm: ${candidate.caLam || 'Chưa chốt'}
 Loại: ${type === 'CHECK_OUT' ? 'CHECK-OUT (RA CA)' : 'CHECK-IN (VÀO CA)'}
-Mốc thời gian: ${now.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
+Mốc thời gian: ${vnNow.toLocaleString('vi-VN')}
 ====================================`;
 
     const txtFilePath = path.join(driveBackupDir, 'Diem_danh.txt');
@@ -283,9 +309,9 @@ Mốc thời gian: ${now.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' 
 
     if (type === 'CHECK_IN') {
       const graceEndTime = new Date(shiftStartTime.getTime() + 4 * 60 * 1000 + 59 * 1000); // Trễ dưới 5m -> Đúng giờ
-      if (now > graceEndTime) {
+      if (vnNow > graceEndTime) {
         isLate = true;
-        lateMinutes = Math.max(5, Math.floor((now.getTime() - shiftStartTime.getTime()) / (60 * 1000)));
+        lateMinutes = Math.max(5, Math.floor((vnNow.getTime() - shiftStartTime.getTime()) / (60 * 1000)));
 
         if (lateMinutes < 30) {
           fineAmount = 30000;
@@ -303,11 +329,11 @@ Mốc thời gian: ${now.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' 
       }
     } else if (type === 'CHECK_OUT') {
       // RA CA SỚM: Phạt 50.000 đ / lần nếu ra sớm trước ca > 5 phút
-      const allowedCheckOutTime = new Date(shiftEndTime.getTime() - 5 * 60 * 1000); // Cho phép ra ca trước tối đa 5 phút
-      if (now < allowedCheckOutTime) {
+      const allowedCheckOutTime = new Date(shiftEndTime.getTime() - 5 * 60 * 1000);
+      if (vnNow < allowedCheckOutTime) {
         isEarlyLeave = true;
-        earlyLeaveMinutes = Math.ceil((shiftEndTime.getTime() - now.getTime()) / (60 * 1000));
-        fineAmount = 50000; // Phạt 50.000đ / lần theo quy chế RA SOM
+        earlyLeaveMinutes = Math.ceil((shiftEndTime.getTime() - vnNow.getTime()) / (60 * 1000));
+        fineAmount = 50000;
         errCode = `RA_SOM_50K_${earlyLeaveMinutes}M`;
         fineLabel = `RA CA SỚM ${earlyLeaveMinutes} PHÚT (PHẠT 50.000Đ/LẦN)`;
       } else {
@@ -323,7 +349,7 @@ Mốc thời gian: ${now.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' 
         candidateId: candidate.id,
         date: dateStr,
         shift: shiftFolder,
-        checkinAt: now,
+        checkinAt: vnNow,
         method: 'PUBLIC_WEB',
         valid: true,
         reason: errCode,
