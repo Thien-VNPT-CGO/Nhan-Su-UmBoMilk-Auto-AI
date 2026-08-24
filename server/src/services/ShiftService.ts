@@ -52,7 +52,7 @@ export class ShiftService {
         string,
         {
           shifts: string;
-          attendanceStatus?: 'ON_TIME' | 'LATE' | 'ABSENT' | null;
+          attendanceStatus?: 'ON_TIME' | 'LATE_5P' | 'LATE_30P' | 'LATE_60P' | 'ABSENT' | null;
           checkinTime?: string | null;
         }
       > = {};
@@ -62,13 +62,21 @@ export class ShiftService {
 
       candidateShifts?.forEach((s) => {
         const att = candidateAttendance?.get(s.date);
-        let status: 'ON_TIME' | 'LATE' | 'ABSENT' | null = null;
+        let status: 'ON_TIME' | 'LATE_5P' | 'LATE_30P' | 'LATE_60P' | 'ABSENT' | null = null;
         let checkinTimeStr: string | null = null;
 
         if (att) {
           checkinTimeStr = formatDateTime(att.createdAt);
-          const isLate = !!(att.reason && (att.reason.includes('TRE') || att.reason.includes('TRỄ')));
-          status = isLate ? 'LATE' : 'ON_TIME';
+          const r = (att.reason || '').toUpperCase();
+          if (r.includes('VAO_TRE_60P') || r.includes('60P')) {
+            status = 'LATE_60P';
+          } else if (r.includes('VAO_TRE_30P') || r.includes('30P')) {
+            status = 'LATE_30P';
+          } else if (r.includes('VAO_TRE_5P') || r.includes('TRE_PHAT_50K') || r.includes('5P') || r.includes('TRE') || r.includes('TRỄ')) {
+            status = 'LATE_5P';
+          } else {
+            status = 'ON_TIME';
+          }
         } else if (s.date < todayStr && s.shifts && s.shifts !== 'OFF') {
           status = 'ABSENT';
         }

@@ -52,14 +52,40 @@ officialEmployeesRouter.get('/', async (req: Request, res: Response, next: NextF
     const result = employees.map((c) => {
       const attended = c.attendanceEvents;
       const totalShifts = attended.length;
-      const isEventLate = (a: { reason: string | null }) => !!(a.reason && (a.reason.includes('TRE') || a.reason.includes('TRỄ')));
-      const lateEvents = attended.filter(isEventLate);
-      const totalLate = lateEvents.length;
-      const totalFine = totalLate * 50000;
+
+      let totalFine = 0;
+      let late5pCount = 0;
+      let late30pCount = 0;
+      let late60pCount = 0;
+      let raSomCount = 0;
+
+      attended.forEach((a) => {
+        const r = (a.reason || '').toUpperCase();
+        if (r.includes('RA_SOM') || r.includes('SỚM')) {
+          raSomCount++;
+          totalFine += 50000;
+        } else if (r.includes('VAO_TRE_60P') || r.includes('60P')) {
+          late60pCount++;
+          const shiftWage = a.shift === 'CA_CHIEU' ? 153000 : 127500;
+          totalFine += shiftWage;
+        } else if (r.includes('VAO_TRE_30P') || r.includes('30P')) {
+          late30pCount++;
+          const shiftWage = a.shift === 'CA_CHIEU' ? 153000 : 127500;
+          totalFine += Math.round(shiftWage * 0.5);
+        } else if (r.includes('VAO_TRE_5P') || r.includes('TRE_PHAT_50K') || r.includes('5P') || r.includes('TRE') || r.includes('TRỄ')) {
+          late5pCount++;
+          totalFine += 30000;
+        }
+      });
+
+      const totalLate = late5pCount + late30pCount + late60pCount;
 
       const latestEvent = attended[0];
+      const isLatestLate = latestEvent && !!(latestEvent.reason && (latestEvent.reason.includes('TRE') || latestEvent.reason.includes('TRỄ')));
+      const isLatestRaSom = latestEvent && !!(latestEvent.reason && (latestEvent.reason.includes('RA_SOM') || latestEvent.reason.includes('SỚM')));
+
       const latestStatusStr = latestEvent
-        ? `${formatDateTime(latestEvent.createdAt)} - ${isEventLate(latestEvent) ? 'TRỄ (50.000đ)' : 'ĐÚNG GIỜ'}`
+        ? `${formatDateTime(latestEvent.createdAt)} - ${isLatestRaSom ? 'RA SỚM (50K)' : isLatestLate ? 'VÀO TRỄ' : 'ĐÚNG GIỜ'}`
         : 'CHƯA ĐIỂM DANH';
 
       return {
@@ -71,6 +97,10 @@ officialEmployeesRouter.get('/', async (req: Request, res: Response, next: NextF
         ngayChinhThuc: formatDate(c.updatedAt),
         tongSoCaDaLam: totalShifts,
         tongSoCaTre: totalLate,
+        late5pCount,
+        late30pCount,
+        late60pCount,
+        raSomCount,
         tongTienPhat: totalFine,
         lichSuDiemDanhMoiNhat: latestStatusStr,
         trangThai: 'DANG_LAM_VIEC',
@@ -90,6 +120,7 @@ officialEmployeesRouter.get('/', async (req: Request, res: Response, next: NextF
           totalEmployees: result.length,
           totalShifts: result.reduce((sum, r) => sum + r.tongSoCaDaLam, 0),
           totalLate: result.reduce((sum, r) => sum + r.tongSoCaTre, 0),
+          totalRaSom: result.reduce((sum, r) => sum + r.raSomCount, 0),
           totalFine: result.reduce((sum, r) => sum + r.tongTienPhat, 0),
         },
       },

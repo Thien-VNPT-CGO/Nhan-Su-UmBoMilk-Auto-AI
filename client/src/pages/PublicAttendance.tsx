@@ -10,6 +10,8 @@ import {
   Milk,
   Image as ImageIcon,
   User,
+  LogIn,
+  LogOut,
 } from 'lucide-react';
 import { api, ApiError } from '../api/client';
 import { Spinner } from '../components/ui';
@@ -25,6 +27,7 @@ interface CandidateAttendanceInfo {
   isTooEarly?: boolean;
   earlyMinutes?: number;
   allowedTimeStr?: string;
+  shiftTimeRangeStr?: string;
 }
 
 export default function PublicAttendance() {
@@ -33,6 +36,7 @@ export default function PublicAttendance() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [attendanceType, setAttendanceType] = useState<'CHECK_IN' | 'CHECK_OUT'>('CHECK_IN');
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
@@ -72,15 +76,19 @@ export default function PublicAttendance() {
 
   const [submitResult, setSubmitResult] = useState<{
     isLate: boolean;
+    isEarlyLeave: boolean;
     lateMinutes: number;
+    earlyLeaveMinutes: number;
     fineAmount: number;
+    errCode?: string;
+    fineLabel?: string;
     backupFolder: string;
     message: string;
   } | null>(null);
 
   const handleCheckinSubmit = async () => {
     if (!id || !imageSrc) return;
-    if (candidate?.isTooEarly) {
+    if (attendanceType === 'CHECK_IN' && candidate?.isTooEarly) {
       alert(`Chưa đến khung giờ điểm danh! Khung giờ cho phép mở điểm danh bắt đầu từ ${candidate.allowedTimeStr} (trước ca 30 phút).`);
       return;
     }
@@ -89,13 +97,18 @@ export default function PublicAttendance() {
     try {
       const data = await api.post<{
         isLate: boolean;
+        isEarlyLeave: boolean;
         lateMinutes: number;
+        earlyLeaveMinutes: number;
         fineAmount: number;
+        errCode?: string;
+        fineLabel?: string;
         backupFolder: string;
         message: string;
       }>(`/public/candidates/${id}/attendance-checkin`, {
         image: imageSrc,
-        note: 'ĐIỂM DANH UBM',
+        note: attendanceType === 'CHECK_OUT' ? 'XÁC NHẬN RA CA UBM' : 'ĐIỂM DANH UBM',
+        type: attendanceType,
       });
       setSubmitResult(data);
       setSubmitSuccess(true);
@@ -148,7 +161,7 @@ export default function PublicAttendance() {
   if (shiftStr.includes('CHIEU') || shiftStr.includes('CHIỀU') || shiftStr.includes('12H')) {
     shiftTimeStr = '12:00 - 18:00';
   } else if (shiftStr.includes('TOI') || shiftStr.includes('TỐI') || shiftStr.includes('18H')) {
-    shiftTimeStr = '18:00 - 22:00';
+    shiftTimeStr = '18:00 - 23:00';
   }
 
   return (
@@ -173,6 +186,43 @@ export default function PublicAttendance() {
         <h1 className="text-xl sm:text-2xl font-black text-center text-white tracking-tight drop-shadow-md">
           ĐIỂM DANH UMBO MILK
         </h1>
+
+        {/* CHECK-IN vs CHECK-OUT TOGGLE SWITCHER */}
+        <div className="bg-slate-900/90 p-1.5 rounded-2xl border border-slate-800 flex gap-2 shadow-xl">
+          <button
+            type="button"
+            onClick={() => {
+              setAttendanceType('CHECK_IN');
+              setImageSrc(null);
+              setSubmitSuccess(false);
+            }}
+            className={`flex-1 py-2.5 px-3 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              attendanceType === 'CHECK_IN'
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-900/40'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <LogIn size={15} />
+            <span>VÀO CA (CHECK-IN)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setAttendanceType('CHECK_OUT');
+              setImageSrc(null);
+              setSubmitSuccess(false);
+            }}
+            className={`flex-1 py-2.5 px-3 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              attendanceType === 'CHECK_OUT'
+                ? 'bg-gradient-to-r from-rose-600 to-pink-600 text-white shadow-lg shadow-rose-900/40'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <LogOut size={15} />
+            <span>RA CA (CHECK-OUT)</span>
+          </button>
+        </div>
 
         {/* Candidate Info Glass Card */}
         <div className="bg-slate-900/80 backdrop-blur-xl p-4 sm:p-5 rounded-3xl border border-slate-800/90 shadow-2xl space-y-4 relative overflow-hidden">
@@ -202,7 +252,7 @@ export default function PublicAttendance() {
                 <span className="font-bold text-amber-400">{candidate.caLam || 'Ca SÁNG'}</span>
               </div>
               <div className="text-[11px] text-slate-300">
-                <span className="text-slate-400 font-medium">Thời gian: </span>
+                <span className="text-slate-400 font-medium">Thời gian ca: </span>
                 <span className="font-mono text-slate-200 font-semibold">{shiftTimeStr}</span>
               </div>
             </div>
@@ -225,8 +275,8 @@ export default function PublicAttendance() {
           </div>
         </div>
 
-        {/* TOO EARLY WARNING ALERT BOX */}
-        {candidate?.isTooEarly && (
+        {/* TOO EARLY WARNING ALERT BOX FOR CHECK-IN */}
+        {attendanceType === 'CHECK_IN' && candidate?.isTooEarly && (
           <div className="bg-amber-950/90 border-2 border-amber-500/80 p-4 sm:p-5 rounded-3xl text-center space-y-2 shadow-2xl backdrop-blur-xl animate-pulse">
             <div className="w-12 h-12 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto text-amber-400">
               <AlertCircle size={28} />
@@ -244,7 +294,38 @@ export default function PublicAttendance() {
 
         {/* Result Cards OR Upload Form */}
         {submitSuccess ? (
-          submitResult?.isLate ? (
+          submitResult?.isEarlyLeave ? (
+            /* Early Leave Penalty Result Card */
+            <div className="bg-rose-950/90 border-2 border-rose-500/80 p-6 rounded-3xl text-center space-y-4 shadow-2xl animate-fade-in backdrop-blur-xl">
+              <div className="w-16 h-16 bg-rose-500/20 rounded-full flex items-center justify-center mx-auto text-rose-400 animate-pulse">
+                <AlertCircle size={40} />
+              </div>
+
+              <div>
+                <h2 className="text-xl font-black text-rose-300">⚠️ RA CA SỚM – PHẠT 50.000Đ/LẦN</h2>
+                <p className="text-xs text-rose-200/90 mt-1">
+                  Bạn đã check-out ra ca sớm <strong className="font-mono text-white font-extrabold">{submitResult.earlyLeaveMinutes} phút</strong> trước khi ca làm kết thúc!
+                </p>
+              </div>
+
+              <div className="bg-rose-900/60 p-4 rounded-2xl border border-rose-700/60 text-xs text-rose-100 space-y-2">
+                <p className="font-bold text-rose-200">
+                  ⚠️ Mức phạt theo Quy chế: <span className="text-amber-300 font-extrabold">RA SỚM: 50.000đ / lần</span> đã được tự động ghi nhận trực tiếp vào Web chấm công.
+                </p>
+                <p className="text-[11px] text-rose-300 opacity-90 leading-relaxed">
+                  Ảnh chụp cửa hàng & xác thực chữ <strong>"XÁC NHẬN RA CA UBM"</strong> đã lưu an toàn vào Google Drive.
+                </p>
+              </div>
+
+              <div className="bg-slate-900/80 p-3 rounded-2xl border border-slate-700 text-xs text-emerald-400 font-mono font-bold flex items-center justify-center gap-1.5">
+                <Check size={14} /> NỘI DUNG XÁC THỰC: "XÁC NHẬN RA CA UBM" ✓
+              </div>
+
+              <p className="text-[11px] text-slate-400 italic">
+                Vui lòng chú ý thời gian ra ca đúng quy định ở các buổi làm việc tiếp theo!
+              </p>
+            </div>
+          ) : submitResult?.isLate ? (
             /* Late Penalty Result Card */
             <div className="bg-rose-950/90 border-2 border-rose-500/80 p-6 rounded-3xl text-center space-y-4 shadow-2xl animate-fade-in backdrop-blur-xl">
               <div className="w-16 h-16 bg-rose-500/20 rounded-full flex items-center justify-center mx-auto text-rose-400 animate-pulse">
@@ -252,7 +333,13 @@ export default function PublicAttendance() {
               </div>
 
               <div>
-                <h2 className="text-xl font-black text-rose-300">ĐIỂM DANH TRỄ – PHẠT 50.000Đ</h2>
+                <h2 className="text-xl font-black text-rose-300">
+                  {submitResult.errCode?.includes('VAO_TRE_5P')
+                    ? 'ĐIỂM DANH TRỄ 5P – PHẠT 30.000Đ'
+                    : submitResult.errCode?.includes('VAO_TRE_30P')
+                      ? 'ĐIỂM DANH TRỄ 30P – PHẠT 50% LƯƠNG CA'
+                      : 'ĐIỂM DANH TRỄ ≥ 60P – PHẠT 100% LƯƠNG CA'}
+                </h2>
                 <p className="text-xs text-rose-200/90 mt-1">
                   Bạn đã trễ <strong className="font-mono text-white font-extrabold">{submitResult.lateMinutes} phút</strong> so với khung giờ ca làm!
                 </p>
@@ -260,7 +347,7 @@ export default function PublicAttendance() {
 
               <div className="bg-rose-900/60 p-4 rounded-2xl border border-rose-700/60 text-xs text-rose-100 space-y-2">
                 <p className="font-bold text-rose-200">
-                  ⚠️ Mức phạt <span className="text-amber-300 font-extrabold">50.000đ</span> đã được hệ thống tự động ghi nhận trực tiếp vào Web chấm công.
+                  ⚠️ Mức phạt theo Quy chế: <span className="text-amber-300 font-extrabold">{submitResult.fineLabel || `${submitResult.fineAmount.toLocaleString('vi-VN')}đ`}</span> đã được tự động ghi nhận vào Web chấm công.
                 </p>
                 <p className="text-[11px] text-rose-300 opacity-90 leading-relaxed">
                   Ảnh chụp cửa hàng & xác thực chữ <strong>"ĐIỂM DANH UBM"</strong> đã lưu an toàn vào Google Drive.
@@ -283,27 +370,33 @@ export default function PublicAttendance() {
               </div>
 
               <div>
-                <h2 className="text-xl font-black text-emerald-300">ĐIỂM DANH THÀNH CÔNG!</h2>
+                <h2 className="text-xl font-black text-emerald-300">
+                  {attendanceType === 'CHECK_OUT' ? 'RA CA THÀNH CÔNG!' : 'ĐIỂM DANH VÀO CA THÀNH CÔNG!'}
+                </h2>
                 <p className="text-xs text-emerald-200/90 mt-1">
-                  Chúc mừng bạn đã điểm danh đúng giờ cho ca làm hôm nay.
+                  {attendanceType === 'CHECK_OUT'
+                    ? 'Bạn đã hoàn tất xác nhận ra ca đúng giờ. Cảm ơn bạn!'
+                    : 'Chúc mừng bạn đã điểm danh đúng giờ cho ca làm hôm nay.'}
                 </p>
               </div>
 
               <div className="bg-emerald-900/50 p-4 rounded-2xl border border-emerald-700/50 text-xs text-emerald-100 space-y-2">
                 <p className="font-bold text-emerald-200">
-                  ✅ Ảnh chụp cửa hàng & thông tin điểm danh đã được lưu lên Google Drive.
+                  ✅ Ảnh chụp cửa hàng & thông tin đã được lưu lên Google Drive.
                 </p>
-                <p className="text-[11px] text-emerald-300 opacity-90">
-                  Tự động tích lũy <strong className="text-white font-extrabold">+1 Ngày Đào Tạo</strong> vào hồ sơ.
-                </p>
+                {attendanceType === 'CHECK_IN' && (
+                  <p className="text-[11px] text-emerald-300 opacity-90">
+                    Tự động tích lũy <strong className="text-white font-extrabold">+1 Ngày Đào Tạo</strong> vào hồ sơ.
+                  </p>
+                )}
               </div>
 
               <div className="bg-slate-900/80 p-3 rounded-2xl border border-slate-700 text-xs text-emerald-400 font-mono font-bold flex items-center justify-center gap-1.5">
-                <Check size={14} /> NỘI DUNG XÁC THỰC: "ĐIỂM DANH UBM" ✓
+                <Check size={14} /> NỘI DUNG XÁC THỰC: "{attendanceType === 'CHECK_OUT' ? 'XÁC NHẬN RA CA UBM' : 'ĐIỂM DANH UBM'}" ✓
               </div>
 
               <p className="text-[11px] text-slate-400 italic">
-                Chúc bạn có một buổi làm việc và học tập hiệu quả tại Umbo Milk!
+                Chúc bạn có một ngày làm việc và học tập hiệu quả tại Umbo Milk!
               </p>
             </div>
           )
@@ -311,7 +404,7 @@ export default function PublicAttendance() {
           /* Photo Upload Section */
           <div className="bg-slate-900/80 backdrop-blur-xl p-4 sm:p-5 rounded-3xl border border-slate-800/90 shadow-2xl space-y-4">
             <h4 className="text-xs font-black text-slate-300 uppercase tracking-wider">
-              TẢI LÊN ẢNH CỬA HÀNG
+              {attendanceType === 'CHECK_OUT' ? 'TẢI LÊN ẢNH XÁC NHẬN RA CA' : 'TẢI LÊN ẢNH CỬA HÀNG VÀO CA'}
             </h4>
 
             <input
@@ -335,7 +428,7 @@ export default function PublicAttendance() {
                 <div className="absolute top-1/2 right-4 -translate-y-1/2 bg-gradient-to-br from-pink-600/90 to-rose-700/90 backdrop-blur-md border border-white/20 p-3.5 rounded-2xl shadow-2xl flex flex-col items-center text-center text-white space-y-1 animate-pulse">
                   <ShieldCheck size={28} className="text-pink-200" />
                   <span className="text-[10px] font-black tracking-wider uppercase leading-tight">
-                    ĐIỂM DANH<br />UMBO MILK
+                    {attendanceType === 'CHECK_OUT' ? 'RA CA' : 'ĐIỂM DANH'}<br />UMBO MILK
                   </span>
                 </div>
 
@@ -363,10 +456,10 @@ export default function PublicAttendance() {
                 </div>
                 <div className="text-center space-y-1">
                   <span className="text-xs font-extrabold text-pink-300 group-hover:text-pink-200 block">
-                    Bấm vào đây để chụp ảnh cửa hàng
+                    Bấm vào đây để chụp ảnh {attendanceType === 'CHECK_OUT' ? 'ra ca' : 'cửa hàng'}
                   </span>
                   <span className="text-[10px] text-slate-400 block">
-                    Chụp hình trước cửa hàng chi nhánh để xác nhận
+                    Chụp hình tại cửa hàng chi nhánh để xác nhận
                   </span>
                 </div>
               </button>
@@ -379,11 +472,11 @@ export default function PublicAttendance() {
             {/* Note Box */}
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                GHI CHÚ
+                GHI CHÚ XÁC THỰC
               </label>
               <div className="bg-slate-800/90 border border-slate-700/80 rounded-2xl px-4 py-3 flex items-center justify-between">
                 <span className="text-sm font-mono font-bold text-slate-200 tracking-wide">
-                  ĐIỂM DANH UBM
+                  {attendanceType === 'CHECK_OUT' ? 'XÁC NHẬN RA CA UBM' : 'ĐIỂM DANH UBM'}
                 </span>
                 <ImageIcon size={18} className="text-slate-500" />
               </div>
@@ -392,17 +485,19 @@ export default function PublicAttendance() {
             {/* Submit Button */}
             <button
               type="button"
-              disabled={!imageSrc || isSubmitting || candidate?.isTooEarly}
+              disabled={!imageSrc || isSubmitting || (attendanceType === 'CHECK_IN' && candidate?.isTooEarly)}
               onClick={handleCheckinSubmit}
               className={`w-full py-4 px-4 rounded-full font-black text-sm transition-all shadow-2xl flex items-center justify-center gap-2 cursor-pointer ${
-                candidate?.isTooEarly
+                attendanceType === 'CHECK_IN' && candidate?.isTooEarly
                   ? 'bg-amber-950/80 text-amber-400 border border-amber-500/50 cursor-not-allowed shadow-none'
                   : imageSrc && !isSubmitting
-                    ? 'bg-gradient-to-r from-pink-600 via-rose-600 to-purple-600 hover:from-pink-500 hover:to-rose-500 text-white shadow-pink-600/40 animate-pulse active:scale-[0.98]'
+                    ? attendanceType === 'CHECK_OUT'
+                      ? 'bg-gradient-to-r from-rose-600 via-pink-600 to-purple-600 hover:from-rose-500 hover:to-pink-500 text-white shadow-rose-600/40 animate-pulse active:scale-[0.98]'
+                      : 'bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-emerald-600/40 animate-pulse active:scale-[0.98]'
                     : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/60'
               }`}
             >
-              {candidate?.isTooEarly ? (
+              {attendanceType === 'CHECK_IN' && candidate?.isTooEarly ? (
                 <>
                   <AlertCircle size={18} />
                   <span>⏳ CHƯA ĐẾN GIỜ (MỞ TỪ {candidate.allowedTimeStr})</span>
@@ -410,12 +505,12 @@ export default function PublicAttendance() {
               ) : isSubmitting ? (
                 <>
                   <Spinner size={18} className="text-white" />
-                  <span>Đang ghi nhận điểm danh...</span>
+                  <span>Đang ghi nhận {attendanceType === 'CHECK_OUT' ? 'ra ca' : 'điểm danh'}...</span>
                 </>
               ) : (
                 <>
                   <CheckCircle2 size={20} />
-                  <span>XÁC NHẬN ĐIỂM DANH</span>
+                  <span>{attendanceType === 'CHECK_OUT' ? 'XÁC NHẬN RA CA' : 'XÁC NHẬN ĐIỂM DANH VÀO CA'}</span>
                 </>
               )}
             </button>

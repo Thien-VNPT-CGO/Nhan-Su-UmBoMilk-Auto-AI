@@ -20,7 +20,7 @@ interface RowData {
     string,
     {
       shifts: string;
-      attendanceStatus?: 'ON_TIME' | 'LATE' | 'ABSENT' | null;
+      attendanceStatus?: 'ON_TIME' | 'LATE_5P' | 'LATE_30P' | 'LATE_60P' | 'ABSENT' | null;
       checkinTime?: string | null;
     }
   >;
@@ -425,10 +425,22 @@ export default function Shifts() {
                             ✓ ĐÚNG GIỜ
                           </span>
                         );
-                      } else if (attStatus === 'LATE') {
+                      } else if (attStatus === 'LATE_5P') {
+                        attBadge = (
+                          <span className="text-[9px] font-black bg-amber-600 text-white px-1 py-0.5 rounded shadow-2xs flex items-center gap-0.5 mt-0.5 animate-pulse">
+                            ⚠️ TRỄ 5P (30K)
+                          </span>
+                        );
+                      } else if (attStatus === 'LATE_30P') {
                         attBadge = (
                           <span className="text-[9px] font-black bg-rose-600 text-white px-1 py-0.5 rounded shadow-2xs flex items-center gap-0.5 mt-0.5 animate-pulse">
-                            ⚠️ TRỄ (50K)
+                            ⚠️ TRỄ 30P (50%L)
+                          </span>
+                        );
+                      } else if (attStatus === 'LATE_60P') {
+                        attBadge = (
+                          <span className="text-[9px] font-black bg-purple-700 text-white px-1 py-0.5 rounded shadow-2xs flex items-center gap-0.5 mt-0.5 animate-pulse">
+                            🚨 TRỄ 60P (100%L)
                           </span>
                         );
                       } else if (attStatus === 'ABSENT') {
@@ -452,7 +464,9 @@ export default function Shifts() {
                               isToday(d) && 'ring-1 ring-brand-300 font-bold',
                               shifts.length === 1 ? colors[0] : 'bg-slate-100',
                               attStatus === 'ON_TIME' && '!bg-emerald-100 border border-emerald-300',
-                              attStatus === 'LATE' && '!bg-rose-100 border border-rose-300',
+                              attStatus === 'LATE_5P' && '!bg-amber-100 border border-amber-300',
+                              attStatus === 'LATE_30P' && '!bg-rose-100 border border-rose-300',
+                              attStatus === 'LATE_60P' && '!bg-purple-100 border border-purple-300',
                               attStatus === 'ABSENT' && '!bg-slate-200/80 border border-slate-300'
                             )}
                             title={`${r.tenUv} – ${d}: ${shifts.join(' + ') || 'Chưa xếp'}${
