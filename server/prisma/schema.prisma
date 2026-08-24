@@ -333,3 +333,33 @@ model BackupRecord {
 
   @@index([createdAt])
 }
+
+model ShiftSwapRequest {
+  id               String    @id
+  candidateIdA     String
+  candidateNameA   String
+  sdtA             String
+  chiNhanhA        String
+  caLamA           String
+  dateA            String
+
+  candidateIdB     String
+  candidateNameB   String
+  sdtB             String
+  chiNhanhB        String
+  caLamB           String
+  dateB            String
+
+  swapType         String    @default("SWAP_2_WAY") // SWAP_2_WAY | COVER_1_WAY
+  reason           String
+  status           String    @default("PENDING_MANAGER") // PENDING_B | PENDING_MANAGER | APPROVED | REJECTED | CANCELLED
+  rejectReason     String?
+  approvedBy       String?
+  approvedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([candidateIdA])
+  @@index([candidateIdB])
+  @@index([status])
+}

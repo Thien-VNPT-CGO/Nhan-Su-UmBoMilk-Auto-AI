@@ -52,6 +52,7 @@ export default function Shifts() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
   const isViewer = user?.role === 'VIEWER';
+  const isManager = user?.role === 'MANAGER' || user?.username === 'umbomilk';
   const [tab, setTab] = useState<'training' | 'employees'>('training');
   const [trainingRows, setTrainingRows] = useState<RowData[]>([]);
   const [employeeRows, setEmployeeRows] = useState<RowData[]>([]);
@@ -124,10 +125,10 @@ export default function Shifts() {
 
   const activeRows = tab === 'training' ? trainingRows : employeeRows;
 
-  // Kiểm tra ca nào user được phép bấm chọn (VIEWER: 0 ca, HR: OFF + ca Gốc, ADMIN: tất cả)
+  // Kiểm tra ca nào user được phép bấm chọn (VIEWER: 0 ca, HR: OFF + ca Gốc, ADMIN/MANAGER: tất cả)
   const isShiftKeyAllowedForUser = (shiftKey: string, caLamStr?: string) => {
     if (isViewer) return false; // VIEWER không được phép chọn bất kỳ ca nào
-    if (isAdmin) return true; // ADMIN được chọn tất cả
+    if (isAdmin || isManager) return true; // ADMIN & MANAGER được chọn tất cả
     if (shiftKey === 'OFF') return true; // HR được chọn Nghỉ OFF
     const lockedKey = getLockedShiftKey(caLamStr);
     if (lockedKey && shiftKey === lockedKey) return true; // HR được trả về ca Gốc
@@ -206,8 +207,8 @@ export default function Shifts() {
   const isToday = (dStr: string) => dStr === startOfToday();
 
   const handleSendAttendanceZaloLink = async (r: RowData) => {
-    if (isViewer) {
-      toast('error', '🔒 Tài khoản VIEWER chỉ có quyền xem dữ liệu, không được phép gửi link Zalo!');
+    if (isViewer || user?.username === 'umbomilk') {
+      toast('error', '🔒 Tài khoản này không có quyền sử dụng chức năng gửi link Zalo!');
       return;
     }
     const origin = window.location.origin;
@@ -418,15 +419,15 @@ export default function Shifts() {
                         </div>
                         <button
                           type="button"
-                          disabled={isViewer}
+                          disabled={isViewer || user?.username === 'umbomilk'}
                           onClick={() => handleSendAttendanceZaloLink(r)}
                           className={cn(
                             'mt-2 text-[10px] font-bold px-2.5 py-1.5 rounded-xl flex items-center gap-1 shadow-2xs transition-transform',
-                            isViewer
+                            isViewer || user?.username === 'umbomilk'
                               ? 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed opacity-60'
                               : 'bg-[#0068ff] hover:bg-[#0052cc] text-white active:scale-95 cursor-pointer'
                           )}
-                          title={isViewer ? 'Tài khoản Viewer không có quyền gửi Zalo' : 'Sao chép tin nhắn kèm Link điểm danh & Mở Zalo 1-1 với ứng viên'}
+                          title={isViewer || user?.username === 'umbomilk' ? 'Tài khoản không có quyền gửi Zalo' : 'Sao chép tin nhắn kèm Link điểm danh & Mở Zalo 1-1 với ứng viên'}
                         >
                           <span>💬 Mở App Zalo gửi Link điểm danh</span>
                         </button>

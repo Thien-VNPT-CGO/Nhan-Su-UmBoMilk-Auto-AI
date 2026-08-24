@@ -42,25 +42,31 @@ export class SyncQueueService {
       return { jobId: existing.id, deduped: true };
     }
 
-    const job = await prisma.syncJob.create({
-      data: {
-        id: nextSyncJobId(),
-        entity: input.entity,
-        entityId: input.entityId,
-        operation: input.operation,
-        field: input.field ?? null,
-        oldValue: input.oldValue !== undefined ? JSON.stringify(input.oldValue) : null,
-        newValue: input.newValue !== undefined ? JSON.stringify(input.newValue) : null,
-        version: input.version,
-        status: 'PENDING',
-        idempotencyKey: key,
-        candidateId: input.entity === 'candidate' ? input.entityId : input.entity === 'shift' || input.entity === 'attendance' ? input.entityId : null,
-      },
-    });
+    try {
+      const job = await prisma.syncJob.create({
+        data: {
+          id: nextSyncJobId(),
+          entity: input.entity,
+          entityId: input.entityId,
+          operation: input.operation,
+          field: input.field ?? null,
+          oldValue: input.oldValue !== undefined ? JSON.stringify(input.oldValue) : null,
+          newValue: input.newValue !== undefined ? JSON.stringify(input.newValue) : null,
+          version: input.version,
+          status: 'PENDING',
+          idempotencyKey: key,
+          candidateId: input.entity === 'candidate' ? input.entityId : input.entity === 'shift' || input.entity === 'attendance' ? input.entityId : null,
+        },
+      });
 
-    emitSync({ type: 'enqueued', jobId: job.id, status: 'PENDING' });
-    this.wake();
-    return { jobId: job.id, deduped: false };
+      emitSync({ type: 'enqueued', jobId: job.id, status: 'PENDING' });
+      this.wake();
+      return { jobId: job.id, deduped: false };
+    } catch (e: any) {
+      const found = await prisma.syncJob.findUnique({ where: { idempotencyKey: key } });
+      if (found) return { jobId: found.id, deduped: true };
+      throw e;
+    }
   }
 
   async claimNext(): Promise<{ jobId: string } | null> {

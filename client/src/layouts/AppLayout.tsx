@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, BrainCircuit, GraduationCap, UserCheck, CalendarDays, ClipboardCheck,
   MessageCircle, RefreshCw, FileSpreadsheet, ScrollText, Settings as SettingsIcon,
-  LogOut, Milk, Wifi, WifiOff, Database, Circle, Bell, Sun, Moon, Languages, BookOpen, BarChart3,
+  LogOut, Milk, Wifi, WifiOff, Database, Circle, Bell, Sun, Moon, Languages, BookOpen, BarChart3, CheckSquare,
 } from 'lucide-react';
 import { useAuth, User } from '../stores/auth';
 import { useToast } from '../stores/Toast';
@@ -16,7 +16,7 @@ import { cn } from '../utils/format';
 import { debounce } from '../utils/debounce';
 import { formatDate, weekdayVi } from '../utils/date';
 
-export const DEFAULT_HR_TABS = ['/dashboard', '/candidates', '/scoring', '/training', '/official-employees', '/shifts'];
+export const DEFAULT_HR_TABS = ['/dashboard', '/candidates', '/scoring', '/training', '/official-employees', '/shifts', '/approvals'];
 export const DEFAULT_VIEWER_TABS = ['/shifts'];
 
 function useI18nNav(user: User | null) {
@@ -28,6 +28,7 @@ function useI18nNav(user: User | null) {
     { to: '/training', label: t('nav.training'), icon: GraduationCap },
     { to: '/official-employees', label: 'Nhân viên chính thức', icon: UserCheck },
     { to: '/shifts', label: t('nav.shifts'), icon: CalendarDays },
+    { to: '/approvals', label: 'Phê duyệt nhân viên', icon: CheckSquare },
     { to: '/attendance', label: t('nav.attendance'), icon: ClipboardCheck },
     { to: '/zalo', label: t('nav.zalo'), icon: MessageCircle },
     { to: '/reports', label: t('nav.reports'), icon: BarChart3 },
@@ -40,13 +41,13 @@ function useI18nNav(user: User | null) {
   if (!user) return [];
   if (user.role === 'ADMIN') return allNavItems;
 
-  const baseTabs = user.role === 'VIEWER' ? DEFAULT_VIEWER_TABS : DEFAULT_HR_TABS;
-  const allowedSet = new Set([
-    ...baseTabs,
-    ...(Array.isArray(user.allowedTabs) ? user.allowedTabs : []),
-  ]);
+  if (Array.isArray(user.allowedTabs) && user.allowedTabs.length > 0) {
+    const allowedSet = new Set(user.allowedTabs);
+    return allNavItems.filter((item) => allowedSet.has(item.to));
+  }
 
-  return allNavItems.filter((item) => allowedSet.has(item.to));
+  const baseTabs = user.role === 'VIEWER' ? DEFAULT_VIEWER_TABS : DEFAULT_HR_TABS;
+  return allNavItems.filter((item) => baseTabs.includes(item.to));
 }
 
 interface SyncCounts {

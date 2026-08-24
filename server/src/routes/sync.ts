@@ -94,7 +94,7 @@ router.post('/provision', requireRole('ADMIN'), async (req: AuthedRequest, res, 
     const sheet = getGoogleSheetService();
     await sheet.refreshConfig();
 
-    if (!sheet.configured) {
+    if (!sheet.configured || req.body?.spreadsheetId === 'DEMO') {
       const candidates = await prisma.candidate.findMany({ orderBy: { id: 'asc' } });
       let enqueued = 0;
       for (const c of candidates) {

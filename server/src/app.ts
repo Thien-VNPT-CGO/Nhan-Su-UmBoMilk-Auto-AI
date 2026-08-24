@@ -18,6 +18,7 @@ import dashboardRoutes from './routes/dashboard';
 import candidateRoutes from './routes/candidates';
 import trainingRoutes from './routes/training';
 import shiftRoutes from './routes/shifts';
+import approvalsRoutes from './routes/approvals';
 import attendanceRoutes from './routes/attendance';
 import zaloRoutes from './routes/zalo';
 import calendarRoutes from './routes/calendar';
@@ -74,6 +75,7 @@ export function createApp() {
   app.use('/api/official-employees', apiLimiter, officialEmployeesRouter);
   app.use('/api/training', apiLimiter, trainingRoutes);
   app.use('/api/shifts', apiLimiter, shiftRoutes);
+  app.use('/api/approvals', apiLimiter, approvalsRoutes);
   app.use('/api/attendance', apiLimiter, attendanceRoutes);
   app.use('/api/zalo', apiLimiter, zaloRoutes);
   app.use('/api/calendar', apiLimiter, calendarRoutes);
@@ -175,6 +177,25 @@ async function backfillXepLoai() {
 
 /** Tự tạo tài khoản mặc định khi DB trống (idempotent - an toàn cho deploy tự động). */
 async function ensureSeedUsers(prisma: typeof import('./lib/prisma').prisma) {
+  try {
+    const bcrypt = (await import('bcryptjs')).default;
+    const umbomilkUser = await prisma.user.findUnique({ where: { username: 'umbomilk' } });
+    if (!umbomilkUser) {
+      await prisma.user.create({
+        data: {
+          username: 'umbomilk',
+          password: await bcrypt.hash('ubm123456', 10),
+          fullName: 'Quản lý Umbo Milk',
+          role: 'MANAGER',
+          allowedTabs: ['/shifts', '/approvals'],
+        },
+      });
+      console.log('[startSystem] Đã khởi tạo tài khoản Quản lý umbomilk / ubm123456');
+    }
+  } catch (e) {
+    // ignore
+  }
+
   const count = await prisma.user.count();
   if (count > 0) return;
   const bcrypt = (await import('bcryptjs')).default;
@@ -185,7 +206,7 @@ async function ensureSeedUsers(prisma: typeof import('./lib/prisma').prisma) {
       { username: 'viewer', password: await bcrypt.hash('view1234', 10), fullName: 'Người xem', role: 'VIEWER' },
     ],
   });
-  console.log('[startSystem] Đã tạo 3 tài khoản mặc định (DB trống)');
+  console.log('[startSystem] Đã tạo các tài khoản mặc định');
 }
 
 let trainingRefreshTimer: NodeJS.Timeout | null = null;

@@ -5,7 +5,7 @@ export interface User {
   id: string;
   username: string;
   fullName: string;
-  role: 'ADMIN' | 'HR' | 'VIEWER';
+  role: 'ADMIN' | 'HR' | 'VIEWER' | 'MANAGER' | string;
   twoFactorEnabled?: boolean;
   branchScope?: string[] | null;
   allowedTabs?: string[] | null;

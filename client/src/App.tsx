@@ -8,6 +8,7 @@ import Scoring from './pages/Scoring';
 import Training from './pages/Training';
 import { OfficialEmployees } from './pages/OfficialEmployees';
 import Shifts from './pages/Shifts';
+import Approvals from './pages/Approvals';
 import Attendance from './pages/Attendance';
 import Zalo from './pages/Zalo';
 import Reports from './pages/Reports';
@@ -56,6 +57,7 @@ export default function App() {
           <Route path="training" element={<Training />} />
           <Route path="official-employees" element={<OfficialEmployees />} />
           <Route path="shifts" element={<Shifts />} />
+          <Route path="approvals" element={<Approvals />} />
           <Route path="attendance" element={<Attendance />} />
           <Route path="zalo" element={<Zalo />} />
           <Route path="reports" element={<Reports />} />
