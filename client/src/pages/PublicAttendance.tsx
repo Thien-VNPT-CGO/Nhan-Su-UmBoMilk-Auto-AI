@@ -78,48 +78,65 @@ export default function PublicAttendance() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const rawDataUrl = event.target?.result as string;
-      if (!rawDataUrl) return;
+    // Nén ảnh trực tiếp từ ObjectURL để tránh nạp chuỗi Base64 dung lượng lớn gây lỗi 'request entity too large'
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
 
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 1280;
-        const MAX_HEIGHT = 1280;
-        let width = img.width;
-        let height = img.height;
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      const canvas = document.createElement('canvas');
+      const MAX_SIZE = 800; // 800px chuẩn nét và siêu nhẹ cho ảnh điểm danh mobile (~50KB)
+      let width = img.width;
+      let height = img.height;
 
-        if (width > height) {
-          if (width > MAX_WIDTH) {
-            height = Math.round((height * MAX_WIDTH) / width);
-            width = MAX_WIDTH;
-          }
-        } else {
-          if (height > MAX_HEIGHT) {
-            width = Math.round((width * MAX_HEIGHT) / height);
-            height = MAX_HEIGHT;
-          }
+      if (width > height) {
+        if (width > MAX_SIZE) {
+          height = Math.round((height * MAX_SIZE) / width);
+          width = MAX_SIZE;
         }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.75);
-          setImageSrc(compressedDataUrl);
-        } else {
-          setImageSrc(rawDataUrl);
+      } else {
+        if (height > MAX_SIZE) {
+          width = Math.round((width * MAX_SIZE) / height);
+          height = MAX_SIZE;
         }
-      };
-      img.onerror = () => {
-        setImageSrc(rawDataUrl);
-      };
-      img.src = rawDataUrl;
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, width, height);
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.6);
+        setImageSrc(compressedDataUrl);
+      }
     };
-    reader.readAsDataURL(file);
+
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const rawDataUrl = event.target?.result as string;
+        if (!rawDataUrl) return;
+        const fallbackImg = new Image();
+        fallbackImg.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = 800;
+          canvas.height = Math.round((fallbackImg.height * 800) / fallbackImg.width) || 600;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(fallbackImg, 0, 0, canvas.width, canvas.height);
+            setImageSrc(canvas.toDataURL('image/jpeg', 0.6));
+          } else {
+            setImageSrc(rawDataUrl);
+          }
+        };
+        fallbackImg.onerror = () => setImageSrc(rawDataUrl);
+        fallbackImg.src = rawDataUrl;
+      };
+      reader.readAsDataURL(file);
+    };
+
+    img.src = objectUrl;
   };
 
   const [submitResult, setSubmitResult] = useState<{

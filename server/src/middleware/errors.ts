@@ -26,6 +26,18 @@ export function notFoundHandler(_req: Request, res: Response) {
 
 export function errorHandler(err: unknown, req: Request, res: Response, _next: NextFunction) {
   const requestId = (req as Request & { requestId?: string }).requestId;
+
+  const errObj = err as { status?: number; statusCode?: number; type?: string; message?: string };
+  if (errObj.status === 413 || errObj.statusCode === 413 || errObj.type === 'entity.too.large') {
+    res.status(413).json({
+      success: false,
+      code: 'PAYLOAD_TOO_LARGE',
+      message: 'Dung lượng ảnh/dữ liệu quá lớn (vượt quá giới hạn). Vui lòng chọn ảnh nhỏ hơn hoặc chụp lại.',
+      requestId,
+    });
+    return;
+  }
+
   if (isApiError(err)) {
     res.status(err.status).json({
       success: false,

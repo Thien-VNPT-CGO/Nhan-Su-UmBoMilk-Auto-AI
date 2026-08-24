@@ -30,7 +30,7 @@ const upsertSchema = z.object({
 // PUT /api/shifts/:candidateId/:date (Hỗ trợ candidateId chứa dấu / như UBM_24/08/2026_NV0001)
 router.put('/*', requireWrite(), async (req: AuthedRequest, res, next) => {
   try {
-    const fullPath = req.params[0] || '';
+    const fullPath = (req.params[0] || '').replace(/^\/+/, '');
     const lastSlashIdx = fullPath.lastIndexOf('/');
     if (lastSlashIdx === -1) throw ApiError.badRequest('INVALID_INPUT', 'Đường dẫn ca không hợp lệ.');
 
