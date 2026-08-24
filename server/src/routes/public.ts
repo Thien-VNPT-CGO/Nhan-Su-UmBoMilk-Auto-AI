@@ -42,10 +42,11 @@ function getVietnamNowParts() {
 }
 
 // Endpoint lấy thông tin ứng viên phỏng vấn từ Web công khai
-router.get('/candidates/:id/interview-info', async (req, res, next) => {
+router.get('/candidates/:id(*)/interview-info', async (req, res, next) => {
   try {
+    const candidateId = decodeURIComponent(req.params.id);
     const candidate = await prisma.candidate.findUnique({
-      where: { id: req.params.id },
+      where: { id: candidateId },
       select: {
         id: true,
         tenUv: true,
@@ -74,14 +75,15 @@ const confirmSchema = z.object({
 });
 
 // Endpoint ứng viên xác nhận / từ chối phỏng vấn từ Web công khai
-router.post('/candidates/:id/confirm-pv', async (req, res, next) => {
+const handleConfirmPv = async (req: any, res: any, next: any) => {
   try {
     const parsed = confirmSchema.safeParse(req.body);
     if (!parsed.success) {
       throw ApiError.badRequest('INVALID_INPUT', 'Phản hồi không hợp lệ.');
     }
 
-    const candidate = await prisma.candidate.findUnique({ where: { id: req.params.id } });
+    const candidateId = decodeURIComponent(req.params.id);
+    const candidate = await prisma.candidate.findUnique({ where: { id: candidateId } });
     if (!candidate) {
       throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy ứng viên.');
     }
@@ -124,13 +126,17 @@ router.post('/candidates/:id/confirm-pv', async (req, res, next) => {
   } catch (e) {
     next(e);
   }
-});
+};
+
+router.post('/candidates/:id(*)/confirm-pv', handleConfirmPv);
+router.post('/candidates/:id(*)/confirm-interview', handleConfirmPv);
 
 // Endpoint lấy thông tin điểm danh công khai cho ứng viên
-router.get('/candidates/:id/attendance-info', async (req, res, next) => {
+router.get('/candidates/:id(*)/attendance-info', async (req, res, next) => {
   try {
+    const candidateId = decodeURIComponent(req.params.id);
     const candidate = await prisma.candidate.findUnique({
-      where: { id: req.params.id },
+      where: { id: candidateId },
       select: {
         id: true,
         tenUv: true,
@@ -239,14 +245,15 @@ const checkinSchema = z.object({
 });
 
 // Endpoint ứng viên nộp hình ảnh & xác nhận điểm danh (Check-in / Check-out) từ Web công khai
-router.post('/candidates/:id/attendance-checkin', async (req, res, next) => {
+router.post('/candidates/:id(*)/attendance-checkin', async (req, res, next) => {
   try {
     const parsed = checkinSchema.safeParse(req.body);
     if (!parsed.success) {
       throw ApiError.badRequest('INVALID_INPUT', 'Thông tin điểm danh không hợp lệ.');
     }
 
-    const candidate = await prisma.candidate.findUnique({ where: { id: req.params.id } });
+    const candidateId = decodeURIComponent(req.params.id);
+    const candidate = await prisma.candidate.findUnique({ where: { id: candidateId } });
     if (!candidate) {
       throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy ứng viên.');
     }

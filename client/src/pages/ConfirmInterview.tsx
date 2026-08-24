@@ -15,7 +15,8 @@ interface CandidateInterviewInfo {
 }
 
 export default function ConfirmInterview() {
-  const { id } = useParams<{ id: string }>();
+  const params = useParams();
+  const id = (params['*'] || params.id || '').replace(/^\/+/, '');
   const [candidate, setCandidate] = useState<CandidateInterviewInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +28,7 @@ export default function ConfirmInterview() {
     setLoading(true);
     const queryParams = new URLSearchParams(window.location.search);
     const pvTime = queryParams.get('pvTime');
-    const fetchUrl = `/api/public/candidates/${id}/interview-info${pvTime ? `?pvTime=${pvTime}` : ''}`;
+    const fetchUrl = `/api/public/candidates/${encodeURIComponent(id)}/interview-info${pvTime ? `?pvTime=${pvTime}` : ''}`;
 
     fetch(fetchUrl)
       .then((res) => res.json())
@@ -51,7 +52,7 @@ export default function ConfirmInterview() {
     if (!id || submitting) return;
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/public/candidates/${id}/confirm-interview`, {
+      const res = await fetch(`/api/public/candidates/${encodeURIComponent(id)}/confirm-interview`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action }),

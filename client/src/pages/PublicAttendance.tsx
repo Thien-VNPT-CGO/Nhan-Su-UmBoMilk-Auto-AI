@@ -43,7 +43,8 @@ interface CandidateAttendanceInfo {
 }
 
 export default function PublicAttendance() {
-  const { id } = useParams<{ id: string }>();
+  const params = useParams();
+  const id = (params['*'] || params.id || '').replace(/^\/+/, '');
   const [candidate, setCandidate] = useState<CandidateAttendanceInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +61,7 @@ export default function PublicAttendance() {
     if (!id) return;
     setLoading(true);
     api
-      .get<CandidateAttendanceInfo>(`/public/candidates/${id}/attendance-info`)
+      .get<CandidateAttendanceInfo>(`/public/candidates/${encodeURIComponent(id)}/attendance-info`)
       .then((data) => {
         setCandidate(data);
         setLoading(false);
@@ -192,7 +193,7 @@ export default function PublicAttendance() {
         fineLabel?: string;
         backupFolder: string;
         message: string;
-      }>(`/public/candidates/${id}/attendance-checkin`, {
+      }>(`/public/candidates/${encodeURIComponent(id)}/attendance-checkin`, {
         image: imageSrc,
         note: attendanceType === 'CHECK_OUT' ? 'XÁC NHẬN RA CA UBM' : 'ĐIỂM DANH UBM',
         type: attendanceType,

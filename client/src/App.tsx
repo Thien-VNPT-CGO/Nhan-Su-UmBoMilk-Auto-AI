@@ -37,9 +37,9 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route path="/confirm-pv/:id" element={<ConfirmInterview />} />
-        <Route path="/diemdanh/:id" element={<PublicAttendance />} />
-        <Route path="/public/attendance/:id" element={<PublicAttendance />} />
+        <Route path="/confirm-pv/*" element={<ConfirmInterview />} />
+        <Route path="/diemdanh/*" element={<PublicAttendance />} />
+        <Route path="/public/attendance/*" element={<PublicAttendance />} />
         <Route path="/dang-ky" element={<Navigate to="/" replace />} />
         <Route
           path="/"
