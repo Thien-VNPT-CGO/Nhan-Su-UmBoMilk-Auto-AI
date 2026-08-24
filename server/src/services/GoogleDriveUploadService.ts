@@ -58,6 +58,7 @@ export class GoogleDriveUploadService {
     cleanBranch: string;
     shiftFolder: string;
     cleanCandidateName: string;
+    dateFolder: string;
     actionFolder: string;
     imageFilePath: string;
     txtFilePath: string;
@@ -68,13 +69,14 @@ export class GoogleDriveUploadService {
 
       const { drive, rootFolderId } = client;
 
-      // 1. Tạo cây thư mục trên Google Drive:
-      // rootFolderId -> typeFolder -> cleanBranch -> shiftFolder -> cleanCandidateName -> actionFolder
+      // 1. Tạo cây thư mục 6 cấp trên Google Drive:
+      // rootFolderId -> typeFolder -> cleanBranch -> shiftFolder -> cleanCandidateName -> dateFolder (DD-MM-YYYY) -> actionFolder (CHECK_IN/CHECK_OUT)
       const typeFolderId = await this.findOrCreateFolder(drive, params.typeFolder, rootFolderId);
       const branchFolderId = await this.findOrCreateFolder(drive, params.cleanBranch, typeFolderId);
       const shiftFolderId = await this.findOrCreateFolder(drive, params.shiftFolder, branchFolderId);
       const candidateFolderId = await this.findOrCreateFolder(drive, params.cleanCandidateName, shiftFolderId);
-      const actionFolderId = await this.findOrCreateFolder(drive, params.actionFolder, candidateFolderId);
+      const dateFolderId = await this.findOrCreateFolder(drive, params.dateFolder, candidateFolderId);
+      const actionFolderId = await this.findOrCreateFolder(drive, params.actionFolder, dateFolderId);
 
       // 2. Upload file ảnh cửa hàng
       if (fs.existsSync(params.imageFilePath)) {

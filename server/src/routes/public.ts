@@ -341,7 +341,8 @@ router.post('/candidates/:id(*)/attendance-checkin', async (req, res, next) => {
     }
 
     const cleanCandidateName = `${candidate.tenUv} - ${candidate.sdtZalo.replace(/\D/g, '')}`.replace(/[\\/:*?"<>|]/g, '_');
-    const actionFolder = type === 'CHECK_OUT' ? `RaCa_Ngay_${dateStr}` : `VaoCa_Ngay_${dateStr}`;
+    const dateFolder = `${String(day).padStart(2, '0')}-${String(month + 1).padStart(2, '0')}-${year}`;
+    const actionFolder = type === 'CHECK_OUT' ? 'CHECK_OUT' : 'CHECK_IN';
 
     // 4. Thư mục Google Drive backup
     const driveBackupDir = path.join(
@@ -352,6 +353,7 @@ router.post('/candidates/:id(*)/attendance-checkin', async (req, res, next) => {
       cleanBranch,
       shiftFolder,
       cleanCandidateName,
+      dateFolder,
       actionFolder
     );
 
@@ -440,6 +442,7 @@ ${savedLateReason ? `Lý do đi trễ chính đáng: ${savedLateReason}` : ''}
       cleanBranch,
       shiftFolder,
       cleanCandidateName,
+      dateFolder,
       actionFolder,
       imageFilePath,
       txtFilePath,
