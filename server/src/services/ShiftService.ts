@@ -4,13 +4,15 @@ import { audit } from './AuditService';
 import { syncQueue } from './SyncQueueService';
 import { emit } from '../sockets';
 import { nextId } from '../lib/id';
-import { dateKey } from '../lib/date';
+import { dateKey, formatDateTime } from '../lib/date';
 
 export const SHIFT_OPTIONS = ['SANG', 'CHIEU', 'TOI', 'OFF'] as const;
 
 export class ShiftService {
   async listForDates(from: string, to: string) {
-    const [trainingCandidates, employeeCandidates] = await Promise.all([
+    const todayStr = dateKey(new Date());
+
+    const [trainingCandidates, employeeCandidates, shifts, attendanceEvents] = await Promise.all([
       prisma.candidate.findMany({
         where: {
           ngayBatDauTraining: { not: null },
@@ -22,29 +24,72 @@ export class ShiftService {
         where: { trangThaiTraining: 'NHAN_VIEN_CHINH_THUC' },
         orderBy: { tenUv: 'asc' },
       }),
+      prisma.shift.findMany({
+        where: { date: { gte: from, lte: to } },
+      }),
+      prisma.attendanceEvent.findMany({
+        where: { date: { gte: from, lte: to } },
+        orderBy: { createdAt: 'desc' },
+      }),
     ]);
-    const shifts = await prisma.shift.findMany({
-      where: { date: { gte: from, lte: to } },
-    });
-    const byCandidate = new Map<string, Map<string, typeof shifts[number]>>();
+
+    const byCandidateShifts = new Map<string, Map<string, typeof shifts[number]>>();
     shifts.forEach((s) => {
-      if (!byCandidate.has(s.candidateId)) byCandidate.set(s.candidateId, new Map());
-      byCandidate.get(s.candidateId)!.set(s.date, s);
+      if (!byCandidateShifts.has(s.candidateId)) byCandidateShifts.set(s.candidateId, new Map());
+      byCandidateShifts.get(s.candidateId)!.set(s.date, s);
     });
+
+    const byCandidateAttendance = new Map<string, Map<string, typeof attendanceEvents[number]>>();
+    attendanceEvents.forEach((a) => {
+      if (!byCandidateAttendance.has(a.candidateId)) byCandidateAttendance.set(a.candidateId, new Map());
+      if (!byCandidateAttendance.get(a.candidateId)!.has(a.date)) {
+        byCandidateAttendance.get(a.candidateId)!.set(a.date, a);
+      }
+    });
+
     const mapRow = (c: { id: string; tenUv: string; sdtZalo: string; chiNhanh: string; caLam: string }) => {
-      const shifts: Record<string, { shifts: string }> = {};
-      byCandidate.get(c.id)?.forEach((s) => {
-        shifts[s.date] = { shifts: s.shifts };
+      const shiftsMap: Record<
+        string,
+        {
+          shifts: string;
+          attendanceStatus?: 'ON_TIME' | 'LATE' | 'ABSENT' | null;
+          checkinTime?: string | null;
+        }
+      > = {};
+
+      const candidateShifts = byCandidateShifts.get(c.id);
+      const candidateAttendance = byCandidateAttendance.get(c.id);
+
+      candidateShifts?.forEach((s) => {
+        const att = candidateAttendance?.get(s.date);
+        let status: 'ON_TIME' | 'LATE' | 'ABSENT' | null = null;
+        let checkinTimeStr: string | null = null;
+
+        if (att) {
+          checkinTimeStr = formatDateTime(att.createdAt);
+          const isLate = !!(att.reason && (att.reason.includes('TRE') || att.reason.includes('TRỄ')));
+          status = isLate ? 'LATE' : 'ON_TIME';
+        } else if (s.date < todayStr && s.shifts && s.shifts !== 'OFF') {
+          status = 'ABSENT';
+        }
+
+        shiftsMap[s.date] = {
+          shifts: s.shifts,
+          attendanceStatus: status,
+          checkinTime: checkinTimeStr,
+        };
       });
+
       return {
         candidateId: c.id,
         tenUv: c.tenUv,
         sdtZalo: c.sdtZalo,
         chiNhanh: c.chiNhanh,
         caLam: c.caLam,
-        shifts,
+        shifts: shiftsMap,
       };
     };
+
     return {
       training: trainingCandidates.map(mapRow),
       employees: employeeCandidates.map(mapRow),
@@ -98,18 +143,20 @@ export class ShiftService {
       entityId: `${input.candidateId}:${input.date}`,
       oldValue,
       newValue: valid.join('|'),
-      version: newVersion,
     });
 
     await syncQueue.enqueue({
-      entity: 'training',
-      entityId: input.candidateId,
-      operation: 'UPDATE',
-      field: 'SHIFT',
-      oldValue,
-      newValue: valid.join('|'),
+      entity: 'shift',
+      entityId: `${input.candidateId}:${input.date}`,
+      operation: 'UPSERT',
+      newValue: {
+        candidateId: input.candidateId,
+        date: input.date,
+        shifts: valid.join('|'),
+        note: input.note ?? null,
+      },
       version: newVersion,
-      idempotencyKey: `candidate:${input.candidateId}:shift:${input.date}:v${newVersion}`,
+      idempotencyKey: `candidate:${input.candidateId}:shift:${input.date}`,
     });
 
     emit('shift:updated', { candidateId: input.candidateId, date: input.date, shifts: valid.join('|') });

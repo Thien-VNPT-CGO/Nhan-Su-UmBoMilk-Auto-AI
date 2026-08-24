@@ -16,7 +16,14 @@ interface RowData {
   sdtZalo?: string;
   chiNhanh: string;
   caLam: string;
-  shifts: Record<string, { shifts: string }>;
+  shifts: Record<
+    string,
+    {
+      shifts: string;
+      attendanceStatus?: 'ON_TIME' | 'LATE' | 'ABSENT' | null;
+      checkinTime?: string | null;
+    }
+  >;
 }
 
 const SHIFT_KEYS = ['SANG', 'CHIEU', 'TOI', 'OFF'] as const;
@@ -408,6 +415,30 @@ export default function Shifts() {
                       const cell = r.shifts?.[d];
                       const shifts = cell ? cell.shifts.split('|').filter(Boolean) : [];
                       const colors = shifts.map((s) => shiftColor(s).bg);
+                      const attStatus = cell?.attendanceStatus;
+                      const checkinTime = cell?.checkinTime;
+
+                      let attBadge = null;
+                      if (attStatus === 'ON_TIME') {
+                        attBadge = (
+                          <span className="text-[9px] font-black bg-emerald-600 text-white px-1 py-0.5 rounded shadow-2xs flex items-center gap-0.5 mt-0.5">
+                            ✓ ĐÚNG GIỜ
+                          </span>
+                        );
+                      } else if (attStatus === 'LATE') {
+                        attBadge = (
+                          <span className="text-[9px] font-black bg-rose-600 text-white px-1 py-0.5 rounded shadow-2xs flex items-center gap-0.5 mt-0.5 animate-pulse">
+                            ⚠️ TRỄ (50K)
+                          </span>
+                        );
+                      } else if (attStatus === 'ABSENT') {
+                        attBadge = (
+                          <span className="text-[9px] font-bold bg-slate-500 text-white px-1 py-0.5 rounded opacity-80 mt-0.5">
+                            ✖ VẮNG
+                          </span>
+                        );
+                      }
+
                       return (
                         <td key={d} className="border-r border-slate-50 p-1 text-center">
                           <button
@@ -416,12 +447,17 @@ export default function Shifts() {
                               setSelected(shifts.length ? shifts : ['OFF']);
                             }}
                             className={cn(
-                              'w-full h-9 rounded-lg flex items-center justify-center gap-0.5 transition-all hover:ring-2 hover:ring-brand-300',
+                              'w-full min-h-[38px] p-1 rounded-lg flex flex-col items-center justify-center gap-0.5 transition-all hover:ring-2 hover:ring-brand-300',
                               shifts.length === 0 && 'bg-slate-50 hover:bg-slate-100',
-                              isToday(d) && 'ring-1 ring-brand-200',
+                              isToday(d) && 'ring-1 ring-brand-300 font-bold',
                               shifts.length === 1 ? colors[0] : 'bg-slate-100',
+                              attStatus === 'ON_TIME' && '!bg-emerald-100 border border-emerald-300',
+                              attStatus === 'LATE' && '!bg-rose-100 border border-rose-300',
+                              attStatus === 'ABSENT' && '!bg-slate-200/80 border border-slate-300'
                             )}
-                            title={`${r.tenUv} – ${d}: ${shifts.join(' + ') || 'Chưa xếp'}`}
+                            title={`${r.tenUv} – ${d}: ${shifts.join(' + ') || 'Chưa xếp'}${
+                              checkinTime ? `\nĐiểm danh lúc: ${checkinTime}` : ''
+                            }`}
                           >
                             {shifts.length > 1 ? (
                               <span className="flex gap-0.5">
@@ -434,6 +470,8 @@ export default function Shifts() {
                                 {shifts[0] === 'OFF' ? 'OFF' : shifts[0].slice(0, 3)}
                               </span>
                             ) : null}
+
+                            {attBadge}
                           </button>
                         </td>
                       );

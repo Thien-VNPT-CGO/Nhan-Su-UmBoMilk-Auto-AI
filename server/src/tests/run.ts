@@ -68,14 +68,15 @@ function uniquePhone(): string {
 }
 
 async function makeCandidate(session: string, phone?: string) {
+  const p = phone ?? uniquePhone();
   const res = await api('/webhooks/form', {
     method: 'POST',
     body: {
-      tenUv: `UV Test ${Date.now() % 1000}`,
+      tenUv: `UV Test ${Math.floor(Math.random() * 1000)}`,
       namSinh: '2004',
       trinhDo: 'Dang hoc Cao dang',
       queQuan: 'Can Tho',
-      sdtZalo: phone ?? uniquePhone(),
+      sdtZalo: p,
       caLam: 'SÁNG',
       chiNhanh: 'Hoc Mon',
       kinhNghiem: 'Da lam tra sua',
@@ -83,6 +84,10 @@ async function makeCandidate(session: string, phone?: string) {
       linkFb: 'https://facebook.com/test',
     },
   });
+  if (!res.json?.data?.id) {
+    const existing = await prisma.candidate.findUnique({ where: { sdtZalo: p } });
+    return existing!.id;
+  }
   return res.json.data.id as string;
 }
 
