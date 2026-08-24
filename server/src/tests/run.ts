@@ -85,7 +85,7 @@ async function makeCandidate(session: string, phone?: string) {
     },
   });
   if (!res.json?.data?.id) {
-    const existing = await prisma.candidate.findUnique({ where: { sdtZalo: p } });
+    const existing = await prisma.candidate.findFirst({ where: { sdtZalo: p } });
     return existing!.id;
   }
   return res.json.data.id as string;
