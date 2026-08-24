@@ -13,6 +13,7 @@ import {
   LogIn,
   LogOut,
   Clock,
+  AlertTriangle,
 } from 'lucide-react';
 import { api, ApiError } from '../api/client';
 import { Spinner } from '../components/ui';
@@ -36,6 +37,9 @@ interface CandidateAttendanceInfo {
   isCheckoutTooEarly?: boolean;
   allowedCheckoutTimeStr?: string;
   shiftEndTimeStr?: string;
+  isLateNow?: boolean;
+  lateMinutesNow?: number;
+  shiftStartTimeStr?: string;
 }
 
 export default function PublicAttendance() {
@@ -46,6 +50,7 @@ export default function PublicAttendance() {
 
   const [attendanceType, setAttendanceType] = useState<'CHECK_IN' | 'CHECK_OUT'>('CHECK_IN');
   const [imageSrc, setImageSrc] = useState<string | null>(null);
+  const [lateReason, setLateReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
@@ -170,6 +175,11 @@ export default function PublicAttendance() {
       return;
     }
 
+    if (attendanceType === 'CHECK_IN' && candidate?.isLateNow && !lateReason.trim()) {
+      alert('Bạn đang điểm danh trễ ca làm. Bắt buộc phải nhập lý do chính đáng trước khi gửi!');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const data = await api.post<{
@@ -186,6 +196,7 @@ export default function PublicAttendance() {
         image: imageSrc,
         note: attendanceType === 'CHECK_OUT' ? 'XÁC NHẬN RA CA UBM' : 'ĐIỂM DANH UBM',
         type: attendanceType,
+        lateReason: lateReason.trim(),
       });
       setSubmitResult(data);
       setSubmitSuccess(true);
@@ -604,6 +615,32 @@ export default function PublicAttendance() {
               Hình ảnh cửa hàng {candidate.chiNhanh || 'Umbo Milk'}
             </p>
 
+            {/* CẢNH BÁO ĐI TRỄ VÀ Ô NHẬP LÝ DO BẮT BUỘC */}
+            {attendanceType === 'CHECK_IN' && candidate?.isLateNow && (
+              <div className="bg-gradient-to-br from-amber-950/90 via-rose-950/90 to-amber-950/90 border-2 border-amber-500/90 p-4 rounded-2xl space-y-2.5 shadow-2xl animate-pulse">
+                <div className="flex items-center gap-2 text-amber-300 font-black text-xs uppercase tracking-wider">
+                  <AlertTriangle size={18} className="text-amber-400 shrink-0" />
+                  <span>CẢNH BÁO ĐI TRỄ ({candidate.lateMinutesNow} PHÚT)</span>
+                </div>
+                <p className="text-[11px] text-amber-200/90 leading-relaxed">
+                  Giờ vào ca chuẩn: <strong>{candidate.shiftStartTimeStr}</strong>. Theo quy chế làm việc, trường hợp đi trễ <strong>bắt buộc phải nhập lý do chính đáng</strong> bên dưới trước khi gửi điểm danh.
+                </p>
+                <div className="space-y-1.5 pt-1">
+                  <label className="text-[10px] font-black text-amber-300 uppercase tracking-wider block flex items-center justify-between">
+                    <span>LÝ DO ĐI TRỄ (BẮT BUỘC NHẬP CHÍNH ĐÁNG)</span>
+                    <span className="text-rose-400 font-extrabold">* Bắt buộc</span>
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={lateReason}
+                    onChange={(e) => setLateReason(e.target.value)}
+                    placeholder="Nhập lý do đi trễ chính đáng của bạn (ví dụ: kẹt xe, sự cố hỏng xe...)..."
+                    className="w-full bg-slate-900/95 border border-amber-500/70 focus:border-amber-400 rounded-xl p-3 text-xs text-white placeholder:text-slate-500 outline-none transition-colors"
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Note Box */}
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
@@ -623,12 +660,12 @@ export default function PublicAttendance() {
               disabled={
                 !imageSrc ||
                 isSubmitting ||
-                (attendanceType === 'CHECK_IN' && (candidate?.hasCheckedInToday || candidate?.isTooEarly)) ||
+                (attendanceType === 'CHECK_IN' && (candidate?.hasCheckedInToday || candidate?.isTooEarly || (candidate?.isLateNow && !lateReason.trim()))) ||
                 (attendanceType === 'CHECK_OUT' && (candidate?.hasCheckedOutToday || candidate?.isCheckoutTooEarly))
               }
               onClick={handleCheckinSubmit}
               className={`w-full py-4 px-4 rounded-full font-black text-sm transition-all shadow-2xl flex items-center justify-center gap-2 cursor-pointer ${
-                (attendanceType === 'CHECK_IN' && (candidate?.hasCheckedInToday || candidate?.isTooEarly)) ||
+                (attendanceType === 'CHECK_IN' && (candidate?.hasCheckedInToday || candidate?.isTooEarly || (candidate?.isLateNow && !lateReason.trim()))) ||
                 (attendanceType === 'CHECK_OUT' && (candidate?.hasCheckedOutToday || candidate?.isCheckoutTooEarly))
                   ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/60 shadow-none'
                   : imageSrc && !isSubmitting

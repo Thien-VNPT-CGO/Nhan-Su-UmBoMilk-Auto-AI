@@ -200,6 +200,12 @@ router.get('/candidates/:id/attendance-info', async (req, res, next) => {
     // RÀNG BUỘC MỚI: Check-out CHỈ ĐƯỢC MỞ ĐÚNG GIỜ HẾT CA TRỞ ĐI (vnNow >= shiftEndTime)
     const isCheckoutTooEarly = vnNow < shiftEndTime;
 
+    // Kiểm tra đi trễ khi Check-in (sau giờ bắt đầu ca + 5 phút)
+    const graceEndTime = new Date(shiftStartTime.getTime() + 4 * 60 * 1000 + 59 * 1000);
+    const isLateNow = vnNow > graceEndTime;
+    const lateMinutesNow = isLateNow ? Math.max(5, Math.floor((vnNow.getTime() - shiftStartTime.getTime()) / (60 * 1000))) : 0;
+    const shiftStartTimeStr = `${String(startHour).padStart(2, '0')}:${String(startMin).padStart(2, '0')}`;
+
     res.json({
       success: true,
       data: {
@@ -215,6 +221,9 @@ router.get('/candidates/:id/attendance-info', async (req, res, next) => {
         isCheckoutTooEarly,
         allowedCheckoutTimeStr: shiftEndTimeStr,
         shiftEndTimeStr,
+        isLateNow,
+        lateMinutesNow,
+        shiftStartTimeStr,
       },
     });
   } catch (e) {
@@ -226,6 +235,7 @@ const checkinSchema = z.object({
   image: z.string().min(1, 'Chưa truyền hình ảnh chụp cửa hàng'),
   note: z.string().optional(),
   type: z.enum(['CHECK_IN', 'CHECK_OUT']).default('CHECK_IN'),
+  lateReason: z.string().optional(),
 });
 
 // Endpoint ứng viên nộp hình ảnh & xác nhận điểm danh (Check-in / Check-out) từ Web công khai
@@ -241,7 +251,7 @@ router.post('/candidates/:id/attendance-checkin', async (req, res, next) => {
       throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy ứng viên.');
     }
 
-    const { image, type } = parsed.data;
+    const { image, type, lateReason } = parsed.data;
     const { vnNow, year, month, day, dateStr } = getVietnamNowParts();
 
     // Lấy sự kiện điểm danh hôm nay để khóa trùng lặp
@@ -347,21 +357,6 @@ router.post('/candidates/:id/attendance-checkin', async (req, res, next) => {
     const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
     fs.writeFileSync(imageFilePath, base64Data, { encoding: 'base64' });
 
-    // 6. Tạo file văn bản Diem_danh.txt
-    const txtContent = `${type === 'CHECK_OUT' ? 'XÁC NHẬN RA CA UBM' : 'ĐIỂM DANH UBM'}
-====================================
-Họ tên: ${candidate.tenUv}
-Số điện thoại: ${candidate.sdtZalo}
-Mã UV: ${candidate.id}
-Chi nhánh: ${candidate.chiNhanh || 'Chưa chốt'}
-Ca làm: ${candidate.caLam || 'Chưa chốt'}
-Loại: ${type === 'CHECK_OUT' ? 'CHECK-OUT (RA CA)' : 'CHECK-IN (VÀO CA)'}
-Mốc thời gian: ${vnNow.toLocaleString('vi-VN')}
-====================================`;
-
-    const txtFilePath = path.join(driveBackupDir, 'Diem_danh.txt');
-    fs.writeFileSync(txtFilePath, txtContent, 'utf8');
-
     // 7. Tính toán Vi phạm & Tiền phạt theo QUY CHẾ LÀM VIỆC (25.500đ/1h)
     let isLate = false;
     let isEarlyLeave = false;
@@ -382,6 +377,15 @@ Mốc thời gian: ${vnNow.toLocaleString('vi-VN')}
         isLate = true;
         lateMinutes = Math.max(5, Math.floor((vnNow.getTime() - shiftStartTime.getTime()) / (60 * 1000)));
 
+        // RÀNG BUỘC BẮT BUỘC: ĐI TRỄ PHẢI CÓ LÝ DO CHÍNH ĐÁNG
+        const trimmedLateReason = lateReason?.trim();
+        if (!trimmedLateReason) {
+          throw ApiError.badRequest(
+            'LATE_REASON_REQUIRED',
+            `Bạn đang điểm danh trễ ${lateMinutes} phút so với giờ vào ca (${String(startHour).padStart(2, '0')}:${String(startMin).padStart(2, '0')}). Vui lòng nhập lý do đi trễ chính đáng trước khi gửi điểm danh!`
+          );
+        }
+
         if (lateMinutes < 30) {
           fineAmount = 30000;
           errCode = `VAO_TRE_5P_30K_${lateMinutes}M`;
@@ -397,12 +401,30 @@ Mốc thời gian: ${vnNow.toLocaleString('vi-VN')}
         }
       }
     } else if (type === 'CHECK_OUT') {
-      // CHECK-OUT ĐÚNG GIỜ (vnNow >= shiftEndTime): 0đ phạt
       isEarlyLeave = false;
       fineAmount = 0;
       errCode = 'CHECK_OUT_ON_TIME';
       fineLabel = 'RA CA ĐÚNG GIỜ';
     }
+
+    const savedLateReason = isLate ? (lateReason?.trim() || null) : null;
+
+    // 6. Tạo file văn bản Diem_danh.txt
+    const txtContent = `${type === 'CHECK_OUT' ? 'XÁC NHẬN RA CA UBM' : 'ĐIỂM DANH UBM'}
+====================================
+Họ tên: ${candidate.tenUv}
+Số điện thoại: ${candidate.sdtZalo}
+Mã UV: ${candidate.id}
+Chi nhánh: ${candidate.chiNhanh || 'Chưa chốt'}
+Ca làm: ${candidate.caLam || 'Chưa chốt'}
+Loại: ${type === 'CHECK_OUT' ? 'CHECK-OUT (RA CA)' : 'CHECK-IN (VÀO CA)'}
+Mốc thời gian: ${vnNow.toLocaleString('vi-VN')}
+Trạng thái: ${isLate ? `ĐI TRỄ ${lateMinutes} PHÚT (${fineLabel})` : 'ĐÚNG GIỜ'}
+${savedLateReason ? `Lý do đi trễ chính đáng: ${savedLateReason}` : ''}
+====================================`;
+
+    const txtFilePath = path.join(driveBackupDir, 'Diem_danh.txt');
+    fs.writeFileSync(txtFilePath, txtContent, 'utf8');
 
     // Ghi nhận sự kiện AttendanceEvent
     await prisma.attendanceEvent.create({
@@ -415,6 +437,7 @@ Mốc thời gian: ${vnNow.toLocaleString('vi-VN')}
         method: 'PUBLIC_WEB',
         valid: true,
         reason: errCode,
+        lateReason: savedLateReason,
         lat: null,
         lng: null,
       },

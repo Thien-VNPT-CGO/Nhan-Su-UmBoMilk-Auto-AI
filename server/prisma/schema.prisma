@@ -146,6 +146,7 @@ model AttendanceEvent {
   method      String // ZALO | MANUAL | SYSTEM
   valid       Boolean
   reason      String?
+  lateReason  String?   // Lý do đi trễ do nhân viên nhập
   lat         Float?
   lng         Float?
   trainingDay Int?

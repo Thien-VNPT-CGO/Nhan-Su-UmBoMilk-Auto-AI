@@ -17,6 +17,7 @@ interface EventRow {
   method: string;
   valid: boolean;
   reason: string | null;
+  lateReason?: string | null;
   trainingDay: number | null;
   candidate: { tenUv: string; sdtZalo: string } | null;
 }
@@ -167,7 +168,14 @@ export default function Attendance() {
                         ? <Badge className="bg-emerald-100 text-emerald-700"><CheckCircle2 size={11} /> Hợp lệ</Badge>
                         : <Badge className="bg-rose-100 text-rose-700"><XCircle size={11} /> Không hợp lệ</Badge>}
                     </td>
-                    <td className="table-td text-xs text-slate-500 max-w-[220px] truncate">{r.reason ?? '—'}</td>
+                    <td className="table-td text-xs text-slate-500 max-w-[280px]">
+                      <div>{r.reason ?? '—'}</div>
+                      {r.lateReason && (
+                        <div className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-300/80 px-2 py-0.5 rounded-md">
+                          <span>⚠️ Lý do trễ:</span> <span>"{r.lateReason}"</span>
+                        </div>
+                      )}
+                    </td>
                     <td className="table-td">{r.trainingDay ? `Ngày ${r.trainingDay}/7` : '—'}</td>
                   </tr>
                 ))}
