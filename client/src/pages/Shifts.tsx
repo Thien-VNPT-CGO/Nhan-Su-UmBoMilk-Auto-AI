@@ -199,6 +199,63 @@ export default function Shifts() {
 
   const isToday = (dStr: string) => dStr === startOfToday();
 
+  const handleSendAttendanceZaloLink = async (r: RowData) => {
+    const origin = window.location.origin;
+    const attendanceLink = `${origin}/diemdanh/${encodeURIComponent(r.candidateId)}`;
+    const msg = [
+      `🐮 [UMBO MILK] – LỊCH VÀ NÚT ĐIỂM DANH HÀNG NGÀY 📋`,
+      ``,
+      `Chào ${r.tenUv} ❤️`,
+      `Dưới đây là đường link điểm danh cá nhân của bạn tại Umbo Milk (${r.chiNhanh || 'Chi nhánh'}):`,
+      ``,
+      `👉 Link điểm danh: ${attendanceLink}`,
+      ``,
+      `📌 Ca làm đăng ký: ${r.caLam || 'Theo ca phân công'}`,
+      `Vui lòng nhấp vào đường link trên để chụp ảnh xác thực tại cửa hàng khi vào ca và ra ca mỗi ngày nhé! ✨`,
+    ].join('\n');
+
+    let copied = false;
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(msg);
+        copied = true;
+      } catch {
+        copied = false;
+      }
+    }
+
+    if (!copied) {
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = msg;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        copied = document.execCommand('copy');
+        document.body.removeChild(textarea);
+      } catch {
+        copied = false;
+      }
+    }
+
+    if (copied) {
+      toast('success', '📋 Đã sao chép tin nhắn & Link điểm danh! Nhấn (Ctrl + V) trên Zalo để dán & gửi.');
+    } else {
+      toast('success', 'Đã mở Zalo để gửi link điểm danh cho ứng viên.');
+    }
+
+    try {
+      await api.post(`/training/${encodeURIComponent(r.candidateId)}/zalo-notify`).catch(() => null);
+    } catch {
+      // ignore
+    }
+
+    const cleanPhone = r.sdtZalo ? r.sdtZalo.replace(/\D/g, '') : '';
+    const zaloUrl = cleanPhone ? `https://zalo.me/${cleanPhone}` : 'https://chat.zalo.me';
+    window.open(zaloUrl, '_blank', 'noopener,noreferrer');
+  };
+
   // RÀNG BUỘC KHÓA DỰA TRÊN THỜI GIAN CA
   const isEditModalDisabled = useMemo(() => {
     if (!edit) return false;
@@ -347,6 +404,14 @@ export default function Shifts() {
                         <div className="text-[11px] text-amber-700 font-medium mt-0.5">
                           • Ca làm: <span className="font-bold">{r.caLam || 'Chưa chốt ca'}</span>
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => handleSendAttendanceZaloLink(r)}
+                          className="mt-2 text-[10px] font-bold bg-[#0068ff] hover:bg-[#0052cc] text-white px-2.5 py-1.5 rounded-xl flex items-center gap-1 shadow-2xs transition-transform active:scale-95 cursor-pointer"
+                          title="Sao chép tin nhắn kèm Link điểm danh & Mở Zalo 1-1 với ứng viên"
+                        >
+                          <span>💬 Mở App Zalo gửi Link điểm danh</span>
+                        </button>
                       </td>
 
                       {/* 7 dates columns */}
