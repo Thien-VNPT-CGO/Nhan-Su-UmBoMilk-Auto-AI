@@ -4,7 +4,6 @@ import {
   Camera,
   CheckCircle2,
   AlertCircle,
-  Clock,
   RefreshCw,
   ShieldCheck,
   Check,
@@ -23,6 +22,9 @@ interface CandidateAttendanceInfo {
   caLam: string;
   ngayBatDauTraining: string | null;
   soNgayDaTraining: number;
+  isTooEarly?: boolean;
+  earlyMinutes?: number;
+  allowedTimeStr?: string;
 }
 
 export default function PublicAttendance() {
@@ -78,6 +80,11 @@ export default function PublicAttendance() {
 
   const handleCheckinSubmit = async () => {
     if (!id || !imageSrc) return;
+    if (candidate?.isTooEarly) {
+      alert(`Chưa đến khung giờ điểm danh! Khung giờ cho phép mở điểm danh bắt đầu từ ${candidate.allowedTimeStr} (trước ca 30 phút).`);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const data = await api.post<{
@@ -217,6 +224,23 @@ export default function PublicAttendance() {
             </div>
           </div>
         </div>
+
+        {/* TOO EARLY WARNING ALERT BOX */}
+        {candidate?.isTooEarly && (
+          <div className="bg-amber-950/90 border-2 border-amber-500/80 p-4 sm:p-5 rounded-3xl text-center space-y-2 shadow-2xl backdrop-blur-xl animate-pulse">
+            <div className="w-12 h-12 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto text-amber-400">
+              <AlertCircle size={28} />
+            </div>
+            <h3 className="text-base font-black text-amber-300">⚠️ CHƯA ĐẾN KHUNG GIỜ ĐIỂM DANH!</h3>
+            <p className="text-xs text-amber-100 leading-relaxed">
+              Bạn đang mở trang quá sớm <strong className="font-mono text-white font-black">{candidate.earlyMinutes} phút</strong>.
+              Khung giờ điểm danh cho ca <strong className="text-amber-300 font-bold">{candidate.caLam || 'SÁNG'}</strong> chỉ mở từ <strong className="font-mono text-white font-extrabold">{candidate.allowedTimeStr}</strong> trở đi (trước ca 30 phút).
+            </p>
+            <p className="text-[11px] text-amber-300/80 italic font-medium">
+              * Nút xác nhận điểm danh đã được khóa cho đến khi vào đúng khung giờ.
+            </p>
+          </div>
+        )}
 
         {/* Result Cards OR Upload Form */}
         {submitSuccess ? (
@@ -368,15 +392,22 @@ export default function PublicAttendance() {
             {/* Submit Button */}
             <button
               type="button"
-              disabled={!imageSrc || isSubmitting}
+              disabled={!imageSrc || isSubmitting || candidate?.isTooEarly}
               onClick={handleCheckinSubmit}
               className={`w-full py-4 px-4 rounded-full font-black text-sm transition-all shadow-2xl flex items-center justify-center gap-2 cursor-pointer ${
-                imageSrc && !isSubmitting
-                  ? 'bg-gradient-to-r from-pink-600 via-rose-600 to-purple-600 hover:from-pink-500 hover:to-rose-500 text-white shadow-pink-600/40 animate-pulse active:scale-[0.98]'
-                  : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/60'
+                candidate?.isTooEarly
+                  ? 'bg-amber-950/80 text-amber-400 border border-amber-500/50 cursor-not-allowed shadow-none'
+                  : imageSrc && !isSubmitting
+                    ? 'bg-gradient-to-r from-pink-600 via-rose-600 to-purple-600 hover:from-pink-500 hover:to-rose-500 text-white shadow-pink-600/40 animate-pulse active:scale-[0.98]'
+                    : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/60'
               }`}
             >
-              {isSubmitting ? (
+              {candidate?.isTooEarly ? (
+                <>
+                  <AlertCircle size={18} />
+                  <span>⏳ CHƯA ĐẾN GIỜ (MỞ TỪ {candidate.allowedTimeStr})</span>
+                </>
+              ) : isSubmitting ? (
                 <>
                   <Spinner size={18} className="text-white" />
                   <span>Đang ghi nhận điểm danh...</span>
