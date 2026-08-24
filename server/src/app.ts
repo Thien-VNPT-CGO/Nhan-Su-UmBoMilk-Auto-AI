@@ -126,8 +126,10 @@ export async function startSystem(server: http.Server) {
   }
   try {
     await backfillXepLoai();
+    const { migrateAllCandidateIdsToUBMFormat } = await import('./lib/id');
+    await migrateAllCandidateIdsToUBMFormat();
   } catch (e) {
-    console.warn('[startSystem] backfillXepLoai:', e instanceof Error ? e.message : String(e));
+    console.warn('[startSystem] backfill/migrate:', e instanceof Error ? e.message : String(e));
   }
   initSocket(server);
   syncWorker.start();

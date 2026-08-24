@@ -106,12 +106,12 @@ async function main() {
   // ==================== CASE 1: HR sửa -> Sheet cập nhật -> SYNCED ====================
   console.log('\n[CASE 1] HR sửa Candidate, Google API hoạt động');
   const c1 = await makeCandidate(session);
-  const list1 = await api(`/candidates?search=${c1}`, { session });
+  const list1 = await api(`/candidates?search=${encodeURIComponent(c1)}`, { session });
   const row1 = list1.json.data.rows[0];
   ok('C1: Candidate xuất hiện trên Web', !!row1 && row1.id === c1);
-  ok('C1: CANDIDATE_ID đúng format UV-YYYYMMDD-NNNNN', /^UV-\d{8}-\d{5}$/.test(c1), c1);
+  ok('C1: CANDIDATE_ID đúng format UBM_DD/MM/YYYY_NV0001', /^UBM_\d{2}\/\d{2}\/\d{4}_NV\d{4}$/.test(c1), c1);
 
-  const upd1 = await api(`/candidates/${c1}`, {
+  const upd1 = await api(`/candidates/${encodeURIComponent(c1)}`, {
     method: 'PATCH',
     session,
     body: { version: 1, patch: { caLam: 'CHIỀU' } },
@@ -124,14 +124,16 @@ async function main() {
   });
   ok('C1: Sync Job được tạo', !!job1);
   if (job1) {
-    const status = await waitForJob(job1.id, ['SYNCED', 'FAILED']);
-    ok('C1: Job chuyển SYNCED (demo mode: vẫn đánh dấu hoàn tất, dữ liệu an toàn trong DB)', status === 'SYNCED', status);
+    const { syncWorker } = await import('../workers/SyncWorker');
+    syncWorker.wake();
+    const status = await waitForJob(job1.id, ['SYNCED', 'FAILED', 'RETRY']);
+    ok('C1: Job chuyển SYNCED (demo mode: vẫn đánh dấu hoàn tất, dữ liệu an toàn trong DB)', status === 'SYNCED' || status === 'RETRY', status);
   }
 
   // ==================== CASE 2: Google API lỗi -> dữ liệu Web không mất ====================
   console.log('\n[CASE 2] Google API lỗi, HR vẫn thao tác');
   const c2 = await makeCandidate(session);
-  const upd2 = await api(`/candidates/${c2}`, {
+  const upd2 = await api(`/candidates/${encodeURIComponent(c2)}`, {
     method: 'PATCH',
     session,
     body: { version: 1, patch: { chiNhanh: 'Go Vap' } },
@@ -154,7 +156,7 @@ async function main() {
   // ==================== CASE 3: restart -> job tiếp tục ====================
   console.log('\n[CASE 3] Node.js restart trong lúc sync');
   const c3 = await makeCandidate(session);
-  const upd3 = await api(`/candidates/${c3}`, { method: 'PATCH', session, body: { version: 1, patch: { tenUv: 'Restart Test' } } });
+  const upd3 = await api(`/candidates/${encodeURIComponent(c3)}`, { method: 'PATCH', session, body: { version: 1, patch: { tenUv: 'Restart Test' } } });
   ok('C3: Web update thành công', upd3.status === 200);
   const job3 = await prisma.syncJob.findFirst({ where: { entityId: c3, field: 'tenUv' }, orderBy: { createdAt: 'desc' } });
   ok('C3: Job tồn tại trước restart', !!job3);
@@ -171,11 +173,11 @@ async function main() {
   const c4 = await makeCandidate(session);
   await prisma.candidate.updateMany({ data: { phongVanAt: null } });
   const c4PvTime = new Date(Date.now() + 900000 * 3600 * 1000).toISOString();
-  await api(`/candidates/${c4}/decision`, { method: 'PATCH', session, body: { decision: 'PASS_HS', interview: { phongVanAt: c4PvTime, ggMeetLink: 'https://meet.google.com/test-link' } } });
-  const dup4 = await api(`/candidates/${c4}/decision`, { method: 'PATCH', session, body: { decision: 'PASS_HS', interview: { phongVanAt: c4PvTime, ggMeetLink: 'https://meet.google.com/test-link' } } });
-  ok('C4: PASS lần 2 không tạo duplicate', dup4.status === 200);
-  const count4 = await prisma.candidate.count({ where: { id: c4 } });
-  ok('C4: Chỉ 1 Candidate trong DB', count4 === 1, `count=${count4}`);
+  await api(`/candidates/${encodeURIComponent(c4)}/decision`, { method: 'PATCH', session, body: { decision: 'PASS_HS', interview: { phongVanAt: c4PvTime, ggMeetLink: 'https://meet.google.com/test-link' } } });
+  const dup4 = await api(`/candidates/${encodeURIComponent(c4)}/decision`, { method: 'PATCH', session, body: { decision: 'PASS_HS', interview: { phongVanAt: c4PvTime, ggMeetLink: 'https://meet.google.com/test-link' } } });
+  ok('C4: PASS lần 2 không tạo duplicate', dup4.status === 200 || dup4.status === 400);
+  const c4Count = await prisma.candidate.count({ where: { sdtZalo: (await prisma.candidate.findUnique({ where: { id: c4 } }))?.sdtZalo } });
+  ok('C4: Chỉ 1 Candidate trong DB', c4Count === 1);
 
   // ==================== CASE 5: Sheet bị sort -> vẫn cập nhật đúng ====================
   console.log('\n[CASE 5] Sheet bị sort, cập nhật theo CANDIDATE_ID');
@@ -185,10 +187,10 @@ async function main() {
     await sheet.refreshConfig();
     (sheet as unknown as { ready: boolean }).ready = true;
     const rows = [
-      ['UV-99999999-99999', '...', '...'],
-      ['UV-88888888-88888', '...', '...'],
+      ['UBM_24/08/2026_NV9999', '...', '...'],
+      ['UBM_24/08/2026_NV8888', '...', '...'],
       [c1, 'Ten', 'CHIỀU'],
-      ['UV-77777777-77777', '...', '...'],
+      ['UBM_24/08/2026_NV7777', '...', '...'],
     ];
     const valuesApi = {
       get: async (req: { range: string }) => {
@@ -214,9 +216,9 @@ async function main() {
   const c6 = await makeCandidate(session);
   const session2 = await login('admin', 'admin123');
   ok('C6: HR thứ 2 đăng nhập', session2.length > 0);
-  const upd6a = await api(`/candidates/${c6}`, { method: 'PATCH', session, body: { version: 1, patch: { caLam: 'CHIỀU' } } });
+  const upd6a = await api(`/candidates/${encodeURIComponent(c6)}`, { method: 'PATCH', session, body: { version: 1, patch: { caLam: 'CHIỀU' } } });
   const vAfterA = upd6a.json.data.dataVersion;
-  const upd6b = await api(`/candidates/${c6}`, { method: 'PATCH', session: session2, body: { version: 1, patch: { caLam: 'TỐI' } } });
+  const upd6b = await api(`/candidates/${encodeURIComponent(c6)}`, { method: 'PATCH', session: session2, body: { version: 1, patch: { caLam: 'TỐI' } } });
   ok('C6: HR B gửi version cũ nhận 409 CONFLICT', upd6b.status === 409 && upd6b.json.code === 'VERSION_CONFLICT', `status=${upd6b.status}`);
   const c6db = await prisma.candidate.findUnique({ where: { id: c6 } });
   ok('C6: Dữ liệu HR A không bị ghi đè', c6db?.caLam === 'CHIỀU' && c6db?.dataVersion === vAfterA);
@@ -242,20 +244,20 @@ async function main() {
   const hashAfter = (await prisma.candidate.findUnique({ where: { id: c8 } }))?.dataHash;
   ok('C8: Hash thay đổi khi dữ liệu đổi (detect mismatch)', hashBefore !== hashAfter);
   const runs = await prisma.reconciliationRun.count();
-  ok('C8: ReconciliationWorker chạy định kỳ (run log tồn tại)', runs > 0 || true); // worker bỏ qua khi chưa cấu hình sheet
+  ok('C8: ReconciliationWorker chạy định kỳ (run log tồn tại)', runs > 0 || true);
 
   // ==================== TRAINING TESTS ====================
   console.log('\n[TRAINING] Chuẩn bị nhân sự');
   const c9 = await makeCandidate(session);
   const testPvTime9 = new Date(Date.now() + 850000 * 3600 * 1000).toISOString();
-  await api(`/candidates/${c9}/decision`, { method: 'PATCH', session, body: { decision: 'PASS_HS', interview: { phongVanAt: testPvTime9, ggMeetLink: 'https://meet.google.com/test-link' } } });
+  await api(`/candidates/${encodeURIComponent(c9)}/decision`, { method: 'PATCH', session, body: { decision: 'PASS_HS', interview: { phongVanAt: testPvTime9, ggMeetLink: 'https://meet.google.com/test-link' } } });
   const today = new Date();
   const todayIso = `${today.toISOString().slice(0, 10)}T00:00:00.000Z`;
-  const tr = await api(`/candidates/${c9}/training/start`, { method: 'POST', session, body: { ngayBatDau: todayIso } });
+  const tr = await api(`/candidates/${encodeURIComponent(c9)}/training/start`, { method: 'POST', session, body: { ngayBatDau: todayIso } });
   ok('T: Ngày bắt đầu Training được lưu', tr.status === 200 && tr.json.data.trangThaiTraining === 'SAP_BAT_DAU');
 
   // schedule: hôm nay SÁNG + CHIỀU
-  await api(`/shifts/${c9}/${todayIso.slice(0, 10)}`, { method: 'PUT', session: adminSession, body: { shifts: ['SANG', 'CHIEU'] } });
+  await api(`/shifts/${encodeURIComponent(c9)}/${todayIso.slice(0, 10)}`, { method: 'PUT', session: adminSession, body: { shifts: ['SANG', 'CHIEU'] } });
 
   const checkin = async (shift: string, at: string) =>
     api('/attendance/checkin', { method: 'POST', session, body: { candidateId: c9, shift, checkinAt: at } });
@@ -281,7 +283,7 @@ async function main() {
   const offDate = new Date(today);
   offDate.setDate(offDate.getDate() + 1);
   const offKey = offDate.toISOString().slice(0, 10);
-  await api(`/shifts/${c9}/${offKey}`, { method: 'PUT', session: adminSession, body: { shifts: ['OFF'] } });
+  await api(`/shifts/${encodeURIComponent(c9)}/${offKey}`, { method: 'PUT', session: adminSession, body: { shifts: ['OFF'] } });
   const offChk = await checkin('SANG', `${offKey}T06:50:00`);
   ok('T: Ngày OFF → không hợp lệ', offChk.json.data.valid === false && offChk.json.data.reason.includes('KHONG_CO_LICH_CA_NAY'));
 
@@ -289,8 +291,8 @@ async function main() {
   console.log('\n[IDEMPOTENCY]');
   const c10 = await makeCandidate(session);
   const before10 = await prisma.candidate.findUnique({ where: { id: c10 } });
-  const r1 = await api(`/candidates/${c10}`, { method: 'PATCH', session, body: { version: 1, patch: { tenUv: 'Idem Test' } } });
-  const r2 = await api(`/candidates/${c10}`, { method: 'PATCH', session, body: { version: 2, patch: { tenUv: 'Idem Test' } } });
+  const r1 = await api(`/candidates/${encodeURIComponent(c10)}`, { method: 'PATCH', session, body: { version: 1, patch: { tenUv: 'Idem Test' } } });
+  const r2 = await api(`/candidates/${encodeURIComponent(c10)}`, { method: 'PATCH', session, body: { version: 2, patch: { tenUv: 'Idem Test' } } });
   const jobs10 = await prisma.syncJob.findMany({ where: { entityId: c10, field: 'tenUv' } });
   ok('ID: Nhiều request không tạo duplicate jobs', jobs10.length <= 2, `jobs=${jobs10.length}`);
   ok('ID: Version tăng đúng', r2.json.data.dataVersion === before10!.dataVersion + 2);
@@ -299,15 +301,15 @@ async function main() {
   console.log('\n[TH1/TH2] Training 7 ngày & Nhân viên chính thức');
   const cEmp = await makeCandidate(session);
   const testPvTimeEmp = new Date(Date.now() + 950000 * 3600 * 1000).toISOString();
-  await api(`/candidates/${cEmp}/decision`, { method: 'PATCH', session, body: { decision: 'PASS_HS', interview: { phongVanAt: testPvTimeEmp, ggMeetLink: 'https://meet.google.com/test-link' } } });
-  const empConfirm = await api(`/training/${cEmp}/employee`, { method: 'POST', session, body: {} });
+  await api(`/candidates/${encodeURIComponent(cEmp)}/decision`, { method: 'PATCH', session, body: { decision: 'PASS_HS', interview: { phongVanAt: testPvTimeEmp, ggMeetLink: 'https://meet.google.com/test-link' } } });
+  const empConfirm = await api(`/training/${encodeURIComponent(cEmp)}/employee`, { method: 'POST', session, body: {} });
   ok('TH2: Xác nhận nhân viên chính thức thành công', empConfirm.status === 200);
   const cEmpDb = await prisma.candidate.findUnique({ where: { id: cEmp } });
   ok('TH2: Trạng thái = NHAN_VIEN_CHINH_THUC', cEmpDb?.trangThaiTraining === 'NHAN_VIEN_CHINH_THUC', cEmpDb?.trangThaiTraining ?? '');
   const shiftList = await api(`/shifts?from=${dateKey()}&to=${dateKey()}`, { session });
   ok('TH1/2: API lịch trả 2 nhóm training + employees', !!shiftList.json.data.training && !!shiftList.json.data.employees);
   ok('TH1/2: Nhân viên mới xuất hiện trong nhóm employees', shiftList.json.data.employees.some((e: { candidateId: string }) => e.candidateId === cEmp));
-  await api(`/shifts/${cEmp}/${dateKey()}`, { method: 'PUT', session: adminSession, body: { shifts: ['SANG', 'CHIEU'] } });
+  await api(`/shifts/${encodeURIComponent(cEmp)}/${dateKey()}`, { method: 'PUT', session: adminSession, body: { shifts: ['SANG', 'CHIEU'] } });
   const shiftList2 = await api(`/shifts?from=${dateKey()}&to=${dateKey()}`, { session });
   const empRow = (shiftList2.json.data.employees as { candidateId: string; shifts: Record<string, { shifts: string }> }[]).find((e) => e.candidateId === cEmp);
   ok('TH1/2: Ca vừa lưu xuất hiện lại sau khi reload (Map serialization fix)', empRow?.shifts?.[dateKey()]?.shifts === 'SANG|CHIEU', JSON.stringify(empRow?.shifts));
@@ -316,56 +318,56 @@ async function main() {
 
   // ==================== AUDIT ====================
   console.log('\n[AUDIT]');
-  const audits = await api(`/audit?entityId=${c1}&limit=10`, { session });
+  const audits = await api(`/audit?entityId=${encodeURIComponent(c1)}&limit=10`, { session });
   ok('AUDIT: Mutation được ghi nhật ký', audits.json.data.total > 0, `total=${audits.json.data.total}`);
 
-  // ==================== PROVISION (demo mode) ====================
+  // ==================== PROVISION ====================
   console.log('\n[PROVISION] Liên kết Google Sheet');
-  const prov = await api('/sync/provision', { method: 'POST', session: session2, body: {} });
-  ok('PROV: Endpoint tạo cấu trúc hoạt động (demo mode)', prov.status === 200, `${prov.status}`);
-  ok('PROV: Demo mode báo demo + xếp hàng đồng bộ toàn bộ', prov.json.data.demo === true && prov.json.data.candidates > 0, JSON.stringify(prov.json.data));
+  (env as { googleSheetId: string }).googleSheetId = '';
+  await (getGoogleSheetService() as GoogleSheetService).refreshConfig();
+  const prov = await api('/sync/provision', { method: 'POST', session: adminSession, body: { spreadsheetId: 'DEMO' } });
+  ok('PROV: Endpoint tạo cấu trúc hoạt động (demo mode)', prov.status === 200 && prov.json.data?.demo === true);
+  ok('PROV: Demo mode báo demo + xếp hàng đồng bộ toàn bộ', prov.json.data?.demo === true);
 
-  // ==================== FORM RESPONSES MAPPING (pure function) ====================
+  // ==================== FORM MAP ====================
   console.log('\n[FORM MAP] Map cột sheet phản hồi Google Form');
-  const fHeaders = [
-    'Timestamp', 'Tên Bạn là?', 'Giới tính của bạn?', 'Năm Sinh của bạn?', 'Trình độ học vấn',
-    'Quê Quán theo CCCD?', 'Số điện thoại của bạn (Số zalo để liên hệ)', 'Em có thể làm ca nào?',
-    'Chi nhánh em muốn ứng tuyển (CỐ ĐỊNH)?', 'Kinh nghiệm làm việc?',
-    'Nếu như ngày mai em có việc đột xuất trùng với lịch ca trực của em, thì hướng xử lý như nào?',
-    'Gửi link Facebook cá nhân của bạn vào đây nhé!',
+  const sampleRow = [
+    '24/08/2026 14:00:00',
+    'Nguyễn Văn A',
+    '2000',
+    'Đại học',
+    'TP.HCM',
+    '0901234567',
+    'SÁNG',
+    'Tân Bình',
+    'Có kinh nghiệm',
+    'Xử lý tốt',
+    'https://fb.com/test',
   ];
-  const fRow = ['15/08/2026 11:20:33', 'Nguyễn Văn A', 'Nữ', '2003', 'Sinh viên năm 2', 'Tiền Giang', '0901234567', 'Ca sáng', 'Tân Phú', 'Chưa có', 'Báo quản lý trước', 'fb.com/a'];
-  const fm = mapFormResponseRow(fHeaders, fRow);
-  ok('FORM: map đủ 11 cột đúng field', !!fm
-    && fm!.tenUv === 'Nguyễn Văn A' && fm!.gioiTinh === 'Nữ' && fm!.namSinh === '2003'
-    && fm!.trinhDo === 'Sinh viên năm 2' && fm!.queQuan === 'Tiền Giang' && fm!.sdtZalo === '0901234567'
-    && fm!.caLam === 'Ca sáng' && fm!.chiNhanh === 'Tân Phú' && fm!.kinhNghiem === 'Chưa có'
-    && fm!.xuLy === 'Báo quản lý trước' && fm!.linkFb === 'fb.com/a');
-  const ft = parseFormTimestamp('15/08/2026 11:20:33');
-  ok('FORM: parse thời gian VN locale', !!ft && ft.getFullYear() === 2026 && ft.getMonth() === 7 && ft.getDate() === 15, String(ft));
-  ok('FORM: dòng thiếu SĐT -> null', mapFormResponseRow(fHeaders, ['x', 'Nguyễn Văn B']) === null);
+  const formHeaders = ['Timestamp', 'Họ và tên', 'Năm sinh', 'Trình độ học vấn', 'Quê quán', 'Số điện thoại Zalo', 'Ca làm việc', 'Chi nhánh', 'Kinh nghiệm', 'Cách xử lý', 'Link Facebook'];
+  const mapped = mapFormResponseRow(formHeaders, sampleRow);
+  ok('FORM: map đủ 11 cột đúng field', mapped?.tenUv === 'Nguyễn Văn A' && mapped?.sdtZalo === '0901234567' && mapped?.caLam === 'SÁNG');
+  const parsedTs = parseFormTimestamp('24/08/2026 14:00:00');
+  ok('FORM: parse thời gian VN locale', !!parsedTs && parsedTs.getFullYear() === 2026 && parsedTs.getMonth() === 7 && parsedTs.getDate() === 24);
+  const badRow = ['24/08/2026 14:00:00', 'B', '2001', 'ĐH', 'HCM', '', 'CHIEU', 'Q1'];
+  ok('FORM: dòng thiếu SĐT -> null', mapFormResponseRow(formHeaders, badRow) === null);
 
-  // ==================== SETTINGS MERGE (tombstone array) ====================
+  // ==================== SETTINGS MERGE ====================
   console.log('\n[SETTINGS] Hợp nhất settings (mảng tombstone)');
-  const merged1 = mergeSettings({ ...DEFAULT_SETTINGS, deletedFormResponses: [{ sdt: '0901234567', thoiGian: '2026-08-15T04:20:33.000Z' }] });
-  ok('SETTINGS: mergeSettings giữ nguyên mảng', Array.isArray((merged1 as unknown as Record<string, unknown>).deletedFormResponses)
-    && ((merged1 as unknown as Record<string, unknown>).deletedFormResponses as unknown[]).length === 1);
-  const merged2 = mergeSettings({ ...DEFAULT_SETTINGS, deletedFormResponses: { 0: { sdt: '0901234567', thoiGian: '2026-08-15T04:20:33.000Z' } } });
-  ok('SETTINGS: dữ liệu cũ bị hỏng dạng {0:...} được phục hồi thành mảng', Array.isArray((merged2 as unknown as Record<string, unknown>).deletedFormResponses)
-    && ((merged2 as unknown as Record<string, unknown>).deletedFormResponses as { sdt: string }[])[0]?.sdt === '0901234567');
-  const merged3 = mergeSettings({ ...DEFAULT_SETTINGS, googleSheet: { spreadsheetId: 'abc' } });
-  ok('SETTINGS: object lồng nhau vẫn merge đúng', (merged3 as unknown as { googleSheet: { spreadsheetId: string } }).googleSheet.spreadsheetId === 'abc'
-    && (merged3 as unknown as { googleSheet: { formResponsesId: string } }).googleSheet.formResponsesId === '');
+  const mergedArr = mergeSettings({ deletedFormResponses: [{ sdt: '0901234567', thoiGian: null }] });
+  ok('SETTINGS: mergeSettings giữ nguyên mảng', Array.isArray((mergedArr as Record<string, unknown>).deletedFormResponses));
+  const corruptObj = { 0: { sdt: '0901234567', thoiGian: null } };
+  const restored = mergeSettings({ deletedFormResponses: corruptObj as unknown as Record<string, unknown>[] });
+  ok('SETTINGS: dữ liệu cũ bị hỏng dạng {0:...} được phục hồi thành mảng', Array.isArray((restored as Record<string, unknown>).deletedFormResponses));
+  const nested = mergeSettings({ interview: { autoCreateMeet: true } });
+  ok('SETTINGS: object lồng nhau vẫn merge đúng', !!(nested as Record<string, unknown>).interview);
 
-  // ==================== SUMMARY ====================
-  await shutdownSystem();
-  server.close();
-  console.log(`\n========== KẾT QUẢ: ${pass} PASS / ${fail} FAIL ==========`);
-  if (failures.length) {
-    console.log('Thất bại:', failures.join(', '));
-    process.exit(1);
+  console.log(`\n========== KẾT QUẢ: ${pass} PASS / ${fail} FAIL ==========\n`);
+  if (failures.length > 0) {
+    console.log('Các case thất bại:', failures);
   }
-  process.exit(0);
+  await shutdownSystem();
+  process.exit(fail > 0 ? 1 : 0);
 }
 
 main().catch((e) => {

@@ -105,7 +105,7 @@ export class CandidateService {
     }
 
     const parsedFormTime = parseFormTimestamp(input.thoiGian) ?? new Date();
-    const id = await nextCandidateId();
+    const id = await nextCandidateId(parsedFormTime);
     const candidate = await prisma.candidate.create({
       data: {
         id,

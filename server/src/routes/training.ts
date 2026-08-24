@@ -17,11 +17,36 @@ router.get('/', async (_req, res, next) => {
   }
 });
 
-const startSchema = z.object({ ngayBatDau: z.string().min(1) });
-
-router.patch('/:id', requireWrite(), async (req: AuthedRequest, res, next) => {
+router.post('/:id(*)/employee', requireWrite(), async (req: AuthedRequest, res, next) => {
   try {
-    const { id } = req.params;
+    await trainingService.confirmAsEmployee(req.params.id, req.user!.username);
+    res.json({ success: true, data: { confirmed: true } });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post('/:id(*)/zalo-notify', requireWrite(), async (req, res, next) => {
+  try {
+    const result = await zaloService.sendTrainingNotice(req.params.id);
+    res.json({ success: true, data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post('/:id(*)/interview-notify', requireWrite(), async (req, res, next) => {
+  try {
+    const result = await zaloService.sendInterviewInvite(req.params.id);
+    res.json({ success: true, data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.patch('/:id(*)', requireWrite(), async (req: AuthedRequest, res, next) => {
+  try {
+    const id = req.params.id;
     const body = req.body as Record<string, unknown>;
 
     const rawDate = body.ngayBatDau ?? body.ngayBatDauTraining;
@@ -59,35 +84,6 @@ router.patch('/:id', requireWrite(), async (req: AuthedRequest, res, next) => {
     const updated = await candidateService.getById(id);
     res.json({ success: true, data: updated });
 
-  } catch (e) {
-    next(e);
-  }
-});
-
-const notifySchema = z.object({});
-
-router.post('/:id/employee', requireWrite(), async (req: AuthedRequest, res, next) => {
-  try {
-    await trainingService.confirmAsEmployee(req.params.id, req.user!.username);
-    res.json({ success: true, data: { confirmed: true } });
-  } catch (e) {
-    next(e);
-  }
-});
-
-router.post('/:id/zalo-notify', requireWrite(), async (req, res, next) => {
-  try {
-    const result = await zaloService.sendTrainingNotice(req.params.id);
-    res.json({ success: true, data: result });
-  } catch (e) {
-    next(e);
-  }
-});
-
-router.post('/:id/interview-notify', requireWrite(), async (req, res, next) => {
-  try {
-    const result = await zaloService.sendInterviewInvite(req.params.id);
-    res.json({ success: true, data: result });
   } catch (e) {
     next(e);
   }

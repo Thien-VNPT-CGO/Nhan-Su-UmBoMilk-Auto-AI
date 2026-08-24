@@ -27,10 +27,17 @@ const upsertSchema = z.object({
   note: z.string().optional(),
 });
 
-// TÀI KHOẢN HR CHỈ ĐƯỢC CẬP NHẬT NGHỈ OFF HOẶC TRẢ VỀ CA GỐC. ADMIN CÓ TOÀN QUYỀN.
-router.put('/:candidateId/:date', requireWrite(), async (req: AuthedRequest, res, next) => {
+// PUT /api/shifts/:candidateId/:date (Hỗ trợ candidateId chứa dấu / như UBM_24/08/2026_NV0001)
+router.put('/*', requireWrite(), async (req: AuthedRequest, res, next) => {
   try {
-    const parsed = upsertSchema.safeParse({ ...req.body, date: req.params.date });
+    const fullPath = req.params[0] || '';
+    const lastSlashIdx = fullPath.lastIndexOf('/');
+    if (lastSlashIdx === -1) throw ApiError.badRequest('INVALID_INPUT', 'Đường dẫn ca không hợp lệ.');
+
+    const candidateId = fullPath.slice(0, lastSlashIdx);
+    const dateParam = fullPath.slice(lastSlashIdx + 1);
+
+    const parsed = upsertSchema.safeParse({ ...req.body, date: dateParam });
     if (!parsed.success) throw ApiError.badRequest('INVALID_INPUT', 'Dữ liệu ca không hợp lệ.');
 
     const userRole = req.user?.role || 'HR';
@@ -38,7 +45,7 @@ router.put('/:candidateId/:date', requireWrite(), async (req: AuthedRequest, res
 
     // Kiểm tra quy định phân quyền nếu là HR
     if (userRole !== 'ADMIN') {
-      const candidate = await prisma.candidate.findUnique({ where: { id: req.params.candidateId } });
+      const candidate = await prisma.candidate.findUnique({ where: { id: candidateId } });
       const normCa = (candidate?.caLam || '').toLowerCase();
       let originalShiftKey = 'SANG';
       if (normCa.includes('chieu') || normCa.includes('12h')) originalShiftKey = 'CHIEU';
@@ -51,7 +58,7 @@ router.put('/:candidateId/:date', requireWrite(), async (req: AuthedRequest, res
     }
 
     await shiftService.upsert({
-      candidateId: req.params.candidateId,
+      candidateId,
       date: normalizeDateKey(parsed.data.date),
       shifts: chosenShifts.join('|'),
       note: parsed.data.note,
