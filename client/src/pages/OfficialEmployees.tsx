@@ -435,9 +435,9 @@ export function OfficialEmployees() {
               onChange={(e) => setEditShift(e.target.value)}
               className="input-field text-xs"
             >
-              <option value="SÁNG">Ca SÁNG (06h45 - 12h00)</option>
-              <option value="CHIỀU">Ca CHIỀU (11h45 - 18h00)</option>
-              <option value="TỐI">Ca TỐI (17h45 - 22h00)</option>
+              <option value="SÁNG">Ca SÁNG (07h00 - 12h00)</option>
+              <option value="CHIỀU">Ca CHIỀU (12h00 - 18h00)</option>
+              <option value="TỐI">Ca TỐI (18h00 - 22h00)</option>
             </select>
           </div>
 

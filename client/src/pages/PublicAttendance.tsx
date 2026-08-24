@@ -144,11 +144,11 @@ export default function PublicAttendance() {
 
   // Determine shift time display
   const shiftStr = (candidate.caLam || 'SÁNG').toUpperCase();
-  let shiftTimeStr = '06:45 - 12:00';
+  let shiftTimeStr = '07:00 - 12:00';
   if (shiftStr.includes('CHIEU') || shiftStr.includes('CHIỀU') || shiftStr.includes('12H')) {
-    shiftTimeStr = '11:45 - 18:00';
+    shiftTimeStr = '12:00 - 18:00';
   } else if (shiftStr.includes('TOI') || shiftStr.includes('TỐI') || shiftStr.includes('18H')) {
-    shiftTimeStr = '17:45 - 22:00';
+    shiftTimeStr = '18:00 - 22:00';
   }
 
   return (
