@@ -100,7 +100,8 @@ async function main() {
   console.log(`Test server: ${BASE}\n`);
 
   const session = await login('hr_umbomilk', 'hr123456');
-  ok('LOGIN: hr_umbomilk đăng nhập thành công', session.length > 0);
+  const adminSession = await login('admin', 'admin123');
+  ok('LOGIN: hr_umbomilk đăng nhập thành công', session.length > 0 && adminSession.length > 0);
 
   // ==================== CASE 1: HR sửa -> Sheet cập nhật -> SYNCED ====================
   console.log('\n[CASE 1] HR sửa Candidate, Google API hoạt động');
@@ -254,7 +255,7 @@ async function main() {
   ok('T: Ngày bắt đầu Training được lưu', tr.status === 200 && tr.json.data.trangThaiTraining === 'SAP_BAT_DAU');
 
   // schedule: hôm nay SÁNG + CHIỀU
-  await api(`/shifts/${c9}/${todayIso.slice(0, 10)}`, { method: 'PUT', session, body: { shifts: ['SANG', 'CHIEU'] } });
+  await api(`/shifts/${c9}/${todayIso.slice(0, 10)}`, { method: 'PUT', session: adminSession, body: { shifts: ['SANG', 'CHIEU'] } });
 
   const checkin = async (shift: string, at: string) =>
     api('/attendance/checkin', { method: 'POST', session, body: { candidateId: c9, shift, checkinAt: at } });
@@ -280,7 +281,7 @@ async function main() {
   const offDate = new Date(today);
   offDate.setDate(offDate.getDate() + 1);
   const offKey = offDate.toISOString().slice(0, 10);
-  await api(`/shifts/${c9}/${offKey}`, { method: 'PUT', session, body: { shifts: ['OFF'] } });
+  await api(`/shifts/${c9}/${offKey}`, { method: 'PUT', session: adminSession, body: { shifts: ['OFF'] } });
   const offChk = await checkin('SANG', `${offKey}T06:50:00`);
   ok('T: Ngày OFF → không hợp lệ', offChk.json.data.valid === false && offChk.json.data.reason.includes('KHONG_CO_LICH_CA_NAY'));
 
@@ -306,7 +307,7 @@ async function main() {
   const shiftList = await api(`/shifts?from=${dateKey()}&to=${dateKey()}`, { session });
   ok('TH1/2: API lịch trả 2 nhóm training + employees', !!shiftList.json.data.training && !!shiftList.json.data.employees);
   ok('TH1/2: Nhân viên mới xuất hiện trong nhóm employees', shiftList.json.data.employees.some((e: { candidateId: string }) => e.candidateId === cEmp));
-  await api(`/shifts/${cEmp}/${dateKey()}`, { method: 'PUT', session, body: { shifts: ['SANG', 'CHIEU'] } });
+  await api(`/shifts/${cEmp}/${dateKey()}`, { method: 'PUT', session: adminSession, body: { shifts: ['SANG', 'CHIEU'] } });
   const shiftList2 = await api(`/shifts?from=${dateKey()}&to=${dateKey()}`, { session });
   const empRow = (shiftList2.json.data.employees as { candidateId: string; shifts: Record<string, { shifts: string }> }[]).find((e) => e.candidateId === cEmp);
   ok('TH1/2: Ca vừa lưu xuất hiện lại sau khi reload (Map serialization fix)', empRow?.shifts?.[dateKey()]?.shifts === 'SANG|CHIEU', JSON.stringify(empRow?.shifts));

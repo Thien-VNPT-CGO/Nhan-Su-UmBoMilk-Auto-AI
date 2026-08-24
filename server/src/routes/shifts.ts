@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { requireAuth, requireWrite, AuthedRequest } from '../middleware/auth';
+import { requireAuth, requireRole, AuthedRequest } from '../middleware/auth';
 import { shiftService } from '../services/ShiftService';
 import { ApiError } from '../lib/errors';
 import { normalizeDateKey } from '../lib/date';
@@ -26,7 +26,8 @@ const upsertSchema = z.object({
   note: z.string().optional(),
 });
 
-router.put('/:candidateId/:date', requireWrite(), async (req: AuthedRequest, res, next) => {
+// CHỈ TÀI KHOẢN ADMIN MỚI CÓ QUYỀN THAY ĐỔI CA LÀM VIỆC CỦA ỨNG VIÊN
+router.put('/:candidateId/:date', requireRole('ADMIN'), async (req: AuthedRequest, res, next) => {
   try {
     const parsed = upsertSchema.safeParse({ ...req.body, date: req.params.date });
     if (!parsed.success) throw ApiError.badRequest('INVALID_INPUT', 'Dữ liệu ca không hợp lệ.');
