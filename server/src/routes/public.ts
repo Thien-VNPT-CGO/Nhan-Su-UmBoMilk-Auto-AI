@@ -171,12 +171,12 @@ router.get('/candidates/:id/attendance-info', async (req, res, next) => {
     const allowedEarlyTime = new Date(shiftStartTime.getTime() - 30 * 60 * 1000);
 
     const shiftEndTime = new Date(year, month, day, endHour, endMin, 0);
-    const allowedCheckoutTime = new Date(shiftEndTime.getTime() - 30 * 60 * 1000);
 
     const isTooEarly = vnNow < allowedEarlyTime;
     const earlyMinutes = isTooEarly ? Math.ceil((allowedEarlyTime.getTime() - vnNow.getTime()) / (60 * 1000)) : 0;
     const allowedTimeStr = `${String(allowedEarlyTime.getHours()).padStart(2, '0')}:${String(allowedEarlyTime.getMinutes()).padStart(2, '0')}`;
     const shiftTimeRangeStr = `${String(startHour).padStart(2, '0')}:00 - ${String(endHour).padStart(2, '0')}:00`;
+    const shiftEndTimeStr = `${String(endHour).padStart(2, '0')}:00`;
 
     // Kiểm tra lịch sử sự kiện điểm danh hôm nay
     const todayEvents = await prisma.attendanceEvent.findMany({
@@ -197,6 +197,9 @@ router.get('/candidates/:id/attendance-info', async (req, res, next) => {
     const hasCheckedInToday = !!checkinEvent;
     const hasCheckedOutToday = !!checkoutEvent;
 
+    // RÀNG BUỘC MỚI: Check-out CHỈ ĐƯỢC MỞ ĐÚNG GIỜ HẾT CA TRỞ ĐI (vnNow >= shiftEndTime)
+    const isCheckoutTooEarly = vnNow < shiftEndTime;
+
     res.json({
       success: true,
       data: {
@@ -209,9 +212,9 @@ router.get('/candidates/:id/attendance-info', async (req, res, next) => {
         hasCheckedOutToday,
         checkinTimeStr: checkinEvent ? formatDateTime(checkinEvent.createdAt) : null,
         checkoutTimeStr: checkoutEvent ? formatDateTime(checkoutEvent.createdAt) : null,
-        isCheckoutTooEarly: vnNow < allowedCheckoutTime,
-        allowedCheckoutTimeStr: `${String(allowedCheckoutTime.getHours()).padStart(2, '0')}:${String(allowedCheckoutTime.getMinutes()).padStart(2, '0')}`,
-        shiftEndTimeStr: `${String(endHour).padStart(2, '0')}:00`,
+        isCheckoutTooEarly,
+        allowedCheckoutTimeStr: shiftEndTimeStr,
+        shiftEndTimeStr,
       },
     });
   } catch (e) {
@@ -307,15 +310,14 @@ router.post('/candidates/:id/attendance-checkin', async (req, res, next) => {
       }
     }
 
-    // 3. KHI RA CA (CHECK-OUT): RÀNG BUỘC KHUNG GIỜ MỞ CHECK-OUT (TRƯỚC HẾT CA 30 PHÚT)
+    // 3. KHI RA CA (CHECK-OUT): RÀNG BUỘC ĐÚNG GIỜ HẾT CA MỚI ĐƯỢC MỞ (vnNow >= shiftEndTime)
     if (type === 'CHECK_OUT') {
-      const allowedCheckoutTime = new Date(shiftEndTime.getTime() - 30 * 60 * 1000);
-      if (vnNow < allowedCheckoutTime) {
-        const earlyMins = Math.ceil((allowedCheckoutTime.getTime() - vnNow.getTime()) / (60 * 1000));
-        const allowedCheckoutStr = `${String(allowedCheckoutTime.getHours()).padStart(2, '0')}:${String(allowedCheckoutTime.getMinutes()).padStart(2, '0')}`;
+      if (vnNow < shiftEndTime) {
+        const earlyMins = Math.ceil((shiftEndTime.getTime() - vnNow.getTime()) / (60 * 1000));
+        const shiftEndTimeStr = `${String(shiftEndTime.getHours()).padStart(2, '0')}:${String(shiftEndTime.getMinutes()).padStart(2, '0')}`;
         throw ApiError.badRequest(
           'CHECKOUT_TOO_EARLY',
-          `Chưa đến khung giờ Check-out! Bạn đang mở quá sớm ${earlyMins} phút. Khung giờ cho phép Check-out ca làm này mở từ ${allowedCheckoutStr} trở đi (trước giờ hết ca 30 phút).`
+          `Chưa đến giờ hết ca! Bạn đang mở quá sớm ${earlyMins} phút. Nút Check-out ca làm này chỉ mở từ ${shiftEndTimeStr} trở đi.`
         );
       }
     }
@@ -395,21 +397,11 @@ Mốc thời gian: ${vnNow.toLocaleString('vi-VN')}
         }
       }
     } else if (type === 'CHECK_OUT') {
-      // RÀNG BUỘC REALTIME CHECK-OUT:
-      // - Nếu ra ca trước giờ kết thúc ca (vnNow < shiftEndTime): PHẠT 50.000đ / lần (RA SOM)
-      // - Nếu ra ca đúng giờ trở đi (vnNow >= shiftEndTime): KHÔNG BỊ PHẠT (Phạt 0đ)
-      if (vnNow < shiftEndTime) {
-        isEarlyLeave = true;
-        earlyLeaveMinutes = Math.ceil((shiftEndTime.getTime() - vnNow.getTime()) / (60 * 1000));
-        fineAmount = 50000; // Phạt 50.000đ / lần theo quy chế RA SOM
-        errCode = `RA_SOM_50K_${earlyLeaveMinutes}M`;
-        fineLabel = `RA CA SỚM ${earlyLeaveMinutes} PHÚT (PHẠT 50.000Đ/LẦN)`;
-      } else {
-        isEarlyLeave = false;
-        fineAmount = 0; // Ra ca đúng giờ hoặc sau ca -> 0đ phạt
-        errCode = 'CHECK_OUT_ON_TIME';
-        fineLabel = 'RA CA ĐÚNG GIỜ';
-      }
+      // CHECK-OUT ĐÚNG GIỜ (vnNow >= shiftEndTime): 0đ phạt
+      isEarlyLeave = false;
+      fineAmount = 0;
+      errCode = 'CHECK_OUT_ON_TIME';
+      fineLabel = 'RA CA ĐÚNG GIỜ';
     }
 
     // Ghi nhận sự kiện AttendanceEvent
@@ -472,9 +464,7 @@ Mốc thời gian: ${vnNow.toLocaleString('vi-VN')}
         fineLabel,
         backupFolder: driveBackupDir,
         message: type === 'CHECK_OUT'
-          ? isEarlyLeave
-            ? `Ra ca sớm ${earlyLeaveMinutes} phút. Ghi nhận phạt: 50.000đ.`
-            : 'Xác nhận ra ca đúng giờ thành công!'
+          ? 'Xác nhận ra ca đúng giờ thành công!'
           : isLate
             ? `Điểm danh trễ ${lateMinutes} phút. Ghi nhận phạt: ${fineLabel}.`
             : 'Điểm danh vào ca đúng giờ thành công!',

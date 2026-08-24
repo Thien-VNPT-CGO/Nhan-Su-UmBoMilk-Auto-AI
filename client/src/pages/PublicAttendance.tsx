@@ -384,18 +384,21 @@ export default function PublicAttendance() {
               <div className="w-12 h-12 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto text-amber-400">
                 <Clock size={28} />
               </div>
-              <h3 className="text-base font-black text-amber-300">⏳ CHƯA ĐẾN KHUNG GIỜ CHECK-OUT!</h3>
+              <h3 className="text-base font-black text-amber-300">⏳ CHƯA ĐẾN GIỜ HẾT CA (CHECK-OUT)!</h3>
               <p className="text-xs text-amber-100 leading-relaxed">
-                Khung giờ cho phép Check-out ca làm này bắt đầu từ <strong className="font-mono text-white font-extrabold">{candidate.allowedCheckoutTimeStr}</strong> trở đi (trước giờ hết ca 30 phút).
+                Nút Check-out (ra ca) ca làm này <strong className="text-amber-300 font-bold">chỉ mở đúng từ {candidate.shiftEndTimeStr} trở đi</strong> (khi kết thúc ca làm).
+              </p>
+              <p className="text-[11px] text-amber-300/80 italic font-medium">
+                * Nút xác nhận ra ca đang khóa cho đến đúng giờ hết ca.
               </p>
             </div>
           ) : (
-            <div className="bg-blue-950/80 border border-blue-500/60 p-3.5 rounded-2xl text-center space-y-1 shadow-lg backdrop-blur-xl">
-              <p className="text-xs font-bold text-blue-200">
-                ⏰ Khung giờ Check-out đã mở! (Giờ hết ca: <span className="font-mono text-white font-black">{candidate.shiftEndTimeStr}</span>)
+            <div className="bg-emerald-950/80 border border-emerald-500/60 p-3.5 rounded-2xl text-center space-y-1 shadow-lg backdrop-blur-xl">
+              <p className="text-xs font-bold text-emerald-300">
+                ⏰ ĐÃ ĐẾN GIỜ HẾT CA! Nút Check-out đã mở ({candidate.shiftEndTimeStr} trở đi).
               </p>
-              <p className="text-[10px] text-amber-300 font-medium">
-                * Ra ca trước {candidate.shiftEndTimeStr} tính là Ra Sớm (phạt 50k). Ra ca từ {candidate.shiftEndTimeStr} trở đi KHÔNG bị phạt.
+              <p className="text-[10px] text-emerald-200 font-medium">
+                * Bạn đang ra ca đúng giờ. Hệ thống ghi nhận 0đ phạt.
               </p>
             </div>
           )
