@@ -54,6 +54,10 @@ export class ShiftService {
           shifts: string;
           attendanceStatus?: 'ON_TIME' | 'LATE_5P' | 'LATE_30P' | 'LATE_60P' | 'ABSENT' | null;
           checkinTime?: string | null;
+          lateMinutes?: number;
+          fineAmount?: number;
+          reason?: string | null;
+          isLocked?: boolean;
         }
       > = {};
 
@@ -64,18 +68,41 @@ export class ShiftService {
         const att = candidateAttendance?.get(s.date);
         let status: 'ON_TIME' | 'LATE_5P' | 'LATE_30P' | 'LATE_60P' | 'ABSENT' | null = null;
         let checkinTimeStr: string | null = null;
+        let lateMins = 0;
+        let fine = 0;
 
         if (att) {
           checkinTimeStr = formatDateTime(att.createdAt);
           const r = (att.reason || '').toUpperCase();
+
+          // Tính số phút đi trễ từ mốc điểm danh
+          if (att.checkinAt) {
+            const attDate = new Date(att.checkinAt);
+            let startH = 7;
+            const norm = (c.caLam || '').toLowerCase();
+            if (norm.includes('chieu') || norm.includes('12h')) startH = 12;
+            else if (norm.includes('toi') || norm.includes('18h')) startH = 18;
+
+            const shiftStart = new Date(attDate);
+            shiftStart.setHours(startH, 0, 0, 0);
+
+            if (attDate > shiftStart) {
+              lateMins = Math.floor((attDate.getTime() - shiftStart.getTime()) / (60 * 1000));
+            }
+          }
+
           if (r.includes('VAO_TRE_60P') || r.includes('60P')) {
             status = 'LATE_60P';
+            fine = c.caLam?.includes('CHIỀU') || c.caLam?.includes('CHIEU') ? 153000 : 127500;
           } else if (r.includes('VAO_TRE_30P') || r.includes('30P')) {
             status = 'LATE_30P';
+            fine = c.caLam?.includes('CHIỀU') || c.caLam?.includes('CHIEU') ? 76500 : 63750;
           } else if (r.includes('VAO_TRE_5P') || r.includes('TRE_PHAT_50K') || r.includes('5P') || r.includes('TRE') || r.includes('TRỄ')) {
             status = 'LATE_5P';
+            fine = 30000;
           } else {
             status = 'ON_TIME';
+            fine = 0;
           }
         } else if (s.date < todayStr && s.shifts && s.shifts !== 'OFF') {
           status = 'ABSENT';
@@ -85,6 +112,10 @@ export class ShiftService {
           shifts: s.shifts,
           attendanceStatus: status,
           checkinTime: checkinTimeStr,
+          lateMinutes: lateMins,
+          fineAmount: fine,
+          reason: att?.reason ?? null,
+          isLocked: !!att, // Ô đã điểm danh -> Khóa không cho HR sửa ca
         };
       });
 
@@ -113,6 +144,14 @@ export class ShiftService {
   }): Promise<void> {
     const candidate = await prisma.candidate.findUnique({ where: { id: input.candidateId } });
     if (!candidate) throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy ứng viên.');
+
+    // RÀNG BUỘC: Không cho phép đổi ca khi đã điểm danh
+    const existingAtt = await prisma.attendanceEvent.findFirst({
+      where: { candidateId: input.candidateId, date: input.date, valid: true },
+    });
+    if (existingAtt) {
+      throw ApiError.badRequest('SHIFT_LOCKED', 'Ca làm này đã được AI tự động chấm công. Không thể thay đổi ca.');
+    }
 
     const valid = input.shifts.split('|').filter(Boolean);
     if (!valid.length || valid.some((s) => !SHIFT_OPTIONS.includes(s as never))) {
