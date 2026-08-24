@@ -1,8 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { BrainCircuit, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Star, TrendingUp, Video, FileCheck } from 'lucide-react';
+import { BrainCircuit, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Star, TrendingUp, FileCheck } from 'lucide-react';
 import { api, ApiError } from '../api/client';
-import { Badge, Skeleton, EmptyState, Modal, Field } from '../components/ui';
+import { Badge, Skeleton, EmptyState } from '../components/ui';
 import { useToast } from '../stores/Toast';
 import { getSocket } from '../api/socket';
 import { formatDateTime } from '../utils/date';
@@ -58,7 +57,6 @@ function scoreCellStyle(diem: number | null): string {
 
 export default function Scoring() {
   const { toast } = useToast();
-  const navigate = useNavigate();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -100,74 +98,6 @@ export default function Scoring() {
       toast('error', e instanceof ApiError ? e.message : 'Chấm hồ sơ thất bại.');
     } finally {
       setBusyId(null);
-    }
-  };
-
-  const decide = async (id: string, decision: 'PASS' | 'FAIL' | 'REVIEW', phongVanAt?: string, ggMeetLink?: string) => {
-    try {
-      const res = await api.patch<{ zalo: { ok: boolean; provider: string } | null }>(`/candidates/${id}/decision`, {
-        decision,
-        phongVanAt,
-        ggMeetLink,
-      });
-      toast('success', `Đã ${decision}.${res.zalo?.ok ? '' : ' ⚠ Không gửi được tin Zalo (kiểm tra cấu hình OA).'}`);
-      void load();
-    } catch (e) {
-      toast('error', e instanceof ApiError ? e.message : 'Thất bại.');
-    }
-  };
-
-  const [interviewId, setInterviewId] = useState<string | null>(null);
-  const [phongVanAt, setPhongVanAt] = useState('');
-  const [ggMeetLink, setGgMeetLink] = useState('');
-  const [sending, setSending] = useState(false);
-  const [branchMeetLinks, setBranchMeetLinks] = useState<Record<string, string>>({});
-  const [calendarEnabled, setCalendarEnabled] = useState(false);
-
-  useEffect(() => {
-    api
-      .get<{ settings: { interview?: { branchMeetLinks?: Record<string, string> }; googleCalendar?: { enabled?: boolean; refreshToken?: string } } }>('/settings')
-      .then((d) => {
-        setBranchMeetLinks(d.settings.interview?.branchMeetLinks ?? {});
-        setCalendarEnabled(!!d.settings.googleCalendar?.enabled && !!d.settings.googleCalendar?.refreshToken);
-      })
-      .catch(() => undefined);
-  }, []);
-
-  const toLocalInput = (d: Date): string => {
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  };
-
-  const QUICK_TIMES = [
-    { label: '+1 giờ', get: () => new Date(Date.now() + 60 * 60_000) },
-    { label: '+3 giờ', get: () => new Date(Date.now() + 3 * 60 * 60_000) },
-    { label: 'Hôm nay 14:00', get: () => { const d = new Date(); d.setHours(14, 0, 0, 0); return d; } },
-    { label: 'Hôm nay 15:30', get: () => { const d = new Date(); d.setHours(15, 30, 0, 0); return d; } },
-    { label: 'Mai 9:00', get: () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); return d; } },
-    { label: 'Mai 14:00', get: () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(14, 0, 0, 0); return d; } },
-  ];
-
-  const openInterview = (id: string) => {
-    const row = rows.find((r) => r.id === id);
-    setInterviewId(id);
-    setPhongVanAt('');
-    // Calendar bật → để trống để server tự tạo link Meet; chưa có Calendar → prefill link mặc định chi nhánh
-    setGgMeetLink(calendarEnabled ? '' : (row ? branchMeetLinks[row.chiNhanh] ?? '' : ''));
-  };
-
-  const submitInterview = async () => {
-    if (!interviewId) return;
-    if (!phongVanAt) {
-      toast('error', 'Chọn thời gian phỏng vấn.');
-      return;
-    }
-    setSending(true);
-    try {
-      await decide(interviewId, 'PASS', phongVanAt, ggMeetLink.trim() || undefined);
-      setInterviewId(null);
-    } finally {
-      setSending(false);
     }
   };
 
@@ -268,13 +198,6 @@ export default function Scoring() {
                           {busyId === r.id ? <RefreshCw size={13} className="animate-spin" /> : <BrainCircuit size={13} />}
                           {r.aiScoredAt ? 'Chấm lại' : 'Chấm'}
                         </button>
-                        {r.aiScoredAt && (
-                          <>
-                            <button className="btn-success !px-2.5 !py-1.5" onClick={() => openInterview(r.id)} title="Chấm ĐẠT + hẹn phỏng vấn"><CheckCircle2 size={13} /></button>
-                            <button className="btn-danger !px-2.5 !py-1.5" onClick={() => decide(r.id, 'FAIL')}><XCircle size={13} /></button>
-                          </>
-                        )}
-                        <button className="btn-secondary !px-2.5 !py-1.5" onClick={() => navigate('/candidates')}>Chi tiết</button>
                       </div>
                     </td>
                   </tr>
@@ -284,32 +207,6 @@ export default function Scoring() {
           </div>
         </div>
       )}
-
-      <Modal open={!!interviewId} onClose={() => setInterviewId(null)} title={`Chấm ĐẠT & hẹn phỏng vấn – ${rows.find((r) => r.id === interviewId)?.tenUv ?? ''}`}>
-        <div className="space-y-4">
-          <Field label="Thời gian phỏng vấn">
-            <input type="datetime-local" className="input" value={phongVanAt} onChange={(e) => setPhongVanAt(e.target.value)} />
-          </Field>
-          <div className="flex flex-wrap gap-1.5">
-            {QUICK_TIMES.map((q) => (
-              <button key={q.label} className="btn-secondary !px-2.5 !py-1 !text-[11px]" onClick={() => setPhongVanAt(toLocalInput(q.get()))}>
-                {q.label}
-              </button>
-            ))}
-          </div>
-          <Field label={`Link Google Meet ${calendarEnabled ? '(để trống = hệ thống tự tạo link mới qua Google Calendar)' : ''}`}>
-            <input type="url" className="input" value={ggMeetLink} onChange={(e) => setGgMeetLink(e.target.value)} placeholder="https://meet.google.com/xxx-xxxx-xxx" />
-          </Field>
-          <p className="text-[11px] text-slate-400">
-            {calendarEnabled
-              ? 'Hệ thống tự tạo sự kiện + link Google Meet mới rồi gửi cho ứng viên qua Zalo. Nhập link tay sẽ ưu tiên dùng link đó.'
-              : 'Để trống → hệ thống dùng link GG Meet mặc định của chi nhánh (nếu đã cấu hình tại Cài đặt → Phỏng vấn & Meet), hoặc tự tạo khi đã kết nối Google Calendar.'}
-          </p>
-          <button className="btn-success w-full" onClick={submitInterview} disabled={sending}>
-            <Video size={15} /> {sending ? 'Đang gửi...' : 'Xác nhận ĐẠT & gửi lời mời phỏng vấn'}
-          </button>
-        </div>
-      </Modal>
     </div>
   );
 }
