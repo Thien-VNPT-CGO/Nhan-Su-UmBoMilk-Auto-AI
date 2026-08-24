@@ -1,6 +1,18 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { Camera, CheckCircle2, AlertCircle, Building2, Clock, Calendar, RefreshCw, Upload, ShieldCheck } from 'lucide-react';
+import {
+  Camera,
+  CheckCircle2,
+  AlertCircle,
+  Building2,
+  Clock,
+  RefreshCw,
+  ShieldCheck,
+  Award,
+  Sparkles,
+  CalendarCheck,
+  Check,
+} from 'lucide-react';
 import { api, ApiError } from '../api/client';
 import { Spinner } from '../components/ui';
 
@@ -23,13 +35,33 @@ export default function PublicAttendance() {
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [currentTime, setCurrentTime] = useState<string>('');
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Live Clock Update
+  useEffect(() => {
+    const updateTime = () => {
+      const d = new Date();
+      setCurrentTime(
+        d.toLocaleTimeString('vi-VN', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false,
+        }),
+      );
+    };
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    api.get<CandidateAttendanceInfo>(`/public/candidates/${id}/attendance-info`)
+    api
+      .get<CandidateAttendanceInfo>(`/public/candidates/${id}/attendance-info`)
       .then((data) => {
         setCandidate(data);
         setLoading(false);
@@ -56,19 +88,28 @@ export default function PublicAttendance() {
     reader.readAsDataURL(file);
   };
 
-  const [submitResult, setSubmitResult] = useState<{ isLate: boolean; lateMinutes: number; fineAmount: number; backupFolder: string; message: string } | null>(null);
+  const [submitResult, setSubmitResult] = useState<{
+    isLate: boolean;
+    lateMinutes: number;
+    fineAmount: number;
+    backupFolder: string;
+    message: string;
+  } | null>(null);
 
   const handleCheckinSubmit = async () => {
     if (!id || !imageSrc) return;
     setIsSubmitting(true);
     try {
-      const data = await api.post<{ isLate: boolean; lateMinutes: number; fineAmount: number; backupFolder: string; message: string }>(
-        `/public/candidates/${id}/attendance-checkin`,
-        {
-          image: imageSrc,
-          note: 'ĐIỂM DANH UBM',
-        }
-      );
+      const data = await api.post<{
+        isLate: boolean;
+        lateMinutes: number;
+        fineAmount: number;
+        backupFolder: string;
+        message: string;
+      }>(`/public/candidates/${id}/attendance-checkin`, {
+        image: imageSrc,
+        note: 'ĐIỂM DANH UBM',
+      });
       setSubmitResult(data);
       setSubmitSuccess(true);
       setIsSubmitting(false);
@@ -80,20 +121,31 @@ export default function PublicAttendance() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-4">
-        <Spinner size={32} className="text-pink-500 mb-3" />
-        <p className="text-sm font-semibold text-slate-300">Đang tải thông tin điểm danh...</p>
+      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-4 font-sans">
+        <div className="relative">
+          <div className="w-16 h-16 rounded-full border-4 border-pink-500/20 border-t-pink-500 animate-spin" />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Sparkles size={20} className="text-pink-400 animate-pulse" />
+          </div>
+        </div>
+        <p className="text-sm font-bold text-slate-300 mt-4 tracking-wide">
+          Đang kết nối hệ thống UMBO MILK...
+        </p>
       </div>
     );
   }
 
   if (error || !candidate) {
     return (
-      <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-4">
-        <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 max-w-md w-full text-center space-y-3">
-          <AlertCircle size={48} className="text-rose-500 mx-auto" />
-          <h2 className="text-lg font-black text-rose-400">Không tìm thấy thông tin</h2>
-          <p className="text-xs text-slate-300">{error || 'Đường dẫn điểm danh không hợp lệ hoặc đã hết hạn.'}</p>
+      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-4 font-sans">
+        <div className="bg-slate-900/90 p-6 rounded-3xl border border-rose-500/30 max-w-md w-full text-center space-y-4 shadow-2xl backdrop-blur-xl">
+          <div className="w-16 h-16 bg-rose-500/10 rounded-full flex items-center justify-center mx-auto text-rose-500">
+            <AlertCircle size={36} />
+          </div>
+          <h2 className="text-lg font-black text-rose-400">Không tìm thấy ứng viên</h2>
+          <p className="text-xs text-slate-300 leading-relaxed">
+            {error || 'Đường dẫn điểm danh không hợp lệ hoặc đã bị thay đổi.'}
+          </p>
         </div>
       </div>
     );
@@ -106,95 +158,175 @@ export default function PublicAttendance() {
     year: 'numeric',
   });
 
+  const progressPercent = Math.min(100, Math.round((candidate.soNgayDaTraining / 7) * 100));
+
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-start p-3 sm:p-6 font-sans">
-      {/* Header Thương Hiệu UMBO MILK */}
-      <div className="w-full max-w-md bg-gradient-to-r from-pink-600 to-rose-600 p-5 rounded-3xl shadow-xl border border-pink-500/30 text-center space-y-2 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-xl pointer-events-none" />
-        <span className="inline-block bg-white/20 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider">
-          HỆ THỐNG ĐÀO TẠO UMBO MILK
-        </span>
-        <h1 className="text-2xl font-black tracking-tight text-white drop-shadow-md">
-          ĐIỂM DANH UMBO MILK
-        </h1>
-        <p className="text-xs text-pink-100 font-medium">{todayStr}</p>
-      </div>
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-start p-3 sm:p-5 font-sans selection:bg-pink-500 selection:text-white">
+      <div className="w-full max-w-md space-y-4">
+        {/* Top Header Card */}
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-pink-600 via-rose-600 to-purple-700 p-5 shadow-2xl border border-white/10 text-center text-white">
+          <div className="absolute top-0 right-0 -mr-6 -mt-6 w-32 h-32 bg-white/10 rounded-full blur-2xl pointer-events-none" />
+          <div className="absolute bottom-0 left-0 -ml-6 -mb-6 w-32 h-32 bg-pink-400/20 rounded-full blur-2xl pointer-events-none" />
 
-      {/* Thẻ Thông Tin Ứng Viên */}
-      <div className="w-full max-w-md bg-slate-900 mt-4 p-4 rounded-2xl border border-slate-800 space-y-3 shadow-lg">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-          <div>
-            <span className="text-[10px] uppercase font-bold text-slate-400">Ứng viên Training</span>
-            <h3 className="text-base font-black text-white">{candidate.tenUv}</h3>
-            <p className="text-xs text-slate-400">{candidate.sdtZalo}</p>
+          <div className="inline-flex items-center gap-1.5 bg-black/20 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-black tracking-wider uppercase border border-white/10 mb-2">
+            <Sparkles size={12} className="text-pink-300 animate-spin" />
+            HỆ THỐNG ĐIỂM DANH TỰ ĐỘNG UMBO MILK
           </div>
-          <div className="bg-pink-950/80 border border-pink-800/80 px-3 py-1.5 rounded-xl text-center">
-            <span className="text-[10px] font-bold text-pink-400 block">Số ngày đã tập</span>
-            <span className="text-sm font-black text-pink-300">{candidate.soNgayDaTraining}/7 Ngày</span>
+
+          <h1 className="text-2xl font-black tracking-tight drop-shadow-md">ĐIỂM DANH UBM</h1>
+          <p className="text-xs text-pink-100/90 font-medium">{todayStr}</p>
+
+          {/* Live Realtime Clock */}
+          <div className="mt-3 inline-flex items-center gap-2 bg-black/30 backdrop-blur-md px-4 py-1.5 rounded-2xl border border-white/15">
+            <Clock size={15} className="text-pink-300 animate-pulse" />
+            <span className="font-mono text-base font-black tracking-widest text-white">
+              {currentTime}
+            </span>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 text-xs">
-          <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700/60 flex items-start gap-2">
-            <Building2 size={16} className="text-pink-400 shrink-0 mt-0.5" />
+        {/* Candidate Profile Card */}
+        <div className="bg-slate-900/90 backdrop-blur-xl p-4 rounded-3xl border border-slate-800 shadow-xl space-y-3">
+          <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
             <div>
-              <span className="text-[10px] text-slate-400 block font-semibold">Chi nhánh chính</span>
-              <span className="font-bold text-slate-200 text-[11px] leading-tight block">{candidate.chiNhanh || 'Chưa chốt'}</span>
+              <span className="text-[10px] uppercase font-bold text-pink-400 tracking-wider">
+                Ứng viên Đào tạo
+              </span>
+              <h3 className="text-lg font-black text-white">{candidate.tenUv}</h3>
+              <p className="text-xs font-mono text-slate-400">{candidate.sdtZalo}</p>
+            </div>
+
+            <div className="bg-slate-800/90 border border-slate-700/80 px-3.5 py-2 rounded-2xl text-center">
+              <div className="flex items-center justify-center gap-1 text-amber-400 mb-0.5">
+                <Award size={14} />
+                <span className="text-[10px] font-extrabold uppercase">Tiến độ</span>
+              </div>
+              <span className="text-sm font-black text-white font-mono">
+                {candidate.soNgayDaTraining}/7 Ngày
+              </span>
             </div>
           </div>
 
-          <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700/60 flex items-start gap-2">
-            <Clock size={16} className="text-amber-400 shrink-0 mt-0.5" />
-            <div>
-              <span className="text-[10px] text-slate-400 block font-semibold">Ca làm chính thức</span>
-              <span className="font-bold text-slate-200 text-[11px] leading-tight block">{candidate.caLam || 'Chưa chốt'}</span>
+          {/* Training Progress Bar */}
+          <div className="space-y-1.5">
+            <div className="flex justify-between text-[10px] font-bold text-slate-400">
+              <span>Đào tạo thử việc 7 ngày</span>
+              <span className="text-pink-400">{progressPercent}%</span>
+            </div>
+            <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden p-0.5 border border-slate-700/50">
+              <div
+                className="h-full bg-gradient-to-r from-pink-500 to-rose-500 rounded-full transition-all duration-500 shadow-sm"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Branch & Shift Details */}
+          <div className="grid grid-cols-2 gap-2 pt-1 text-xs">
+            <div className="bg-slate-800/60 p-3 rounded-2xl border border-slate-700/50 flex items-start gap-2.5">
+              <div className="p-1.5 rounded-xl bg-pink-500/10 text-pink-400 shrink-0">
+                <Building2 size={16} />
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block font-semibold">Chi nhánh</span>
+                <span className="font-bold text-slate-100 text-[11px] leading-snug block">
+                  {candidate.chiNhanh || 'Chưa phân ca'}
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-slate-800/60 p-3 rounded-2xl border border-slate-700/50 flex items-start gap-2.5">
+              <div className="p-1.5 rounded-xl bg-amber-500/10 text-amber-400 shrink-0">
+                <Clock size={16} />
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block font-semibold">Ca làm việc</span>
+                <span className="font-bold text-slate-100 text-[11px] leading-snug block">
+                  {candidate.caLam || 'Chưa phân ca'}
+                </span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Màn Hình Điểm Danh Thành Công */}
-      {submitSuccess ? (
-        submitResult?.isLate ? (
-          <div className="w-full max-w-md bg-rose-950/90 border-2 border-rose-500 mt-4 p-6 rounded-3xl text-center space-y-3 shadow-2xl animate-fade-in">
-            <AlertCircle size={56} className="text-rose-400 mx-auto animate-bounce" />
-            <h2 className="text-xl font-black text-rose-300">ĐIỂM DANH TRỄ – PHẠT 50.000Đ</h2>
-            <div className="bg-rose-900/80 p-3.5 rounded-xl border border-rose-700/80 text-xs text-rose-100 font-bold space-y-1">
-              <p className="text-sm font-black text-rose-200">⚠️ Bạn đã điểm danh trễ {submitResult.lateMinutes} phút!</p>
-              <p className="text-xs text-rose-300 leading-relaxed">
-                Hệ thống tự động ghi nhận mức <strong>PHẠT 50.000đ</strong> trực tiếp vào hồ sơ chấm công trên web.
+        {/* Screen State: Success/Result vs Capture Form */}
+        {submitSuccess ? (
+          submitResult?.isLate ? (
+            /* Late Penalty Result Card */
+            <div className="bg-rose-950/90 border-2 border-rose-500/80 p-6 rounded-3xl text-center space-y-4 shadow-2xl animate-fade-in backdrop-blur-xl">
+              <div className="w-16 h-16 bg-rose-500/20 rounded-full flex items-center justify-center mx-auto text-rose-400 animate-pulse">
+                <AlertCircle size={40} />
+              </div>
+
+              <div>
+                <h2 className="text-xl font-black text-rose-300">ĐIỂM DANH TRỄ – PHẠT 50.000Đ</h2>
+                <p className="text-xs text-rose-200/90 mt-1">
+                  Bạn đã trễ <strong className="font-mono text-white font-extrabold">{submitResult.lateMinutes} phút</strong> so với khung giờ ca làm!
+                </p>
+              </div>
+
+              <div className="bg-rose-900/60 p-4 rounded-2xl border border-rose-700/60 text-xs text-rose-100 space-y-2">
+                <p className="font-bold text-rose-200">
+                  ⚠️ Mức phạt <span className="text-amber-300 font-extrabold">50.000đ</span> đã được hệ thống tự động ghi nhận trực tiếp vào Web chấm công.
+                </p>
+                <p className="text-[11px] text-rose-300 opacity-90 leading-relaxed">
+                  Ảnh chụp cửa hàng & xác thực chữ <strong>"ĐIỂM DANH UBM"</strong> đã lưu an toàn vào Google Drive.
+                </p>
+              </div>
+
+              <div className="bg-slate-900/80 p-3 rounded-2xl border border-slate-700 text-xs text-emerald-400 font-mono font-bold flex items-center justify-center gap-1.5">
+                <Check size={14} /> NỘI DUNG XÁC THỰC: "ĐIỂM DANH UBM" ✓
+              </div>
+
+              <p className="text-[11px] text-slate-400 italic">
+                Vui lòng chú ý thời gian có mặt đúng giờ ở các ca tiếp theo!
               </p>
             </div>
-            <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-700 text-xs text-slate-200 font-mono font-bold">
-              NỘI DUNG XÁC THỰC: "ĐIỂM DANH UBM" ✓ (Đã lưu Google Drive)
-            </div>
-            <p className="text-[11px] text-slate-400">Vui lòng rút kinh nghiệm có mặt đúng giờ ở các ca tiếp theo!</p>
-          </div>
-        ) : (
-          <div className="w-full max-w-md bg-emerald-950/90 border-2 border-emerald-500 mt-4 p-6 rounded-3xl text-center space-y-3 shadow-2xl animate-fade-in">
-            <CheckCircle2 size={56} className="text-emerald-400 mx-auto animate-bounce" />
-            <h2 className="text-xl font-black text-emerald-300">ĐIỂM DANH THÀNH CÔNG (ĐÚNG GIỜ)!</h2>
-            <p className="text-xs text-emerald-200 leading-relaxed">
-              Hệ thống đã ghi nhận ảnh chụp cửa hàng & tự động lưu hồ sơ điểm danh ngày <strong>{todayStr}</strong> vào Google Drive.
-            </p>
-            <div className="bg-emerald-900/60 p-3 rounded-xl border border-emerald-700/60 text-xs text-emerald-100 font-mono font-bold">
-              NỘI DUNG XÁC THỰC: "ĐIỂM DANH UBM" ✓
-            </div>
-            <p className="text-[11px] text-slate-400">Chúc bạn có một buổi làm việc và đào tạo hiệu quả tại Umbo Milk!</p>
-          </div>
-        )
-      ) : (
-        /* Màn Hình Chụp Hình & Điểm Danh */
-        <div className="w-full max-w-md bg-slate-900 mt-4 p-4 rounded-3xl border border-slate-800 space-y-4 shadow-xl">
-          <div className="text-center space-y-1">
-            <h4 className="text-sm font-black text-pink-400 flex items-center justify-center gap-1">
-              <Camera size={16} /> Chụp hình cửa hàng điểm danh
-            </h4>
-            <p className="text-[11px] text-slate-400">Vui lòng đứng trước cửa hàng chi nhánh để chụp ảnh xác nhận.</p>
-          </div>
+          ) : (
+            /* On-Time Success Result Card */
+            <div className="bg-emerald-950/90 border-2 border-emerald-500/80 p-6 rounded-3xl text-center space-y-4 shadow-2xl animate-fade-in backdrop-blur-xl">
+              <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto text-emerald-400 animate-bounce">
+                <CheckCircle2 size={40} />
+              </div>
 
-          {/* Vùng Chọn / Chụp Ảnh */}
-          <div className="space-y-3">
+              <div>
+                <h2 className="text-xl font-black text-emerald-300">ĐIỂM DANH THÀNH CÔNG!</h2>
+                <p className="text-xs text-emerald-200/90 mt-1">
+                  Chúc mừng bạn đã điểm danh đúng giờ cho ca làm hôm nay.
+                </p>
+              </div>
+
+              <div className="bg-emerald-900/50 p-4 rounded-2xl border border-emerald-700/50 text-xs text-emerald-100 space-y-2">
+                <p className="font-bold text-emerald-200">
+                  ✅ Ảnh chụp cửa hàng & thông tin điểm danh ngày <strong>{todayStr}</strong> đã được lưu lên Google Drive.
+                </p>
+                <p className="text-[11px] text-emerald-300 opacity-90">
+                  Tự động tích lũy <strong className="text-white font-extrabold">+1 Ngày Đào Tạo</strong> vào hồ sơ.
+                </p>
+              </div>
+
+              <div className="bg-slate-900/80 p-3 rounded-2xl border border-slate-700 text-xs text-emerald-400 font-mono font-bold flex items-center justify-center gap-1.5">
+                <Check size={14} /> NỘI DUNG XÁC THỰC: "ĐIỂM DANH UBM" ✓
+              </div>
+
+              <p className="text-[11px] text-slate-400 italic">
+                Chúc bạn có một buổi làm việc và học tập hiệu quả tại Umbo Milk!
+              </p>
+            </div>
+          )
+        ) : (
+          /* Main Photo Capture & Submit Card */
+          <div className="bg-slate-900/90 backdrop-blur-xl p-5 rounded-3xl border border-slate-800 space-y-4 shadow-xl">
+            <div className="text-center space-y-1">
+              <h4 className="text-sm font-black text-pink-400 flex items-center justify-center gap-1.5">
+                <Camera size={18} /> Chụp hình cửa hàng điểm danh
+              </h4>
+              <p className="text-[11px] text-slate-400">
+                Đứng trước mặt tiền cửa hàng chi nhánh để chụp hình xác nhận.
+              </p>
+            </div>
+
+            {/* Hidden File Input with Camera Capture */}
             <input
               type="file"
               accept="image/*"
@@ -204,76 +336,91 @@ export default function PublicAttendance() {
               className="hidden"
             />
 
-            {imageSrc ? (
-              <div className="relative rounded-2xl overflow-hidden border-2 border-pink-500 shadow-lg group">
-                <img src={imageSrc} alt="Ảnh cửa hàng điểm danh" className="w-full h-56 object-cover" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-end p-3">
-                  <span className="bg-pink-600 text-white text-xs font-black px-2.5 py-1 rounded-lg w-fit shadow-md flex items-center gap-1">
-                    <ShieldCheck size={14} /> ĐIỂM DANH UMBO MILK
-                  </span>
-                  <span className="text-[10px] text-slate-300 mt-1 font-mono">{new Date().toLocaleString('vi-VN')}</span>
+            {/* Photo Capture Area / Preview */}
+            <div className="space-y-3">
+              {imageSrc ? (
+                <div className="relative rounded-2xl overflow-hidden border-2 border-pink-500 shadow-xl group">
+                  <img
+                    src={imageSrc}
+                    alt="Ảnh cửa hàng điểm danh"
+                    className="w-full h-56 object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-transparent flex flex-col justify-end p-3">
+                    <span className="bg-pink-600 text-white text-xs font-black px-3 py-1 rounded-xl w-fit shadow-md flex items-center gap-1">
+                      <ShieldCheck size={14} /> ĐIỂM DANH UMBO MILK
+                    </span>
+                    <span className="text-[10px] text-slate-300 mt-1 font-mono">
+                      {new Date().toLocaleString('vi-VN')}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="absolute top-3 right-3 bg-slate-900/90 hover:bg-slate-900 text-white px-3 py-1.5 rounded-xl border border-slate-700 text-xs font-bold flex items-center gap-1.5 shadow-lg active:scale-95 transition-transform cursor-pointer"
+                  >
+                    <RefreshCw size={14} /> Chụp lại
+                  </button>
                 </div>
+              ) : (
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="absolute top-2 right-2 bg-slate-900/80 hover:bg-slate-900 text-white p-2 rounded-xl border border-slate-700 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                  className="w-full h-52 border-2 border-dashed border-pink-500/40 hover:border-pink-500 bg-pink-950/20 hover:bg-pink-950/40 rounded-2xl flex flex-col items-center justify-center gap-3 transition-all cursor-pointer group p-4"
                 >
-                  <RefreshCw size={14} /> Chụp lại
+                  <div className="w-16 h-16 rounded-2xl bg-pink-600/20 group-hover:bg-pink-600/30 flex items-center justify-center text-pink-400 group-hover:scale-110 transition-transform shadow-inner">
+                    <Camera size={32} />
+                  </div>
+                  <div className="text-center space-y-1">
+                    <span className="text-xs font-extrabold text-pink-300 group-hover:text-pink-200 block">
+                      Bấm vào đây để mở Camera chụp ảnh cửa hàng
+                    </span>
+                    <span className="text-[10px] text-slate-400 block">
+                      Hình chụp cửa hàng + chữ "ĐIỂM DANH UBM"
+                    </span>
+                  </div>
                 </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full h-48 border-2 border-dashed border-pink-500/50 hover:border-pink-500 bg-pink-950/20 hover:bg-pink-950/40 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all cursor-pointer group"
-              >
-                <div className="w-14 h-14 rounded-full bg-pink-600/20 group-hover:bg-pink-600/30 flex items-center justify-center text-pink-400 group-hover:scale-110 transition-transform">
-                  <Camera size={28} />
-                </div>
-                <span className="text-xs font-bold text-pink-300 group-hover:text-pink-200">
-                  Bấm vào đây để chụp ảnh cửa hàng
-                </span>
-                <span className="text-[10px] text-slate-400">Hoặc tải lên hình chụp thực tế</span>
-              </button>
-            )}
-          </div>
-
-          {/* Dòng chữ ĐIỂM DANH thương hiệu */}
-          <div className="bg-slate-800 p-3 rounded-2xl border border-slate-700 text-center space-y-1">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Nội dung xác thực hệ thống</span>
-            <div className="text-lg font-black text-pink-400 tracking-wider font-mono">
-              "ĐIỂM DANH UMBO MILK"
+              )}
             </div>
-            <p className="text-[10px] text-slate-400 italic">
-              * Ảnh & thông tin sẽ tự động phân loại lưu vào Google Drive theo Chi nhánh & Ca làm việc.
-            </p>
-          </div>
 
-          {/* Nút XÁC NHẬN ĐIỂM DANH */}
-          <button
-            type="button"
-            disabled={!imageSrc || isSubmitting}
-            onClick={handleCheckinSubmit}
-            className={`w-full py-3.5 px-4 rounded-2xl font-black text-sm transition-all shadow-xl flex items-center justify-center gap-2 cursor-pointer ${
-              imageSrc && !isSubmitting
-                ? 'bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white animate-pulse'
-                : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
-            }`}
-          >
-            {isSubmitting ? (
-              <>
-                <Spinner size={18} className="text-white" />
-                <span>Đang đồng bộ Google Drive...</span>
-              </>
-            ) : (
-              <>
-                <CheckCircle2 size={18} />
-                <span>XÁC NHẬN ĐIỂM DANH</span>
-              </>
-            )}
-          </button>
-        </div>
-      )}
+            {/* Brand Validation Box */}
+            <div className="bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700/80 text-center space-y-1">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                Nội dung xác thực hệ thống
+              </span>
+              <div className="text-base font-black text-pink-400 tracking-wider font-mono">
+                "ĐIỂM DANH UMBO MILK"
+              </div>
+              <p className="text-[10px] text-slate-400 italic">
+                * Tự động lưu Google Drive theo thư mục Chi nhánh & Ca làm việc.
+              </p>
+            </div>
+
+            {/* Submit Button */}
+            <button
+              type="button"
+              disabled={!imageSrc || isSubmitting}
+              onClick={handleCheckinSubmit}
+              className={`w-full py-4 px-4 rounded-2xl font-black text-sm transition-all shadow-2xl flex items-center justify-center gap-2 cursor-pointer ${
+                imageSrc && !isSubmitting
+                  ? 'bg-gradient-to-r from-pink-600 via-rose-600 to-purple-600 hover:from-pink-500 hover:to-rose-500 text-white shadow-pink-600/30 animate-pulse active:scale-[0.98]'
+                  : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/60'
+              }`}
+            >
+              {isSubmitting ? (
+                <>
+                  <Spinner size={18} className="text-white" />
+                  <span>Đang ghi nhận điểm danh & lưu Drive...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 size={20} />
+                  <span>XÁC NHẬN ĐIỂM DANH</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
