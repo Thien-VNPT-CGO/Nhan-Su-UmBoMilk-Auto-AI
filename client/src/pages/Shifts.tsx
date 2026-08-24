@@ -123,9 +123,18 @@ export default function Shifts() {
 
   const activeRows = tab === 'training' ? trainingRows : employeeRows;
 
+  // Kiểm tra ca nào HR được phép bấm chọn (HR chỉ được chọn OFF hoặc ca Gốc)
+  const isShiftKeyAllowedForUser = (shiftKey: string, caLamStr?: string) => {
+    if (isAdmin) return true; // ADMIN được chọn tất cả
+    if (shiftKey === 'OFF') return true; // HR được chọn Nghỉ OFF
+    const lockedKey = getLockedShiftKey(caLamStr);
+    if (lockedKey && shiftKey === lockedKey) return true; // HR được trả về ca Gốc
+    return false; // HR KHÔNG được chọn các ca làm khác
+  };
+
   const toggleSelect = (val: string) => {
-    if (!isAdmin) {
-      toast('error', '🔒 Chỉ tài khoản ADMIN mới có quyền thay đổi ca làm việc!');
+    if (edit && !isShiftKeyAllowedForUser(val, edit.caLam)) {
+      toast('error', '🔒 Tài khoản HR chỉ được phép cập nhật Nghỉ OFF hoặc ca Gốc!');
       return;
     }
     if (val === 'OFF') {
@@ -142,10 +151,6 @@ export default function Shifts() {
   };
 
   const handleSave = async () => {
-    if (!isAdmin) {
-      toast('error', '🔒 Chỉ tài khoản ADMIN mới có quyền thay đổi ca!');
-      return;
-    }
     if (!edit) return;
     setSaving(true);
 
@@ -194,9 +199,8 @@ export default function Shifts() {
 
   const isToday = (dStr: string) => dStr === startOfToday();
 
-  // RÀNG BUỘC PHÂN QUYỀN KHÓA CHỈ CHO ADMIN ĐỔI CA
+  // RÀNG BUỘC KHÓA DỰA TRÊN THỜI GIAN CA
   const isEditModalDisabled = useMemo(() => {
-    if (!isAdmin) return true; // KHÔNG PHẢI ADMIN -> KHÓA KHÔNG CHO ĐỔI CA
     if (!edit) return false;
     const todayStr = startOfToday();
     if (edit.date < todayStr) return true;
@@ -210,7 +214,7 @@ export default function Shifts() {
       if (currentVnHour >= startH) return true;
     }
     return false;
-  }, [edit, isAdmin]);
+  }, [edit]);
 
   return (
     <div className="space-y-4">
@@ -223,7 +227,7 @@ export default function Shifts() {
           <p className="text-xs text-slate-500 mt-0.5">
             {formatDate(dates[0])} &rarr; {formatDate(dates[6])} &middot;{' '}
             {!isAdmin ? (
-              <span className="text-rose-600 font-bold">🔒 Tài khoản HR chỉ có quyền xem lịch. Chỉ tài khoản ADMIN mới có quyền thay đổi ca.</span>
+              <span className="text-blue-700 font-bold">ℹ️ Tài khoản HR được cập nhật Nghỉ OFF cho ứng viên. Để đổi ca khác cần quyền ADMIN.</span>
             ) : (
               'Click ô ca làm chưa đến giờ để xếp lịch ca.'
             )}
@@ -437,18 +441,16 @@ export default function Shifts() {
                                 attStatus === 'LATE_30P' && '!bg-rose-100 border border-rose-300',
                                 attStatus === 'LATE_60P' && '!bg-purple-100 border border-purple-300',
                                 attStatus === 'ABSENT' && '!bg-slate-200/80 border border-slate-300',
-                                (!isAdmin || isAttendedOrLocked) && 'cursor-default opacity-90'
+                                isAttendedOrLocked && 'cursor-default opacity-90'
                               )}
                               title={
-                                !isAdmin
-                                  ? `${r.tenUv} – ${formatDate(d)}\n🔒 TÀI KHOẢN HR CHỈ XEM (Chỉ ADMIN mới có quyền đổi ca)`
-                                  : isAttendedOrLocked
-                                    ? `${r.tenUv} – ${formatDate(d)}\n🔒 CA LÀM NÀY ĐÃ ĐẾN/QUA GIỜ HOẶC ĐÃ ĐƯỢC AI CHẤM CÔNG (Lịch đã bị khóa)\nCheck-in: ${checkinTime || 'Chưa nhận'}`
-                                    : `${r.tenUv} – ${formatDate(d)}: ${shifts.join(' + ') || 'Chưa xếp'}`
+                                isAttendedOrLocked
+                                  ? `${r.tenUv} – ${formatDate(d)}\n🔒 CA LÀM NÀY ĐÃ ĐẾN/QUA GIỜ HOẶC ĐÃ ĐƯỢC AI CHẤM CÔNG (Lịch đã bị khóa)\nCheck-in: ${checkinTime || 'Chưa nhận'}`
+                                  : `${r.tenUv} – ${formatDate(d)}: ${shifts.join(' + ') || 'Chưa xếp'}`
                               }
                             >
-                              {/* Biểu tượng khóa cho ca không được phép sửa */}
-                              {(!isAdmin || isAttendedOrLocked) && (
+                              {/* Biểu tượng khóa cho ca đã bị khóa */}
+                              {isAttendedOrLocked && (
                                 <span className="absolute top-1 right-1 text-slate-500 opacity-60 group-hover:opacity-100 transition-opacity">
                                   <Lock size={10} />
                                 </span>
@@ -594,7 +596,7 @@ export default function Shifts() {
         </Modal>
       )}
 
-      {/* Modal Chỉnh Sửa Lịch Đổi Ca (Chỉ mở cho ADMIN) */}
+      {/* Modal Chỉnh Sửa Lịch Đổi Ca */}
       {edit && (
         <Modal open={!!edit} onClose={() => setEdit(null)} title={`Xếp lịch ngày ${formatDate(edit.date)}`}>
           <div className="space-y-4">
@@ -609,12 +611,12 @@ export default function Shifts() {
             </div>
 
             {!isAdmin ? (
-              <div className="bg-rose-50 border border-rose-200 text-rose-800 p-3.5 rounded-xl text-xs flex items-start gap-2.5 shadow-sm">
-                <ShieldAlert size={20} className="text-rose-600 shrink-0 mt-0.5" />
+              <div className="bg-blue-50 border border-blue-200 text-blue-800 p-3.5 rounded-xl text-xs flex items-start gap-2.5 shadow-sm">
+                <Clock size={20} className="text-blue-600 shrink-0 mt-0.5" />
                 <div>
-                  <h5 className="font-extrabold text-rose-900 text-xs mb-0.5">🔒 KHÔNG CÓ QUYỀN THAY ĐỔI CA LÀM VIỆC</h5>
+                  <h5 className="font-extrabold text-blue-900 text-xs mb-0.5">ℹ️ QUYỀN HẠN TÀI KHOẢN HR</h5>
                   <p className="text-[11px] leading-relaxed">
-                    Bạn đang đăng nhập bằng tài khoản <strong className="text-rose-950 font-black">HR ({user?.fullName || user?.username})</strong>. Theo quy định hệ thống, <strong className="text-rose-950 font-black">chỉ duy nhất tài khoản ADMIN</strong> mới có quyền thay đổi ca làm việc của ứng viên.
+                    Tài khoản HR được phép cập nhật <strong className="text-blue-950 font-black">Nghỉ OFF</strong> hoặc ca <strong className="text-blue-950 font-black">Gốc</strong> cho ứng viên. Để chuyển sang ca làm khác, vui lòng liên hệ ADMIN.
                   </p>
                 </div>
               </div>
@@ -633,7 +635,8 @@ export default function Shifts() {
                 {SHIFT_KEYS.map((k) => {
                   const isSel = selected.includes(k);
                   const isLockedShift = getLockedShiftKey(edit.caLam) === k;
-                  const isBtnDisabled = !isAdmin || isEditModalDisabled;
+                  const isAllowed = isShiftKeyAllowedForUser(k, edit.caLam);
+                  const isBtnDisabled = isEditModalDisabled || !isAllowed;
 
                   return (
                     <button
@@ -643,7 +646,9 @@ export default function Shifts() {
                       onClick={() => !isBtnDisabled && toggleSelect(k)}
                       className={cn(
                         'p-3 rounded-xl font-bold text-xs border text-left flex items-center justify-between transition-all',
-                        isBtnDisabled ? 'cursor-not-allowed opacity-60 bg-slate-100 border-slate-200 text-slate-400' : 'cursor-pointer',
+                        isBtnDisabled
+                          ? 'cursor-not-allowed opacity-40 bg-slate-100 border-slate-200 text-slate-400'
+                          : 'cursor-pointer',
                         isSel && !isBtnDisabled
                           ? 'border-brand-600 bg-brand-50 text-brand-700 ring-2 ring-brand-300'
                           : isSel && isBtnDisabled
@@ -677,10 +682,10 @@ export default function Shifts() {
               </button>
               <button
                 onClick={handleSave}
-                disabled={saving || !isAdmin || isEditModalDisabled}
+                disabled={saving || isEditModalDisabled}
                 className={cn(
                   'px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm',
-                  !isAdmin || isEditModalDisabled
+                  isEditModalDisabled
                     ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none'
                     : 'bg-brand-600 hover:bg-brand-700 text-white cursor-pointer'
                 )}

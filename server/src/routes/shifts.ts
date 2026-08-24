@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { requireAuth, requireRole, AuthedRequest } from '../middleware/auth';
+import { requireAuth, requireWrite, AuthedRequest } from '../middleware/auth';
 import { shiftService } from '../services/ShiftService';
 import { ApiError } from '../lib/errors';
 import { normalizeDateKey } from '../lib/date';
+import { prisma } from '../lib/prisma';
 
 const router = Router();
 router.use(requireAuth);
@@ -26,15 +27,33 @@ const upsertSchema = z.object({
   note: z.string().optional(),
 });
 
-// CHỈ TÀI KHOẢN ADMIN MỚI CÓ QUYỀN THAY ĐỔI CA LÀM VIỆC CỦA ỨNG VIÊN
-router.put('/:candidateId/:date', requireRole('ADMIN'), async (req: AuthedRequest, res, next) => {
+// TÀI KHOẢN HR CHỈ ĐƯỢC CẬP NHẬT NGHỈ OFF HOẶC TRẢ VỀ CA GỐC. ADMIN CÓ TOÀN QUYỀN.
+router.put('/:candidateId/:date', requireWrite(), async (req: AuthedRequest, res, next) => {
   try {
     const parsed = upsertSchema.safeParse({ ...req.body, date: req.params.date });
     if (!parsed.success) throw ApiError.badRequest('INVALID_INPUT', 'Dữ liệu ca không hợp lệ.');
+
+    const userRole = req.user?.role || 'HR';
+    const chosenShifts = parsed.data.shifts;
+
+    // Kiểm tra quy định phân quyền nếu là HR
+    if (userRole !== 'ADMIN') {
+      const candidate = await prisma.candidate.findUnique({ where: { id: req.params.candidateId } });
+      const normCa = (candidate?.caLam || '').toLowerCase();
+      let originalShiftKey = 'SANG';
+      if (normCa.includes('chieu') || normCa.includes('12h')) originalShiftKey = 'CHIEU';
+      else if (normCa.includes('toi') || normCa.includes('18h')) originalShiftKey = 'TOI';
+
+      const isOnlyOffOrOriginal = chosenShifts.every((s) => s === 'OFF' || s === originalShiftKey);
+      if (!isOnlyOffOrOriginal) {
+        throw ApiError.forbidden('Tài khoản HR chỉ được phép cập nhật Nghỉ OFF hoặc ca Gốc cho ứng viên.');
+      }
+    }
+
     await shiftService.upsert({
       candidateId: req.params.candidateId,
       date: normalizeDateKey(parsed.data.date),
-      shifts: parsed.data.shifts.join('|'),
+      shifts: chosenShifts.join('|'),
       note: parsed.data.note,
       user: req.user!.username,
     });
