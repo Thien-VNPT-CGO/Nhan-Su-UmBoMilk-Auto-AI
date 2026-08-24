@@ -112,10 +112,7 @@ export default function Attendance() {
           <p className="text-sm text-slate-500">{validCount}/{rows.length} hợp lệ hôm nay</p>
         </div>
         <div className="flex gap-2">
-          <button className="btn-primary" onClick={openManual}>
-            <ClipboardCheck size={15} /> Điểm danh thủ công
-          </button>
-          <button className="btn-secondary" onClick={() => void load()}><RefreshCw size={15} /></button>
+          <button className="btn-secondary" onClick={() => void load()} title="Tải lại dữ liệu"><RefreshCw size={15} /></button>
         </div>
       </div>
 
