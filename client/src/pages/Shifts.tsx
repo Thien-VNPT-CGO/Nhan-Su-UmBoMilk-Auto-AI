@@ -6,7 +6,7 @@ import { Skeleton, Badge, Modal, Spinner, Field } from '../components/ui';
 import { useToast } from '../stores/Toast';
 import { useAuth } from '../stores/auth';
 import { getSocket } from '../api/socket';
-import { dateKey, weekdayVi } from '../utils/date';
+import { dateKey, weekdayVi, formatDate } from '../utils/date';
 import { cn, shiftColor } from '../utils/format';
 import { debounce } from '../utils/debounce';
 
@@ -168,7 +168,7 @@ export default function Shifts() {
         shifts: shiftsVal,
       });
 
-      toast('success', `Đã lưu lịch ngày ${edit.date}`);
+      toast('success', `Đã lưu lịch ngày ${formatDate(edit.date)}`);
       setEdit(null);
     } catch (e) {
       toast('error', e instanceof ApiError ? e.message : 'Lưu lịch thất bại');
@@ -196,7 +196,7 @@ export default function Shifts() {
             <CalendarDays className="text-brand-600" size={24} /> Lịch làm việc
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            {dates[0]} &rarr; {dates[6]} &middot; Click ô chưa điểm danh để đổi ca. Ô đã điểm danh được khóa tự động bởi AI.
+            {formatDate(dates[0])} &rarr; {formatDate(dates[6])} &middot; Click ô chưa điểm danh để đổi ca. Ô đã điểm danh được khóa tự động bởi AI.
           </p>
         </div>
 
@@ -471,7 +471,7 @@ export default function Shifts() {
 
               <div className="flex items-center justify-between text-xs border-b border-slate-200 pb-2">
                 <span className="text-slate-600">Ngày điểm danh:</span>
-                <span className="font-bold font-mono text-slate-800">{viewAttDetail.date}</span>
+                <span className="font-bold font-mono text-slate-800">{formatDate(viewAttDetail.date)}</span>
               </div>
 
               <div className="flex items-center justify-between text-xs border-b border-slate-200 pb-2">
@@ -529,7 +529,7 @@ export default function Shifts() {
             <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-xl text-xs flex items-start gap-2">
               <Lock size={16} className="text-amber-600 shrink-0 mt-0.5" />
               <div>
-                <strong>Lưu ý dành cho HR:</strong> Ca làm việc ngày <span className="font-bold">{viewAttDetail.date}</span> đã được hệ thống AI tự động chấm công. Theo quy chế bảo mật chấm công, tài khoản HR <strong>không thể chỉnh sửa ca</strong> của ngày đã phát sinh dữ liệu điểm danh.
+                <strong>Lưu ý dành cho HR:</strong> Ca làm việc ngày <span className="font-bold">{formatDate(viewAttDetail.date)}</span> đã được hệ thống AI tự động chấm công. Theo quy chế bảo mật chấm công, tài khoản HR <strong>không thể chỉnh sửa ca</strong> của ngày đã phát sinh dữ liệu điểm danh.
               </div>
             </div>
 
@@ -548,7 +548,7 @@ export default function Shifts() {
 
       {/* Modal Chỉnh Sửa Lịch Đổi Ca (Chỉ mở cho các ô chưa điểm danh) */}
       {edit && (
-        <Modal open={!!edit} onClose={() => setEdit(null)} title={`Xếp lịch ngày ${edit.date}`}>
+        <Modal open={!!edit} onClose={() => setEdit(null)} title={`Xếp lịch ngày ${formatDate(edit.date)}`}>
           <div className="space-y-4">
             <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
               <div className="font-bold text-slate-800">{edit.tenUv}</div>
