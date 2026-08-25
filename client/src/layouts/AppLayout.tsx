@@ -4,6 +4,7 @@ import {
   LayoutDashboard, Users, BrainCircuit, GraduationCap, UserCheck, CalendarDays, ClipboardCheck,
   MessageCircle, RefreshCw, FileSpreadsheet, ScrollText, Settings as SettingsIcon,
   LogOut, Milk, Wifi, WifiOff, Database, Circle, Bell, Sun, Moon, Languages, BookOpen, BarChart3, CheckSquare,
+  Menu, X,
 } from 'lucide-react';
 import { useAuth, User } from '../stores/auth';
 import { useToast } from '../stores/Toast';
@@ -193,6 +194,13 @@ export default function AppLayout() {
   const NAV = useI18nNav(user);
   const notif = useNotifications();
 
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Tự động đóng menu di động khi chuyển route
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
+
   useEffect(() => {
     if (!user) return;
     if (user.role === 'ADMIN') return;
@@ -246,23 +254,48 @@ export default function AppLayout() {
   };
 
   return (
-    <div className="min-h-screen flex bg-slate-50 dark:bg-slate-950">
-      {/* Sidebar */}
-      <aside className="w-60 shrink-0 bg-white border-r border-slate-100 flex flex-col fixed h-full z-40 dark:bg-slate-900 dark:border-slate-800">
-        <div className="flex items-center gap-2.5 px-5 py-5">
-          <div className="bg-brand-600 text-white rounded-xl p-2">
-            <Milk size={20} />
+    <div className="min-h-screen flex bg-slate-50 dark:bg-slate-950 font-sans">
+      {/* Backdrop cho di động */}
+      {mobileMenuOpen && (
+        <div
+          onClick={() => setMobileMenuOpen(false)}
+          className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-40 md:hidden transition-opacity duration-300"
+        />
+      )}
+
+      {/* Sidebar Responsive Drawer */}
+      <aside
+        className={cn(
+          'w-64 shrink-0 bg-white border-r border-slate-100 flex flex-col fixed h-full z-50 transition-transform duration-300 dark:bg-slate-900 dark:border-slate-800',
+          'md:translate-x-0 md:w-60',
+          mobileMenuOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0'
+        )}
+      >
+        <div className="flex items-center justify-between px-5 py-5 border-b border-slate-100 dark:border-slate-800 md:border-none">
+          <div className="flex items-center gap-2.5">
+            <div className="bg-brand-600 text-white rounded-xl p-2">
+              <Milk size={20} />
+            </div>
+            <div>
+              <div className="font-extrabold text-slate-800 leading-tight dark:text-slate-100">UMBO MILK</div>
+              <div className="text-[10px] text-slate-400 font-medium">{t('header.subtitle')}</div>
+            </div>
           </div>
-          <div>
-            <div className="font-extrabold text-slate-800 leading-tight dark:text-slate-100">UMBO MILK</div>
-            <div className="text-[10px] text-slate-400 font-medium">{t('header.subtitle')}</div>
-          </div>
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(false)}
+            className="md:hidden text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-lg"
+          >
+            <X size={20} />
+          </button>
         </div>
+
         <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto">
           {NAV.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
+              onClick={() => setMobileMenuOpen(false)}
               className={({ isActive }) =>
                 cn(
                   'flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors',
@@ -294,19 +327,28 @@ export default function AppLayout() {
       </aside>
 
       {/* Main */}
-      <div className="flex-1 ml-60 flex flex-col min-w-0">
+      <div className="flex-1 ml-0 md:ml-60 flex flex-col min-w-0">
         {/* Header */}
-        <header className="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-slate-100 px-6 py-3 flex items-center gap-4 dark:bg-slate-900/90 dark:border-slate-800">
-          <div className="text-sm text-slate-600 font-semibold dark:text-slate-300">
-            {weekdayVi(now)}, {formatDate(now)}
-            <span className="ml-3 font-mono text-slate-800 tabular-nums dark:text-slate-100">
+        <header className="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-slate-100 px-3 sm:px-6 py-2.5 flex items-center gap-2 sm:gap-4 dark:bg-slate-900/90 dark:border-slate-800">
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(true)}
+            className="md:hidden text-slate-600 dark:text-slate-200 p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0"
+            title="Mở menu điều hướng"
+          >
+            <Menu size={20} />
+          </button>
+
+          <div className="text-xs sm:text-sm text-slate-600 font-semibold dark:text-slate-300 truncate">
+            <span className="hidden sm:inline">{weekdayVi(now)}, </span>{formatDate(now)}
+            <span className="ml-2 font-mono text-slate-800 tabular-nums dark:text-slate-100">
               {now.toLocaleTimeString('vi-VN', { hour12: false })}
             </span>
           </div>
           <div className="flex-1" />
 
           {health?.demoMode && (
-            <span className="rounded-full bg-amber-100 text-amber-700 px-3 py-1 text-[11px] font-bold border border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30">
+            <span className="hidden sm:inline-flex rounded-full bg-amber-100 text-amber-700 px-3 py-1 text-[11px] font-bold border border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30">
               {t('header.demoMode')}
             </span>
           )}
@@ -315,7 +357,7 @@ export default function AppLayout() {
           <button
             onClick={() => navigate('/sync')}
             className={cn(
-              'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold border transition-colors',
+              'flex items-center gap-1.5 rounded-full px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] font-bold border transition-colors shrink-0',
               syncConflict
                 ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-500/15 dark:text-purple-300 dark:border-purple-500/30'
                 : syncError
@@ -326,83 +368,48 @@ export default function AppLayout() {
             )}
           >
             <FileSpreadsheet size={13} />
-            {t('header.sheet')}
-            {syncError
-              ? `● ${t('header.syncError')}`
-              : pendingTotal > 0
-                ? `● ${pendingTotal} ${t('header.pending')}`
-                : `● ${t('header.synced')}`}
+            <span className="hidden xs:inline">{t('header.sheet')}</span>
           </button>
 
-          {/* Desktop Web Push Notification Manager */}
-          <NotificationManager />
-
-          {/* Language toggle */}
-          <button
-            onClick={() => setLang(lang === 'vi' ? 'en' : 'vi')}
-            title={t('header.language')}
-            className="p-2 rounded-xl text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
-          >
-            <Languages size={16} />
-          </button>
-
-          {/* Dark mode toggle */}
-          <button
-            onClick={toggleTheme}
-            title={t('header.darkMode')}
-            className="p-2 rounded-xl text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
-          >
-            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-          </button>
-
-          {/* Notification bell */}
+          {/* Notifications */}
           <div className="relative" ref={notif.boxRef}>
             <button
-              onClick={() => notif.setOpen((o) => !o)}
-              title={t('header.notifications')}
-              className="relative p-2 rounded-xl text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+              onClick={() => notif.setOpen(!notif.open)}
+              className="relative text-slate-500 hover:text-slate-700 p-2 rounded-xl border border-slate-200 dark:border-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
+              title="Thông báo"
             >
               <Bell size={16} />
               {notif.unread > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 bg-rose-500 text-white rounded-full min-w-4 h-4 px-1 text-[9px] font-bold flex items-center justify-center">
-                  {notif.unread > 99 ? '99+' : notif.unread}
+                <span className="absolute -top-1 -right-1 bg-rose-500 text-white rounded-full w-4 h-4 text-[10px] font-black flex items-center justify-center animate-pulse">
+                  {notif.unread > 9 ? '9+' : notif.unread}
                 </span>
               )}
             </button>
+
             {notif.open && (
-              <div className="absolute right-0 mt-2 w-80 card shadow-xl overflow-hidden z-50">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
-                  <div className="text-sm font-bold text-slate-800 dark:text-slate-100">{t('header.notifications')}</div>
-                  <button onClick={() => void notif.markAll()} className="text-[11px] font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-300">
-                    {t('header.markAllRead')}
-                  </button>
+              <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl z-50 p-4 space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                  <span className="font-bold text-xs text-slate-800 dark:text-slate-100">Thông báo hệ thống ({notif.unread})</span>
+                  <button onClick={notif.markAll} className="text-[11px] text-brand-600 hover:underline">Đã đọc tất cả</button>
                 </div>
-                <div className="max-h-96 overflow-y-auto divide-y divide-slate-50 dark:divide-slate-800">
-                  {notif.rows.length === 0 && (
-                    <div className="px-4 py-10 text-center text-xs text-slate-400">{t('header.noNotifications')}</div>
-                  )}
-                  {notif.rows.map((n) => (
-                    <button
-                      key={n.id}
-                      onClick={() => {
-                        void api.post(`/notifications/${n.id}/read`).catch(() => undefined);
-                        notif.setOpen(false);
-                        if (n.link) navigate(n.link);
-                      }}
-                      className={cn('w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/60', !n.read && 'bg-brand-50/60 dark:bg-brand-500/10')}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={cn(
-                            'w-1.5 h-1.5 rounded-full shrink-0',
-                            n.type === 'ERROR' ? 'bg-rose-500' : n.type === 'WARNING' ? 'bg-amber-500' : n.type === 'SUCCESS' ? 'bg-emerald-500' : 'bg-sky-500',
-                          )}
-                        />
-                        <span className="text-xs font-bold text-slate-800 dark:text-slate-100">{n.title}</span>
+                <div className="max-h-80 overflow-y-auto space-y-2">
+                  {notif.rows.length === 0 ? (
+                    <div className="text-xs text-slate-400 text-center py-4">Không có thông báo mới</div>
+                  ) : (
+                    notif.rows.map((row) => (
+                      <div
+                        key={row.id}
+                        onClick={() => {
+                          notif.setOpen(false);
+                          if (row.link) navigate(row.link);
+                        }}
+                        className={cn('p-2.5 rounded-xl border text-xs space-y-1 cursor-pointer', row.read ? 'bg-slate-50 border-slate-100 dark:bg-slate-800/40 dark:border-slate-800' : 'bg-brand-50/50 border-brand-200 dark:bg-brand-500/10 dark:border-brand-500/30')}
+                      >
+                        <div className="font-bold text-slate-800 dark:text-slate-100">{row.title}</div>
+                        <div className="text-slate-600 dark:text-slate-300 text-[11px]">{row.body}</div>
                       </div>
-                      <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2">{n.body}</div>
-                    </button>
-                  ))}
+                    ))
+                  )}
                 </div>
               </div>
             )}
