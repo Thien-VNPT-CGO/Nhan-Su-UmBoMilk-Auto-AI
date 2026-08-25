@@ -506,45 +506,28 @@ export default function EmployeePortal() {
             <div className="space-y-1">
               <div className="flex items-center justify-between">
                 <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                  MÃ NHÂN VIÊN (GÁN CỨNG)
+                  MÃ NHÂN VIÊN (CỐ ĐỊNH TỰ ĐỘNG)
                 </label>
-                {isAutoFilledId && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-500/50 px-2 py-0.5 rounded-full flex items-center gap-1">
-                      ✓ TỰ ĐỘNG ĐIỀN
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setIsAutoFilledId(false)}
-                      className="text-[10px] font-semibold text-slate-400 hover:text-pink-400 underline"
-                    >
-                      (Sửa Mã)
-                    </button>
-                  </div>
-                )}
+                <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-500/50 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  🔒 CỐ ĐỊNH VỚI WEB HR
+                </span>
               </div>
               <div className="relative">
                 <input
                   type="text"
                   value={candidateIdInput}
                   onChange={(e) => setCandidateIdInput(e.target.value)}
-                  readOnly={isAutoFilledId}
+                  readOnly={true}
                   placeholder="Ví dụ: UBM_25/08/2026_NV0008"
-                  className={cn(
-                    'w-full border rounded-2xl px-4 py-3 text-xs text-white placeholder:text-slate-500 outline-none font-mono font-bold transition-all',
-                    isAutoFilledId
-                      ? 'bg-emerald-950/20 border-emerald-500/80 text-emerald-300 ring-2 ring-emerald-500/30 cursor-not-allowed'
-                      : 'bg-slate-800/90 border-slate-700 focus:border-pink-500'
-                  )}
+                  className="w-full border rounded-2xl px-4 py-3 text-xs text-emerald-300 bg-emerald-950/20 border-emerald-500/80 ring-2 ring-emerald-500/30 outline-none font-mono font-bold transition-all cursor-not-allowed"
                   required
                 />
-                <User size={16} className={cn('absolute right-4 top-1/2 -translate-y-1/2', isAutoFilledId ? 'text-emerald-400' : 'text-slate-500')} />
+                <User size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-400" />
               </div>
-              {isAutoFilledId && (
-                <p className="text-[10px] text-emerald-400/90 font-medium pt-0.5">
-                  🔒 Mã NV của bạn đã được gán cứng tự động theo đúng đường link HR gửi. Vui lòng nhập Key Kích Hoạt bên dưới.
-                </p>
-              )}
+              <p className="text-[10px] text-emerald-400/90 font-medium pt-0.5 flex items-center gap-1">
+                <Lock size={11} className="shrink-0" />
+                <span>Mã NV của bạn đã được gán cố định tự động theo đúng hồ sơ Web HR. Vui lòng nhập Key Kích Hoạt bên dưới.</span>
+              </p>
             </div>
 
             <div className="space-y-1">

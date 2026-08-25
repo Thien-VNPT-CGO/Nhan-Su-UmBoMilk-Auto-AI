@@ -555,6 +555,10 @@ ${savedLateReason ? `Lý do đi trễ chính đáng: ${savedLateReason}` : ''}
       type,
       date: dateStr,
     });
+    emit('shift:updated', {
+      candidateId: candidate.id,
+      date: dateStr,
+    });
 
     res.json({
       success: true,

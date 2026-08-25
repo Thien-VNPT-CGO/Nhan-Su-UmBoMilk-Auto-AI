@@ -80,8 +80,13 @@ export class ShiftService {
       if (normCa.includes('chieu') || normCa.includes('12h')) startH = 12;
       else if (normCa.includes('toi') || normCa.includes('18h')) startH = 18;
 
-      candidateShifts?.forEach((s) => {
-        const att = candidateAttendance?.get(s.date);
+      const allDates = new Set<string>();
+      candidateShifts?.forEach((_, d) => allDates.add(d));
+      candidateAttendance?.forEach((_, d) => allDates.add(d));
+
+      allDates.forEach((d) => {
+        const s = candidateShifts?.get(d);
+        const att = candidateAttendance?.get(d);
         let status: 'ON_TIME' | 'LATE_5P' | 'LATE_30P' | 'LATE_60P' | 'ABSENT' | null = null;
         let checkinTimeStr: string | null = null;
         let lateMins = 0;
@@ -115,12 +120,12 @@ export class ShiftService {
             status = 'ON_TIME';
             fine = 0;
           }
-        } else if (s.date < todayStr && s.shifts && s.shifts !== 'OFF') {
+        } else if (s && s.date < todayStr && s.shifts && s.shifts !== 'OFF') {
           status = 'ABSENT';
         }
 
-        shiftsMap[s.date] = {
-          shifts: s.shifts,
+        shiftsMap[d] = {
+          shifts: s?.shifts || '',
           attendanceStatus: status,
           checkinTime: checkinTimeStr,
           lateMinutes: lateMins,

@@ -118,8 +118,12 @@ export default function Shifts() {
 
     const handler = () => debouncedReload();
     socket.on('shift:updated', handler);
+    socket.on('attendance:updated', handler);
+    socket.on('candidate:updated', handler);
     return () => {
       socket.off('shift:updated', handler);
+      socket.off('attendance:updated', handler);
+      socket.off('candidate:updated', handler);
     };
   }, [loadData]);
 
