@@ -43,6 +43,21 @@ router.get('/public/employee/payroll-ai/:candidateId', async (req, res, next) =>
   }
 });
 
+// 2b. Kiểm tra hợp lệ phiên làm việc & thiết bị gán cứng (Heartbeat / Focus / Realtime check)
+router.post('/public/employee/session-check', async (req, res, next) => {
+  try {
+    const schema = z.object({
+      candidateId: z.string().min(1),
+      deviceId: z.string().min(1),
+    });
+    const parsed = schema.parse(req.body);
+    const check = await employeeAuthService.validateDevice(parsed.candidateId, parsed.deviceId);
+    res.json({ success: true, data: check });
+  } catch (e) {
+    next(e);
+  }
+});
+
 // 3. Nhân viên tự tạo Phiếu Yêu cầu Reset Thiết bị (TH1: Thực hiện từ Máy cũ)
 router.post('/public/employee/device-reset-request', async (req, res, next) => {
   try {

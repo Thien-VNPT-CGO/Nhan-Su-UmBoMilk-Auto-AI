@@ -156,22 +156,62 @@ export default function EmployeePortal() {
     }
   }, []);
 
-  // Lắng nghe Socket.io Realtime FORCE LOGOUT khi IT Admin duyệt Reset máy
+  // KÍCH HOẠT DUAL MECHANISM FORCE LOGOUT (Socket.io Realtime + Active Heartbeat/Focus Check)
   useEffect(() => {
     if (!session?.candidate.id) return;
-    const socket = getSocket();
+    const deviceId = getDeviceId();
 
-    const handleForceLogout = (data: { candidateId: string; reason: string }) => {
-      if (data.candidateId === session.candidate.id) {
+    // 1. Hàm kiểm tra hợp lệ phiên làm việc trực tiếp với Server
+    const checkSession = async () => {
+      try {
+        const res = await api.post<{ valid: boolean; reason?: string }>('/public/employee/session-check', {
+          candidateId: session.candidate.id,
+          deviceId,
+        });
+        if (res && res.valid === false) {
+          localStorage.removeItem('umbomilk_emp_session');
+          setSession(null);
+          alert(`⚡ THÔNG BÁO TỪ HỆ THỐNG AI:\n${res.reason || 'Thiết bị của bạn đã được IT Admin Reset thành công. Phiên làm việc trên máy này đã được Logout.'}`);
+        }
+      } catch {
+        // ignore network glitches
+      }
+    };
+
+    // Kiểm tra ngay khi khởi chạy
+    checkSession();
+
+    // Định kỳ 5 giây kiểm tra 1 lần (Heartbeat)
+    const interval = setInterval(checkSession, 5000);
+
+    // Kiểm tra ngay lập tức khi điện thoại mở lại màn hình / chuyển tab (Focus / Wakeup)
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        checkSession();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', handleVisibility);
+
+    // 2. Đăng ký Socket.io Realtime Push
+    const socket = getSocket();
+    const handleForceLogout = (data: { candidateId: string; reason?: string }) => {
+      if (!data || data.candidateId === session.candidate.id) {
         localStorage.removeItem('umbomilk_emp_session');
         setSession(null);
-        alert(`⚡ THÔNG BÁO TỪ HỆ THỐNG AI:\n${data.reason || 'Thiết bị của bạn đã được IT Admin Reset thành công. Phiên làm việc trên máy này đã được Logout.'}`);
+        alert(`⚡ THÔNG BÁO TỪ HỆ THỐNG AI:\n${data?.reason || 'Thiết bị của bạn đã được IT Admin Reset thành công. Phiên làm việc trên máy này đã được Logout.'}`);
       }
     };
 
     socket.on('device_key:force_logout', handleForceLogout);
+    socket.on('device_reset:approved', handleForceLogout);
+
     return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', handleVisibility);
       socket.off('device_key:force_logout', handleForceLogout);
+      socket.off('device_reset:approved', handleForceLogout);
     };
   }, [session?.candidate.id]);
 

@@ -151,8 +151,13 @@ export class EmployeeAuthService {
     const keyRecord = await prisma.employeeKey.findFirst({
       where: { candidateId, status: 'ACTIVE' },
     });
-    if (!keyRecord || !keyRecord.deviceId) return false;
-    return keyRecord.deviceId === deviceId;
+    if (!keyRecord || !keyRecord.deviceId) {
+      return { valid: false, reason: 'Key kích hoạt thiết bị của bạn đã được IT Admin Reset thành công. Phiên làm việc trên máy này đã hết hạn.' };
+    }
+    if (keyRecord.deviceId !== deviceId) {
+      return { valid: false, reason: 'Tài khoản này đã được gán với thiết bị khác.' };
+    }
+    return { valid: true, keyInfo: keyRecord };
   }
 }
 
