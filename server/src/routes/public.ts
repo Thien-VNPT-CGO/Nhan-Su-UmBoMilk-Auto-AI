@@ -10,6 +10,7 @@ import { TRAINING_STATUS } from '../lib/constants';
 import { formatDateTime } from '../lib/date';
 import { googleDriveUploadService } from '../services/GoogleDriveUploadService';
 import { trainingService } from '../services/TrainingService';
+import { emit } from '../sockets';
 
 const router = Router();
 
@@ -311,12 +312,6 @@ router.post('/candidates/:id(*)/attendance-checkin', async (req, res, next) => {
       startMin = 0;
       endHour = 23;
       endMin = 0;
-    } else if (normShift.includes('hanchinh') || normShift.includes('hanh chinh') || normShift.includes('8h')) {
-      shiftFolder = 'CA_HANCHINH';
-      startHour = 8;
-      startMin = 0;
-      endHour = 17;
-      endMin = 0;
     }
 
     const shiftStartTime = new Date(year, month, day, startHour, startMin, 0);
@@ -545,6 +540,13 @@ ${savedLateReason ? `Lý do đi trễ chính đáng: ${savedLateReason}` : ''}
         fineAmount,
         fineLabel,
       },
+    });
+
+    emit('attendance:updated', {
+      candidateId: candidate.id,
+      candidateName: candidate.tenUv,
+      type,
+      date: dateStr,
     });
 
     res.json({
