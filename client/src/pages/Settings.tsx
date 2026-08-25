@@ -119,6 +119,24 @@ export default function Settings() {
   const [pwdForm, setPwdForm] = useState({ oldPassword: '', newPassword: '', totpCode: '' });
   const [pwdBusy, setPwdBusy] = useState(false);
 
+  // Admin Reset Password State
+  const [resettingPasswordId, setResettingPasswordId] = useState<string | null>(null);
+  const [resetPasswordUser, setResetPasswordUser] = useState<{ id: string; username: string; fullName: string } | null>(null);
+
+  const handleResetUserPasswordConfirm = async () => {
+    if (!resetPasswordUser) return;
+    setResettingPasswordId(resetPasswordUser.id);
+    try {
+      const res = await api.post<{ reset: boolean; username: string; defaultPassword: string }>(`/settings/users/${resetPasswordUser.id}/reset-password`);
+      toast('success', `⚡ Đã Reset mật khẩu tài khoản "${res.username}" về mặc định (${res.defaultPassword}) thành công! Phân hệ Realtime đã phát lệnh đá Logout khỏi thiết bị.`);
+      setResetPasswordUser(null);
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Reset mật khẩu thất bại.');
+    } finally {
+      setResettingPasswordId(null);
+    }
+  };
+
   // Phân quyền Tab cho HR
   const ALL_PERMISSION_TABS = [
     { path: '/dashboard', label: 'Tổng quan', defaultHR: true },
@@ -1515,6 +1533,18 @@ export default function Settings() {
                         <span>Phân quyền Tab</span>
                       </button>
                     )}
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        disabled={resettingPasswordId === u.id}
+                        onClick={() => setResetPasswordUser(u)}
+                        className="btn-danger !py-1 !px-2.5 text-xs flex items-center gap-1 shrink-0 font-semibold cursor-pointer"
+                        title={`Reset mật khẩu của tài khoản ${u.username} về mặc định (ubm123123) & Đá Logout Realtime`}
+                      >
+                        {resettingPasswordId === u.id ? <Spinner size={13} /> : <KeyRound size={14} />}
+                        <span>🔑 Reset Mật Khẩu (ubm123123)</span>
+                      </button>
+                    )}
                   </div>
                   {isAdmin && u.id !== user?.id && (
                     <div className="flex items-center gap-2">
@@ -1709,6 +1739,18 @@ export default function Settings() {
         confirmLabel={t('settings.restore')}
         danger
       />
+
+      {resetPasswordUser && (
+        <ConfirmDialog
+          open={!!resetPasswordUser}
+          onClose={() => setResetPasswordUser(null)}
+          onConfirm={() => void handleResetUserPasswordConfirm()}
+          title="XÁC NHẬN RESET MẬT KHẨU TÀI KHOẢN VỀ GỐC"
+          message={`Bạn có chắc chắn muốn Reset mật khẩu của tài khoản "${resetPasswordUser.fullName} (${resetPasswordUser.username})" về mật khẩu mặc định (ubm123123)?\n\n⚡ Lưu ý: Phân hệ Realtime Socket.io sẽ phát lệnh đá ĐĂNG XUẤT tài khoản này LẬP TỨC trên thiết bị đang sử dụng!`}
+          confirmLabel="🔑 Reset Về Mặc Định (ubm123123)"
+          danger
+        />
+      )}
     </div>
   );
 }

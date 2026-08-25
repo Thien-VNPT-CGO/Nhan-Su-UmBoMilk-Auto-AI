@@ -10,6 +10,7 @@ import { Prisma } from '@prisma/client';
 import { ApiError } from '../lib/errors';
 import { prisma } from '../lib/prisma';
 import { notificationService } from '../services/NotificationService';
+import { authService } from '../services/AuthService';
 
 const router = Router();
 router.use(requireAuth);
@@ -95,6 +96,17 @@ router.post('/users/:id', requireRole('ADMIN'), async (req: AuthedRequest, res, 
         allowedTabs: updated.allowedTabs,
       },
     });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/** Admin Reset Mật Khẩu tài khoản về gốc ubm123123 & Đá Realtime Logout. */
+router.post('/users/:id/reset-password', requireRole('ADMIN'), async (req: AuthedRequest, res, next) => {
+  try {
+    const targetUserId = String(req.params.id);
+    const result = await authService.adminResetPassword(req.user!.username, targetUserId, 'ubm123123');
+    res.json({ success: true, data: result });
   } catch (e) {
     next(e);
   }

@@ -215,6 +215,26 @@ export default function AppLayout() {
     }
   }, [user, location.pathname, navigate, toast]);
 
+  // Lắng nghe Realtime khi Admin Reset Mật Khẩu tài khoản -> Đá Logout lập tức!
+  useEffect(() => {
+    if (!user) return;
+    const socket = getSocket();
+
+    const handlePasswordReset = (data: { userId: string; username: string; defaultPassword: string; message: string }) => {
+      if (data.userId === user.id || data.username === user.username) {
+        logout().then(() => {
+          alert(`⚡ THÔNG BÁO TỪ HỆ THỐNG AI:\nMật khẩu của tài khoản ${data.username} đã được Admin Reset về gốc (${data.defaultPassword}).\nPhiên đăng nhập đã hết hiệu lực. Vui lòng đăng nhập lại với mật khẩu mới!`);
+          navigate('/login', { replace: true });
+        });
+      }
+    };
+
+    socket.on('user:password_reset', handlePasswordReset);
+    return () => {
+      socket.off('user:password_reset', handlePasswordReset);
+    };
+  }, [user, logout, navigate]);
+
   const pendingTotal = (counts?.PENDING ?? 0) + (counts?.RETRY ?? 0) + (counts?.PROCESSING ?? 0);
   const syncError = (counts?.FAILED ?? 0) > 0;
   const syncConflict = (counts?.CONFLICT ?? 0) > 0;

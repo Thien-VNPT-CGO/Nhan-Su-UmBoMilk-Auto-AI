@@ -6,6 +6,7 @@ import { nextId } from '../lib/id';
 import { env } from '../config/env';
 import { audit } from './AuditService';
 import { verifyTOTP, generateTOTPSecret, otpauthUrl } from '../lib/totp';
+import { emit } from '../sockets';
 import type { Request, Response } from 'express';
 
 const COOKIE_NAME = 'umbo_session';
@@ -163,6 +164,40 @@ export class AuthService {
     });
     await audit({ user: user.username, action: 'CHANGE_PASSWORD', entity: 'user', entityId: user.id });
     return { changed: true };
+  }
+
+  /** Reset mật khẩu Admin: Đưa mật khẩu về gốc "ubm123123" & Đá Logout Realtime thiết bị hiện tại */
+  async adminResetPassword(adminUsername: string, targetUserId: string, defaultPassword = 'ubm123123') {
+    const user = await prisma.user.findUnique({ where: { id: targetUserId } });
+    if (!user) throw ApiError.notFound('USER_NOT_FOUND', 'Không tìm thấy tài khoản.');
+
+    const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+    await prisma.user.update({
+      where: { id: targetUserId },
+      data: { password: hashedPassword },
+    });
+
+    // Xóa tất cả session hiện tại của tài khoản bị Reset
+    await prisma.session.deleteMany({ where: { userId: targetUserId } }).catch(() => undefined);
+
+    // Ghi log Audit
+    await audit({
+      user: adminUsername,
+      action: 'ADMIN_RESET_PASSWORD',
+      entity: 'user',
+      entityId: user.id,
+      newValue: JSON.stringify({ resetToDefault: defaultPassword }),
+    });
+
+    // Phát thông báo Realtime Socket.io đá Logout tài khoản này lập tức!
+    emit('user:password_reset', {
+      userId: user.id,
+      username: user.username,
+      defaultPassword,
+      message: `Mật khẩu của tài khoản ${user.username} đã được Admin Reset về gốc (${defaultPassword}).`,
+    });
+
+    return { reset: true, username: user.username, defaultPassword };
   }
 
   async logout(req: Request, res: Response) {
