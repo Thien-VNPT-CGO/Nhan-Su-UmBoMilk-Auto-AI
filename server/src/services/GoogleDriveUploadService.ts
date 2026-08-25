@@ -2,6 +2,7 @@ import { google } from 'googleapis';
 import { getSettings } from './SettingsService';
 import { env } from '../config/env';
 import fs from 'fs';
+import { Readable } from 'stream';
 
 export class GoogleDriveUploadService {
   private async getDriveClient() {
@@ -24,6 +25,21 @@ export class GoogleDriveUploadService {
     return { drive, rootFolderId: driveFolderId };
   }
 
+  private async sharePermission(drive: any, fileId: string) {
+    try {
+      await drive.permissions.create({
+        fileId,
+        requestBody: {
+          role: 'reader',
+          type: 'anyone',
+        },
+        supportsAllDrives: true,
+      });
+    } catch {
+      // Ignore if permission already exists or domain-restricted
+    }
+  }
+
   private async findOrCreateFolder(drive: any, folderName: string, parentFolderId: string): Promise<string> {
     try {
       const q = `'${parentFolderId}' in parents and name = '${folderName.replace(/'/g, "\\'")}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
@@ -36,7 +52,9 @@ export class GoogleDriveUploadService {
       });
 
       if (res.data.files && res.data.files.length > 0) {
-        return res.data.files[0].id;
+        const existingId = res.data.files[0].id;
+        await this.sharePermission(drive, existingId);
+        return existingId;
       }
 
       const createRes = await drive.files.create({
@@ -49,7 +67,9 @@ export class GoogleDriveUploadService {
         supportsAllDrives: true,
       });
 
-      return createRes.data.id;
+      const newFolderId = createRes.data.id;
+      await this.sharePermission(drive, newFolderId);
+      return newFolderId;
     } catch (e) {
       console.warn(`[GoogleDrive] Failed to findOrCreateFolder '${folderName}':`, e instanceof Error ? e.message : String(e));
       return parentFolderId;
@@ -88,6 +108,7 @@ export class GoogleDriveUploadService {
 
       // 2. Upload file ảnh cửa hàng Anh_chup_cua_hang.jpg
       if (fs.existsSync(params.imageFilePath)) {
+        const imgBuffer = fs.readFileSync(params.imageFilePath);
         const imgRes = await drive.files.create({
           requestBody: {
             name: 'Anh_chup_cua_hang.jpg',
@@ -95,11 +116,14 @@ export class GoogleDriveUploadService {
           },
           media: {
             mimeType: 'image/jpeg',
-            body: fs.createReadStream(params.imageFilePath),
+            body: Readable.from(imgBuffer),
           },
           fields: 'id, name, webViewLink',
           supportsAllDrives: true,
         });
+        if (imgRes.data.id) {
+          await this.sharePermission(drive, imgRes.data.id);
+        }
         console.log(`[GoogleDrive] ✅ Image uploaded successfully: ${imgRes.data.name} (ID: ${imgRes.data.id})`);
       } else {
         console.warn(`[GoogleDrive] Image file missing locally: ${params.imageFilePath}`);
@@ -107,6 +131,7 @@ export class GoogleDriveUploadService {
 
       // 3. Upload file văn bản Diem_danh.txt
       if (fs.existsSync(params.txtFilePath)) {
+        const txtBuffer = fs.readFileSync(params.txtFilePath);
         const txtRes = await drive.files.create({
           requestBody: {
             name: 'Diem_danh.txt',
@@ -114,11 +139,14 @@ export class GoogleDriveUploadService {
           },
           media: {
             mimeType: 'text/plain',
-            body: fs.createReadStream(params.txtFilePath),
+            body: Readable.from(txtBuffer),
           },
           fields: 'id, name, webViewLink',
           supportsAllDrives: true,
         });
+        if (txtRes.data.id) {
+          await this.sharePermission(drive, txtRes.data.id);
+        }
         console.log(`[GoogleDrive] ✅ Txt file uploaded successfully: ${txtRes.data.name} (ID: ${txtRes.data.id})`);
       } else {
         console.warn(`[GoogleDrive] Txt file missing locally: ${params.txtFilePath}`);
