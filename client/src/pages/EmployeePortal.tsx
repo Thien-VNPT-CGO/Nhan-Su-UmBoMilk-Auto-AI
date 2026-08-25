@@ -140,6 +140,56 @@ export default function EmployeePortal() {
   // States cho Lương AI
   const [payroll, setPayroll] = useState<PayrollData | null>(null);
 
+  // States cho Đổi ca làm
+  const [colleagues, setColleagues] = useState<ColleagueItem[]>([]);
+  const [selectedColleagueId, setSelectedColleagueId] = useState('');
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const [myDate, setMyDate] = useState(todayStr);
+  const [myShift, setMyShift] = useState('SÁNG (07:00 - 12:00)');
+  const [myShiftSource, setMyShiftSource] = useState('');
+  const [targetDate, setTargetDate] = useState(todayStr);
+  const [targetShift, setTargetShift] = useState('CHIỀU (12:00 - 18:00)');
+  const [targetShiftSource, setTargetShiftSource] = useState('');
+  const [swapReason, setSwapReason] = useState('');
+
+  const [swapSubmitting, setSwapSubmitting] = useState(false);
+  const [swapSuccessMsg, setSwapSuccessMsg] = useState<string | null>(null);
+  const [swapErrorMsg, setSwapErrorMsg] = useState<string | null>(null);
+
+  const [swapHistory, setSwapHistory] = useState<SwapHistoryItem[]>([]);
+  const [loadingSwapHistory, setLoadingSwapHistory] = useState(false);
+
+  // Tra cứu ca làm việc chuẩn từ Web HR cho bản thân
+  const fetchMyShiftSchedule = useCallback(async (cId: string, date: string) => {
+    if (!cId || !date) return;
+    try {
+      const res = await api.get<{ formattedShift: string; source: string }>(`/public/employee/shift-schedule?candidateId=${encodeURIComponent(cId)}&date=${date}`);
+      const data = (res as any)?.data || res;
+      if (data?.formattedShift) {
+        setMyShift(data.formattedShift);
+        setMyShiftSource(data.source === 'WEB_HR_SCHEDULE' ? 'Lịch trực chốt từ Web HR' : 'Ca làm mặc định hồ sơ HR');
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Tra cứu ca làm việc chuẩn từ Web HR cho Đồng nghiệp
+  const fetchTargetShiftSchedule = useCallback(async (cId: string, date: string) => {
+    if (!cId || !date) return;
+    try {
+      const res = await api.get<{ formattedShift: string; source: string }>(`/public/employee/shift-schedule?candidateId=${encodeURIComponent(cId)}&date=${date}`);
+      const data = (res as any)?.data || res;
+      if (data?.formattedShift) {
+        setTargetShift(data.formattedShift);
+        setTargetShiftSource(data.source === 'WEB_HR_SCHEDULE' ? 'Lịch trực chốt từ Web HR' : 'Ca làm mặc định hồ sơ HR');
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
   // Local deviceId generator
   const getDeviceId = () => {
     let devId = localStorage.getItem('umbomilk_device_id');
@@ -217,7 +267,7 @@ export default function EmployeePortal() {
     document.addEventListener('visibilitychange', handleVisibility);
     window.addEventListener('focus', handleVisibility);
 
-    // 2. Đăng ký Socket.io Realtime Push
+    // 2. Đăng ký Socket.io Realtime Push từ Web HR
     const socket = getSocket();
     const handleForceLogout = (data: { candidateId: string; reason?: string }) => {
       if (!data || data.candidateId === session.candidate.id) {
@@ -227,8 +277,20 @@ export default function EmployeePortal() {
       }
     };
 
+    const handleRealtimeWebHRSync = () => {
+      checkSession();
+      if (session?.candidate.id && myDate) {
+        fetchMyShiftSchedule(session.candidate.id, myDate);
+      }
+    };
+
     socket.on('device_key:force_logout', handleForceLogout);
     socket.on('device_reset:approved', handleForceLogout);
+    socket.on('candidate:updated', handleRealtimeWebHRSync);
+    socket.on('shift:updated', handleRealtimeWebHRSync);
+    socket.on('training:updated', handleRealtimeWebHRSync);
+    socket.on('attendance:updated', handleRealtimeWebHRSync);
+    socket.on('shift_swap:approved', handleRealtimeWebHRSync);
 
     return () => {
       clearInterval(interval);
@@ -236,8 +298,13 @@ export default function EmployeePortal() {
       window.removeEventListener('focus', handleVisibility);
       socket.off('device_key:force_logout', handleForceLogout);
       socket.off('device_reset:approved', handleForceLogout);
+      socket.off('candidate:updated', handleRealtimeWebHRSync);
+      socket.off('shift:updated', handleRealtimeWebHRSync);
+      socket.off('training:updated', handleRealtimeWebHRSync);
+      socket.off('attendance:updated', handleRealtimeWebHRSync);
+      socket.off('shift_swap:approved', handleRealtimeWebHRSync);
     };
-  }, [session?.candidate.id]);
+  }, [session?.candidate.id, myDate, fetchMyShiftSchedule]);
 
   // Load Lương AI Realtime khi chuyển sang Tab PAYROLL
   useEffect(() => {
@@ -247,56 +314,6 @@ export default function EmployeePortal() {
         .catch(() => null);
     }
   }, [activeTab, session?.candidate.id]);
-
-  // States cho Đổi ca làm
-  const [colleagues, setColleagues] = useState<ColleagueItem[]>([]);
-  const [selectedColleagueId, setSelectedColleagueId] = useState('');
-
-  const todayStr = new Date().toISOString().split('T')[0];
-  const [myDate, setMyDate] = useState(todayStr);
-  const [myShift, setMyShift] = useState('SÁNG (07:00 - 12:00)');
-  const [myShiftSource, setMyShiftSource] = useState('');
-  const [targetDate, setTargetDate] = useState(todayStr);
-  const [targetShift, setTargetShift] = useState('CHIỀU (12:00 - 18:00)');
-  const [targetShiftSource, setTargetShiftSource] = useState('');
-  const [swapReason, setSwapReason] = useState('');
-
-  const [swapSubmitting, setSwapSubmitting] = useState(false);
-  const [swapSuccessMsg, setSwapSuccessMsg] = useState<string | null>(null);
-  const [swapErrorMsg, setSwapErrorMsg] = useState<string | null>(null);
-
-  const [swapHistory, setSwapHistory] = useState<SwapHistoryItem[]>([]);
-  const [loadingSwapHistory, setLoadingSwapHistory] = useState(false);
-
-  // Tra cứu ca làm việc chuẩn từ Web HR cho bản thân
-  const fetchMyShiftSchedule = useCallback(async (cId: string, date: string) => {
-    if (!cId || !date) return;
-    try {
-      const res = await api.get<{ formattedShift: string; source: string }>(`/public/employee/shift-schedule?candidateId=${encodeURIComponent(cId)}&date=${date}`);
-      const data = (res as any)?.data || res;
-      if (data?.formattedShift) {
-        setMyShift(data.formattedShift);
-        setMyShiftSource(data.source === 'WEB_HR_SCHEDULE' ? 'Lịch trực chốt từ Web HR' : 'Ca làm mặc định hồ sơ HR');
-      }
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  // Tra cứu ca làm việc chuẩn từ Web HR cho Đồng nghiệp
-  const fetchTargetShiftSchedule = useCallback(async (cId: string, date: string) => {
-    if (!cId || !date) return;
-    try {
-      const res = await api.get<{ formattedShift: string; source: string }>(`/public/employee/shift-schedule?candidateId=${encodeURIComponent(cId)}&date=${date}`);
-      const data = (res as any)?.data || res;
-      if (data?.formattedShift) {
-        setTargetShift(data.formattedShift);
-        setTargetShiftSource(data.source === 'WEB_HR_SCHEDULE' ? 'Lịch trực chốt từ Web HR' : 'Ca làm mặc định hồ sơ HR');
-      }
-    } catch {
-      // ignore
-    }
-  }, []);
 
   // Tự động tra cứu ca của bản thân khi thay đổi ngày hoặc vào Tab SWAP
   useEffect(() => {
