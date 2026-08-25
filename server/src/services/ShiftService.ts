@@ -22,7 +22,7 @@ export class ShiftService {
   async listForDates(from: string, to: string) {
     const todayStr = dateKey(new Date());
 
-    const [trainingCandidates, employeeCandidates, shifts, attendanceEvents] = await Promise.all([
+    const [trainingCandidates, employeeCandidates] = await Promise.all([
       prisma.candidate.findMany({
         where: {
           ngayBatDauTraining: { not: null },
@@ -34,11 +34,24 @@ export class ShiftService {
         where: { trangThaiTraining: 'NHAN_VIEN_CHINH_THUC' },
         orderBy: { tenUv: 'asc' },
       }),
+    ]);
+
+    let minDate = from;
+    trainingCandidates.forEach((c) => {
+      if (c.ngayBatDauTraining) {
+        const dStr = dateKey(c.ngayBatDauTraining);
+        if (dStr < minDate) {
+          minDate = dStr;
+        }
+      }
+    });
+
+    const [shifts, attendanceEvents] = await Promise.all([
       prisma.shift.findMany({
-        where: { date: { gte: from, lte: to } },
+        where: { date: { gte: minDate, lte: to } },
       }),
       prisma.attendanceEvent.findMany({
-        where: { date: { gte: from, lte: to } },
+        where: { date: { gte: minDate, lte: to } },
         orderBy: { createdAt: 'desc' },
       }),
     ]);

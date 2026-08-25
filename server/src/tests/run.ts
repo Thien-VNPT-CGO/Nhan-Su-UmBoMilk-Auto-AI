@@ -328,7 +328,7 @@ async function main() {
   console.log('\n[PROVISION] Liên kết Google Sheet');
   (env as { googleSheetId: string }).googleSheetId = '';
   await (getGoogleSheetService() as GoogleSheetService).refreshConfig();
-  const provAdmin = adminSession || (await login('admin', 'admin123')) || (await login('admin', 'ubm123456'));
+  const provAdmin = (await login('admin', 'admin123')) || (await login('admin', 'ubm123456')) || adminSession;
   const prov = await api('/sync/provision', { method: 'POST', session: provAdmin, body: { spreadsheetId: 'DEMO' } });
   ok('PROV: Endpoint tạo cấu trúc hoạt động (demo mode)', prov.status === 200 && prov.json.data?.demo === true);
   ok('PROV: Demo mode báo demo + xếp hàng đồng bộ toàn bộ', prov.json.data?.demo === true);
