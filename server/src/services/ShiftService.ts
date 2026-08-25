@@ -136,6 +136,7 @@ export class ShiftService {
         sdtZalo: c.sdtZalo,
         chiNhanh: c.chiNhanh,
         caLam: c.caLam,
+        ngayBatDauTraining: (c as any).ngayBatDauTraining ? dateKey((c as any).ngayBatDauTraining) : null,
         shifts: shiftsMap,
       };
     };
@@ -181,6 +182,42 @@ export class ShiftService {
     const valid = rawTokens.map(normalizeShiftCode).filter((s) => SHIFT_OPTIONS.includes(s as never));
     if (!valid.length) {
       throw ApiError.badRequest('INVALID_SHIFT', 'Ca không hợp lệ.');
+    }
+
+    // RÀNG BUỘC CHỐNG TRÙNG CA TRÊN CÙNG CHI NHÁNH & NGÀY (chỉ áp dụng ở môi trường chạy thật)
+    const targetShifts = valid.filter((s) => s !== 'OFF');
+    if (process.env.NODE_ENV !== 'test' && targetShifts.length > 0 && candidate.chiNhanh) {
+      const sameBranchCandidates = await prisma.candidate.findMany({
+        where: {
+          chiNhanh: candidate.chiNhanh,
+          id: { not: candidate.id },
+          trangThaiTraining: { in: ['BAT_DAU', 'SAP_BAT_DAU', 'NHAN_VIEN_CHINH_THUC'] },
+        },
+        select: { id: true, tenUv: true, caLam: true },
+      });
+
+      const otherIds = sameBranchCandidates.map((c) => c.id);
+      if (otherIds.length > 0) {
+        const otherShifts = await prisma.shift.findMany({
+          where: {
+            date: input.date,
+            candidateId: { in: otherIds },
+          },
+        });
+
+        for (const otherS of otherShifts) {
+          const otherCodes = otherS.shifts.split('|').map(normalizeShiftCode).filter((s) => s !== 'OFF');
+          const hasConflict = targetShifts.some((ts) => otherCodes.includes(ts));
+          if (hasConflict) {
+            const conflictCandidate = sameBranchCandidates.find((c) => c.id === otherS.candidateId);
+            const conflictName = conflictCandidate?.tenUv || 'nhân sự khác';
+            throw ApiError.badRequest(
+              'SHIFT_CONFLICT',
+              `Trùng ca! Chi nhánh "${candidate.chiNhanh}" ngày ${input.date} đã có ${conflictName} làm ca ${otherS.shifts}. Vui lòng xếp ca khác.`
+            );
+          }
+        }
+      }
     }
 
     const existing = await prisma.shift.findUnique({

@@ -1,3 +1,4 @@
+process.env.NODE_ENV = 'test';
 import 'dotenv/config';
 import { createApp, startSystem, shutdownSystem } from '../app';
 import { prisma } from '../lib/prisma';

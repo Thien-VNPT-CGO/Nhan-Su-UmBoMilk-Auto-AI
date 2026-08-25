@@ -425,6 +425,26 @@ export default function Shifts() {
                 {activeRows.map((r) => {
                   const lockedKey = getLockedShiftKey(r.caLam);
 
+                  // Thuật toán đếm 7 Ngày Training nối tiếp (bỏ qua OFF)
+                  const trainingDayMap: Record<string, number | null> = {};
+                  let currentTCount = 0;
+
+                  dates.forEach((d) => {
+                    const cellObj = r.shifts[d];
+                    const shiftsRaw = cellObj?.shifts || '';
+                    let shifts = shiftsRaw ? shiftsRaw.split('|').filter(Boolean) : [];
+                    if (shifts.length === 0 && lockedKey) {
+                      shifts = [lockedKey];
+                    }
+                    const isOff = shifts.includes('OFF') || shifts.length === 0;
+                    if (!isOff && currentTCount < 7) {
+                      currentTCount++;
+                      trainingDayMap[d] = currentTCount;
+                    } else {
+                      trainingDayMap[d] = null;
+                    }
+                  });
+
                   return (
                     <tr key={r.candidateId} className="hover:bg-slate-50/60 transition-colors">
                       {/* Left info column */}
@@ -437,6 +457,21 @@ export default function Shifts() {
                         <div className="text-[11px] text-amber-700 font-medium mt-0.5">
                           • Ca làm: <span className="font-bold">{r.caLam || 'Chưa chốt ca'}</span>
                         </div>
+
+                        {tab === 'training' && (
+                          <div className="text-[10px] font-bold mt-1.5">
+                            {currentTCount >= 7 ? (
+                              <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-300 inline-block shadow-2xs">
+                                📊 Tiến độ: 7/7 Đủ ca Training
+                              </span>
+                            ) : (
+                              <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-300 inline-block shadow-2xs">
+                                ⚠️ Mới xếp: {currentTCount}/7 Ngày
+                              </span>
+                            )}
+                          </div>
+                        )}
+
                         <div className="mt-2 space-y-1">
                           <button
                             type="button"
@@ -484,6 +519,7 @@ export default function Shifts() {
                         const colors = shifts.map((s) => shiftBadgeColors[s] || 'bg-slate-100 text-slate-600 border-slate-200');
                         const attStatus = cellObj?.attendanceStatus;
                         const checkinTime = cellObj?.checkinTime;
+                        const tNum = tab === 'training' ? trainingDayMap[d] : null;
 
                         // RÀNG BUỘC KHOÁ REALTIME DƯỚI CLIENT:
                         const todayStr = startOfToday();
@@ -588,6 +624,18 @@ export default function Shifts() {
                                 <span className="font-extrabold text-[11px] uppercase tracking-wide">
                                   {shifts[0] || 'CHƯA'}
                                 </span>
+                              )}
+
+                              {tab === 'training' && (
+                                tNum ? (
+                                  <span className="text-[9px] font-extrabold bg-gradient-to-r from-pink-500 to-rose-500 text-white px-1.5 py-0.2 rounded-full shadow-2xs mt-0.5 whitespace-nowrap">
+                                    🎯 Ngày {tNum} (T{tNum})
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] font-bold text-slate-400 opacity-60 mt-0.5 whitespace-nowrap">
+                                    ☕ NGHỈ (OFF)
+                                  </span>
+                                )
                               )}
 
                               {attBadge}
