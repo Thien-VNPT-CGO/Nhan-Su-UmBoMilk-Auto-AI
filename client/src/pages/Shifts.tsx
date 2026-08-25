@@ -25,6 +25,7 @@ interface RowData {
       lateMinutes?: number;
       fineAmount?: number;
       reason?: string | null;
+      note?: string | null;
       isLocked?: boolean;
     }
   >;
@@ -171,6 +172,8 @@ export default function Shifts() {
     }
   };
 
+  const [adminNoteInput, setAdminNoteInput] = useState('');
+
   const handleSave = async () => {
     if (!edit) return;
     setSaving(true);
@@ -189,6 +192,7 @@ export default function Shifts() {
               [edit.date]: {
                 ...currentCell,
                 shifts: shiftsVal,
+                note: adminNoteInput.trim() || null,
               },
             },
           };
@@ -199,6 +203,7 @@ export default function Shifts() {
 
       await api.put(`/shifts/${edit.candidateId}/${edit.date}`, {
         shifts: selected.length === 0 ? ['OFF'] : selected,
+        note: adminNoteInput.trim() || undefined,
       });
 
       toast('success', `Đã lưu lịch ngày ${formatDate(edit.date)}`);
@@ -648,6 +653,7 @@ export default function Shifts() {
                                     }
                                     setEdit({ candidateId: r.candidateId, tenUv: r.tenUv, date: d, current: shifts.join('|'), caLam: r.caLam });
                                     setSelected(shifts.length ? shifts : ['OFF']);
+                                    setAdminNoteInput(cellObj?.note || '');
                                   }}
                                   className={cn(
                                     'w-full min-h-[38px] p-1 rounded-lg flex flex-col items-center justify-center gap-0.5 transition-all hover:ring-2 hover:ring-brand-300 relative group cursor-pointer',
@@ -689,6 +695,12 @@ export default function Shifts() {
                                   {tab === 'training' && tNum ? (
                                     <span className="text-[9px] font-extrabold bg-gradient-to-r from-pink-500 to-rose-500 text-white px-1.5 py-0.2 rounded-full shadow-2xs mt-0.5 whitespace-nowrap">
                                       🎯 Ngày {tNum}
+                                    </span>
+                                  ) : null}
+
+                                  {cellObj?.note ? (
+                                    <span className="text-[9px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300 px-1 py-0.2 rounded shadow-2xs mt-0.5 max-w-[85px] truncate" title={`📝 Ghi chú Admin: ${cellObj.note}`}>
+                                      📝 {cellObj.note}
                                     </span>
                                   ) : null}
 
@@ -908,6 +920,21 @@ export default function Shifts() {
                 })}
               </div>
             </div>
+
+            {(isAdmin || isManager) && (
+              <div className="space-y-1 pt-1">
+                <label className="text-xs font-bold text-slate-700 block">
+                  📝 Ghi chú ca bù Admin / Lý do mở ca:
+                </label>
+                <input
+                  type="text"
+                  value={adminNoteInput}
+                  onChange={(e) => setAdminNoteInput(e.target.value)}
+                  placeholder="Ví dụ: Bù ca quên check-out ngày 28/08, HR duyệt test thêm..."
+                  className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-300 font-medium bg-slate-50 focus:bg-white transition-all"
+                />
+              </div>
+            )}
 
             <div className="flex justify-end gap-2 pt-2">
               <button

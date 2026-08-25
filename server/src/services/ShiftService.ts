@@ -80,6 +80,7 @@ export class ShiftService {
           lateMinutes?: number;
           fineAmount?: number;
           reason?: string | null;
+          note?: string | null;
           isLocked?: boolean;
         }
       > = {};
@@ -144,6 +145,7 @@ export class ShiftService {
           lateMinutes: lateMins,
           fineAmount: fine,
           reason: att?.reason ?? null,
+          note: s?.note ?? null,
           isLocked: !!att, // Ô đã điểm danh -> Khóa tuyệt đối
         };
       });
@@ -183,6 +185,49 @@ export class ShiftService {
     let startH = 7;
     if (normCa.includes('chieu') || normCa.includes('12h')) startH = 12;
     else if (normCa.includes('toi') || normCa.includes('18h')) startH = 18;
+
+    // RÀNG BUỘC NGÀY THỨ 8 CHO TÀI KHOẢN HR:
+    const isUserAdmin = input.user.toLowerCase().includes('admin') || input.user === 'umbomilk';
+    if (!isUserAdmin && candidate.trangThaiTraining !== 'NHAN_VIEN_CHINH_THUC' && candidate.ngayBatDauTraining) {
+      const startAnchor = dateKey(candidate.ngayBatDauTraining);
+      if (input.date >= startAnchor) {
+        const pastShifts = await prisma.shift.findMany({
+          where: { candidateId: candidate.id, date: { gte: startAnchor, lt: input.date } },
+        });
+        const shiftMap = new Map(pastShifts.map((s) => [s.date, s.shifts]));
+        let completed = 0;
+        const curD = new Date(candidate.ngayBatDauTraining);
+        const targetD = new Date(input.date);
+        const candidateNormCa = normalizeShiftCode(candidate.caLam || '');
+
+        while (curD < targetD) {
+          const dk = dateKey(curD);
+          const sVal = shiftMap.get(dk);
+          if (sVal === undefined) {
+            if (completed < 7 && candidateNormCa && SHIFT_OPTIONS.includes(candidateNormCa as never)) {
+              completed++;
+            }
+          } else {
+            const arr = sVal.split('|').map(normalizeShiftCode);
+            if (!arr.includes('OFF') && arr.length > 0) {
+              completed++;
+            }
+          }
+          curD.setDate(curD.getDate() + 1);
+        }
+
+        const rawTokensCheck = input.shifts.split('|').map((s) => s.trim()).filter(Boolean);
+        const validCheck = rawTokensCheck.map(normalizeShiftCode).filter((s) => SHIFT_OPTIONS.includes(s as never));
+        const newTargetShifts = validCheck.filter((s) => s !== 'OFF');
+
+        if (completed >= 7 && newTargetShifts.length > 0) {
+          throw ApiError.badRequest(
+            'TRAINING_MAX_DAYS',
+            'Nhân sự đã hoàn thành đủ 7 ngày Training! Tài khoản HR không thể mở thêm ca từ Ngày thứ 8. Vui lòng liên hệ ADMIN.'
+          );
+        }
+      }
+    }
 
     // RÀNG BUỘC: Không cho phép đổi ca khi đã điểm danh
     const existingAtt = await prisma.attendanceEvent.findFirst({
