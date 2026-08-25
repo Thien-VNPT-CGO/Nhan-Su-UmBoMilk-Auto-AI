@@ -224,7 +224,7 @@ export default function Training() {
       '',
       '👉 Vui lòng có mặt đúng giờ và giữ liên lạc với Quản lý chi nhánh nhé!',
       '',
-      'UMBO MILK chúc bạn có một quá trình làm việc thuận lợi và hiệu quả! ✨',
+      '‼️ỨNG VIÊN VUI LÒNG GỬI THỜI GIAN ĐẾN KÝ HỢP ĐỒNG THỬ VIỆC TẠI CÔNG TY: 10 ĐẶNG THAI MAI. PHƯỜNG CẦU KIỆU. HCM',
     ].join('\n');
 
     // 2. Tự động Sao chép vào bộ nhớ tạm Clipboard (Dùng Ctrl + V dán trên Zalo)

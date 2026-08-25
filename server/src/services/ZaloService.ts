@@ -65,7 +65,7 @@ export class ZaloService {
       '',
       '👉 Vui lòng có mặt đúng giờ và giữ liên lạc với Quản lý chi nhánh nhé!',
       '',
-      'UMBO MILK chúc bạn có một quá trình làm việc thuận lợi và hiệu quả! ✨',
+      '‼️ỨNG VIÊN VUI LÒNG GỬI THỜI GIAN ĐẾN KÝ HỢP ĐỒNG THỬ VIỆC TẠI CÔNG TY: 10 ĐẶNG THAI MAI. PHƯỜNG CẦU KIỆU. HCM',
     ].join('\n');
 
     const r = await this.sendRaw(c.sdtZalo, content, c.id);
