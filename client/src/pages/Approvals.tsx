@@ -93,6 +93,19 @@ export default function Approvals() {
   const [genSubmitting, setGenSubmitting] = useState(false);
   const [genResult, setGenResult] = useState<{ key: string; candidateId: string; type: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [sendingZalo, setSendingZalo] = useState(false);
+
+  const handleSendZaloPortal = async (candidateId: string, key?: string) => {
+    setSendingZalo(true);
+    try {
+      await api.post('/approvals/send-portal-zalo', { candidateId, key });
+      toast('success', '📲 Đã tự động gửi Tin nhắn Zalo chứa Link Web App, Mã NV và Key Kích Hoạt đến SĐT Zalo của nhân sự!');
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Gửi Zalo thất bại.');
+    } finally {
+      setSendingZalo(false);
+    }
+  };
 
   // State Modal Tạo đơn đổi ca
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -633,19 +646,30 @@ export default function Approvals() {
           </div>
 
           {genResult && (
-            <div className="bg-emerald-50 border border-emerald-300 p-4 rounded-xl space-y-2 text-xs">
+            <div className="bg-emerald-50 border border-emerald-300 p-4 rounded-xl space-y-3 text-xs">
               <div className="font-bold text-emerald-800">✅ CẤP KEY THÀNH CÔNG:</div>
               <div className="flex items-center justify-between bg-white p-3 rounded-lg border border-emerald-200 font-mono font-bold text-sm text-slate-900">
                 <span>{genResult.key}</span>
                 <button
                   type="button"
                   onClick={() => copyToClipboard(genResult.key)}
-                  className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs flex items-center gap-1"
+                  className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs flex items-center gap-1 cursor-pointer"
                 >
                   {copied ? <Check size={14} /> : <Copy size={14} />}
                   <span>{copied ? 'Đã chép' : 'Sao chép'}</span>
                 </button>
               </div>
+
+              <button
+                type="button"
+                disabled={sendingZalo}
+                onClick={() => handleSendZaloPortal(genResult.candidateId, genResult.key)}
+                className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 shadow transition-all cursor-pointer"
+              >
+                {sendingZalo ? <Spinner size={14} /> : <Send size={14} />}
+                <span>📲 TỰ ĐỘNG GỬI ZALO LINK WEB APP & KEY CHO NHÂN VIÊN</span>
+              </button>
+
               <p className="text-[11px] text-emerald-700">
                 Gửi Mã NV (<strong className="font-mono">{genResult.candidateId}</strong>) và Mã Key này cho Nhân viên để họ kích hoạt trên điện thoại.
               </p>

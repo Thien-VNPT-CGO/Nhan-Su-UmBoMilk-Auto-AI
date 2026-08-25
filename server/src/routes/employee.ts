@@ -4,6 +4,7 @@ import { ApiError } from '../lib/errors';
 import { employeeAuthService } from '../services/EmployeeAuthService';
 import { deviceResetService } from '../services/DeviceResetService';
 import { payrollAIService } from '../services/PayrollAIService';
+import { zaloService } from '../services/ZaloService';
 import { requireAuth, requireRole, AuthedRequest } from '../middleware/auth';
 
 const router = Router();
@@ -156,6 +157,22 @@ router.post('/approvals/device-reset/:id/reject', requireAuth, requireRole('ADMI
       parsed.success && parsed.data.reason ? parsed.data.reason : 'Không chấp nhận lý do đổi máy.'
     );
     res.json({ success: true, data: updated });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// 10. Tự động / Thủ công gửi Tin nhắn Zalo chứa Link Web App + Mã NV + Key kích hoạt cho Nhân viên
+router.post('/approvals/send-portal-zalo', requireAuth, requireRole('ADMIN', 'MANAGER', 'HR'), async (req: AuthedRequest, res, next) => {
+  try {
+    const schema = z.object({
+      candidateId: z.string().min(1, 'Thiếu Mã nhân viên'),
+      key: z.string().optional(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) throw ApiError.badRequest('INVALID_INPUT', 'Dữ liệu không hợp lệ.');
+    const result = await zaloService.sendEmployeePortalAccess(parsed.data.candidateId, parsed.data.key);
+    res.json({ success: true, data: result });
   } catch (e) {
     next(e);
   }

@@ -71,6 +71,41 @@ export class ZaloService {
     return { ok: r.ok, provider: r.provider, messageId: r.messageId };
   }
 
+  /** Gửi thông tin Link Web App + Mã NV + Key Kích Hoạt đến Zalo nhân viên. */
+  async sendEmployeePortalAccess(candidateId: string, customKey?: string, domainUrl?: string): Promise<{ ok: boolean; provider: string; messageId?: string }> {
+    const c = await prisma.candidate.findUnique({
+      where: { id: candidateId },
+      include: { employeeKeys: { where: { status: 'ACTIVE' }, orderBy: { createdAt: 'desc' }, take: 1 } },
+    });
+    if (!c) throw new Error('Không tìm thấy nhân sự');
+
+    const keyRecord = c.employeeKeys[0];
+    const keyStr = customKey || keyRecord?.key || 'Chưa cấp Key (Vui lòng liên hệ Admin/HR)';
+    const webAppUrl = domainUrl || process.env.PUBLIC_WEBAPP_URL || 'http://localhost:3100/portal';
+
+    const content = [
+      '🐮 [UMBO MILK] – TÀI KHOẢN & LINK WEB APP NHÂN VIÊN 📱',
+      '',
+      `Chào ${c.tenUv.trim()} ❤️`,
+      'Dưới đây là thông tin kích hoạt Web App làm việc dành riêng cho bạn:',
+      '',
+      `🔗 Link Web App: ${webAppUrl}`,
+      `🆔 Mã Nhân Viên (User): ${c.id}`,
+      `🔑 Key Kích Hoạt: ${keyStr}`,
+      '',
+      '📌 HƯỚNG DẪN KÍCH HOẠT VÀ ĐIỂM DANH:',
+      '1. Bấm vào Link Web App ở trên từ điện thoại di động cá nhân.',
+      '2. Nhập đúng Mã Nhân Viên và Key Kích Hoạt.',
+      '3. Bấm "KÍCH HOẠT THIẾT BỊ & ĐĂNG NHẬP".',
+      '⚠️ Lưu ý quan trọng: Hệ thống AI sẽ gán cứng với điện thoại này để bảo mật điểm danh, đổi ca và tự động tính lương.',
+      '',
+      'UMBO MILK chúc bạn có trải nghiệm làm việc tuyệt vời! ✨',
+    ].join('\n');
+
+    const r = await this.sendRaw(c.sdtZalo, content, c.id);
+    return { ok: r.ok, provider: r.provider, messageId: r.messageId };
+  }
+
   /** Gửi lời mời phỏng vấn (thời gian + link GG Meet) cho ứng viên vừa được HR chấm PASS. */
   async sendInterviewInvite(candidateId: string): Promise<{ ok: boolean; provider: string; messageId?: string }> {
     const c = await prisma.candidate.findUnique({ where: { id: candidateId } });
