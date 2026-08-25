@@ -19,6 +19,7 @@ import {
 import { api, ApiError } from '../api/client';
 import { Spinner } from '../components/ui';
 import { getSocket } from '../api/socket';
+import { cn } from '../utils/format';
 import PublicAttendance from './PublicAttendance';
 
 interface EmployeeSession {
@@ -82,6 +83,19 @@ export default function EmployeePortal() {
     }
     return devId;
   };
+
+  const [isAutoFilledId, setIsAutoFilledId] = useState(false);
+
+  // Tự động nhận và gán cứng MÃ NHÂN VIÊN từ URL params (?id=UBM_... hoặc ?candidateId=...)
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const idFromUrl = searchParams.get('id') || searchParams.get('candidateId') || searchParams.get('madv');
+    if (idFromUrl) {
+      const cleanId = decodeURIComponent(idFromUrl).trim();
+      setCandidateIdInput(cleanId);
+      setIsAutoFilledId(true);
+    }
+  }, []);
 
   // Restore saved session
   useEffect(() => {
@@ -212,21 +226,40 @@ export default function EmployeePortal() {
               </div>
             )}
 
+            {/* Input Mã Nhân Viên */}
             <div className="space-y-1">
-              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                MÃ NHÂN VIÊN (GÁN CỨNG)
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                  MÃ NHÂN VIÊN (GÁN CỨNG)
+                </label>
+                {isAutoFilledId && (
+                  <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-500/50 px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
+                    ✓ TỰ ĐỘNG ĐIỀN TỪ LINK HR
+                  </span>
+                )}
+              </div>
               <div className="relative">
                 <input
                   type="text"
                   value={candidateIdInput}
                   onChange={(e) => setCandidateIdInput(e.target.value)}
+                  readOnly={isAutoFilledId}
                   placeholder="Ví dụ: UBM_25/08/2026_NV0008"
-                  className="w-full bg-slate-800/90 border border-slate-700 focus:border-pink-500 rounded-2xl px-4 py-3 text-xs text-white placeholder:text-slate-500 outline-none font-mono font-bold"
+                  className={cn(
+                    'w-full border rounded-2xl px-4 py-3 text-xs text-white placeholder:text-slate-500 outline-none font-mono font-bold transition-all',
+                    isAutoFilledId
+                      ? 'bg-emerald-950/20 border-emerald-500/80 text-emerald-300 ring-2 ring-emerald-500/30 cursor-not-allowed'
+                      : 'bg-slate-800/90 border-slate-700 focus:border-pink-500'
+                  )}
                   required
                 />
-                <User size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500" />
+                <User size={16} className={cn('absolute right-4 top-1/2 -translate-y-1/2', isAutoFilledId ? 'text-emerald-400' : 'text-slate-500')} />
               </div>
+              {isAutoFilledId && (
+                <p className="text-[10px] text-emerald-400/90 font-medium pt-0.5">
+                  🔒 Mã NV của bạn đã được gán cứng tự động theo đúng đường link HR gửi. Vui lòng nhập Key Kích Hoạt bên dưới.
+                </p>
+              )}
             </div>
 
             <div className="space-y-1">

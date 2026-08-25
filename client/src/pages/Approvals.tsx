@@ -7,6 +7,7 @@ import { api, ApiError } from '../api/client';
 import { Badge, Spinner, Modal, Field } from '../components/ui';
 import { useToast } from '../stores/Toast';
 import { useAuth } from '../stores/auth';
+import { getSocket } from '../api/socket';
 import { formatDate } from '../utils/date';
 import { cn } from '../utils/format';
 
@@ -94,6 +95,19 @@ export default function Approvals() {
   const [genResult, setGenResult] = useState<{ key: string; candidateId: string; type: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [sendingZalo, setSendingZalo] = useState(false);
+  const [keyGenSearch, setKeyGenSearch] = useState('');
+
+  const filteredKeyGenCandidates = useMemo(() => {
+    if (!keyGenSearch.trim()) return candidates;
+    const q = keyGenSearch.toLowerCase().trim();
+    return candidates.filter(
+      (c) =>
+        c.tenUv?.toLowerCase().includes(q) ||
+        c.id?.toLowerCase().includes(q) ||
+        c.sdtZalo?.includes(q) ||
+        c.chiNhanh?.toLowerCase().includes(q)
+    );
+  }, [candidates, keyGenSearch]);
 
   const handleSendZaloPortal = async (candidateId: string, key?: string) => {
     setSendingZalo(true);
@@ -150,20 +164,52 @@ export default function Approvals() {
     }
   }, []);
 
-  const loadCandidates = async () => {
+  const loadCandidates = useCallback(async () => {
     try {
-      const r = await api.get<{ data: CandidateOption[] }>('/candidates?limit=100');
-      setCandidates(r.data || []);
+      const r = await api.get<{
+        data?: { rows?: CandidateOption[] } | CandidateOption[];
+        rows?: CandidateOption[];
+      }>('/candidates?limit=500');
+      let rawList: CandidateOption[] = [];
+      if (Array.isArray(r.data)) {
+        rawList = r.data;
+      } else if (r.data && Array.isArray(r.data.rows)) {
+        rawList = r.data.rows;
+      } else if (Array.isArray(r.rows)) {
+        rawList = r.rows;
+      }
+      setCandidates(rawList);
     } catch {
       // ignore
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadRequests();
     loadResetTickets();
     loadCandidates();
-  }, [loadRequests, loadResetTickets]);
+
+    const socket = getSocket();
+    const handleRealtimeUpdate = () => {
+      loadCandidates();
+      loadRequests();
+      loadResetTickets();
+    };
+
+    socket.on('candidate:created', handleRealtimeUpdate);
+    socket.on('candidate:updated', handleRealtimeUpdate);
+    socket.on('training:updated', handleRealtimeUpdate);
+    socket.on('official_employees:updated', handleRealtimeUpdate);
+    socket.on('employee_key:generated', handleRealtimeUpdate);
+
+    return () => {
+      socket.off('candidate:created', handleRealtimeUpdate);
+      socket.off('candidate:updated', handleRealtimeUpdate);
+      socket.off('training:updated', handleRealtimeUpdate);
+      socket.off('official_employees:updated', handleRealtimeUpdate);
+      socket.off('employee_key:generated', handleRealtimeUpdate);
+    };
+  }, [loadRequests, loadResetTickets, loadCandidates]);
 
   const filteredRequests = useMemo(() => {
     return requests.filter((r) => {
@@ -600,23 +646,44 @@ export default function Approvals() {
       {/* TAB 3: CẤP KEY KÍCH HOẠT NHÂN VIÊN (ADMIN) */}
       {mainTab === 'KEY_GEN' && isAdmin && (
         <div className="bg-white p-6 rounded-2xl border border-slate-200 max-w-xl mx-auto space-y-4 shadow-sm font-sans">
-          <div className="flex items-center gap-2 pb-2 border-b border-slate-200">
-            <Key className="text-pink-600" size={20} />
-            <h3 className="text-sm font-black text-slate-900">CẤP KEY KÍCH HOẠT CHO NHÂN SỰ</h3>
+          <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+            <div className="flex items-center gap-2">
+              <Key className="text-pink-600" size={20} />
+              <h3 className="text-sm font-black text-slate-900">CẤP KEY KÍCH HOẠT CHO NHÂN SỰ</h3>
+            </div>
+            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+              ⚡ REALTIME ({candidates.length} NV)
+            </span>
           </div>
 
           <div className="space-y-3">
             <div>
-              <label className="text-xs font-bold text-slate-700 block mb-1">Chọn Nhân viên *</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-bold text-slate-700 block">Chọn Nhân viên *</label>
+                <span className="text-[11px] text-slate-500 font-mono">Dữ liệu Realtime AI</span>
+              </div>
+
+              {/* Ô tìm kiếm nhanh nhân viên */}
+              <div className="relative mb-2">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Gõ tìm nhanh theo Tên, Mã NV, SĐT Zalo, Chi nhánh..."
+                  value={keyGenSearch}
+                  onChange={(e) => setKeyGenSearch(e.target.value)}
+                  className="input text-xs pl-8 bg-slate-50 focus:bg-white"
+                />
+              </div>
+
               <select
                 value={genCandidateId}
                 onChange={(e) => setGenCandidateId(e.target.value)}
-                className="input text-xs"
+                className="input text-xs font-medium"
               >
-                <option value="">— Chọn Nhân viên cần cấp Key —</option>
-                {candidates.map((c) => (
+                <option value="">— Chọn Nhân viên cần cấp Key ({filteredKeyGenCandidates.length}) —</option>
+                {filteredKeyGenCandidates.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.tenUv} ({c.id}) · {c.chiNhanh || 'Chi nhánh'}
+                    {c.tenUv} ({c.id}) · {c.chiNhanh || 'Chưa chọn CN'} ({c.caLam || 'Chưa chốt ca'})
                   </option>
                 ))}
               </select>
