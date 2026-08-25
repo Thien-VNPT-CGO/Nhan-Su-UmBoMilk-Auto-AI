@@ -83,6 +83,27 @@ router.post('/public/employee/device-reset-request', async (req, res, next) => {
   }
 });
 
+function normalizeShiftName(rawShift: string | null | undefined): string {
+  if (!rawShift) return 'SÁNG (06:00 - 14:00)';
+  const s = rawShift.toUpperCase().trim();
+  if (s === 'SANG' || s === 'CA_SANG' || s.includes('SÁNG') || s.includes('SANG')) {
+    return 'SÁNG (06:00 - 14:00)';
+  }
+  if (s === 'CHIEU' || s === 'CA_CHIEU' || s.includes('CHIỀU') || s.includes('CHIEU')) {
+    return 'CHIỀU (14:00 - 22:00)';
+  }
+  if (s === 'HANCHINH' || s === 'HÀNH CHÍNH' || s === 'CA_HANCHINH' || s.includes('HÀNH CHÍNH')) {
+    return 'HÀNH CHÍNH (08:00 - 17:00)';
+  }
+  if (s === 'TOI' || s === 'CA_TOI' || s.includes('TỐI') || s.includes('TOI')) {
+    return 'TỐI (18:00 - 22:00)';
+  }
+  if (s === 'OFF' || s.includes('NGHỈ') || s.includes('OFF')) {
+    return 'NGHỈ (OFF)';
+  }
+  return rawShift;
+}
+
 // 3b. Lấy danh sách đồng nghiệp để chọn đổi ca
 router.get('/public/employee/colleagues', async (req, res, next) => {
   try {
@@ -92,6 +113,61 @@ router.get('/public/employee/colleagues', async (req, res, next) => {
       take: 300,
     });
     res.json({ success: true, data: list });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// 3b-2. Tra cứu ca làm việc chuẩn từ Web HR cho từng Nhân viên & Ngày cụ thể
+router.get('/public/employee/shift-schedule', async (req, res, next) => {
+  try {
+    const candidateId = req.query.candidateId ? String(req.query.candidateId) : '';
+    const date = req.query.date ? String(req.query.date) : '';
+
+    if (!candidateId) {
+      throw ApiError.badRequest('INVALID_INPUT', 'Thiếu Mã nhân viên');
+    }
+
+    const candidate = await prisma.candidate.findUnique({
+      where: { id: candidateId },
+      select: { id: true, tenUv: true, caLam: true, chiNhanh: true },
+    });
+
+    if (!candidate) {
+      throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy nhân viên');
+    }
+
+    let rawShift = candidate.caLam;
+    let source = 'CANDIDATE_DEFAULT';
+
+    if (date) {
+      const shiftRecord = await prisma.shift.findUnique({
+        where: {
+          candidateId_date: {
+            candidateId,
+            date,
+          },
+        },
+      });
+      if (shiftRecord && shiftRecord.shifts) {
+        rawShift = shiftRecord.shifts;
+        source = 'WEB_HR_SCHEDULE';
+      }
+    }
+
+    const formattedShift = normalizeShiftName(rawShift);
+
+    res.json({
+      success: true,
+      data: {
+        candidateId,
+        candidateName: candidate.tenUv,
+        date,
+        rawShift,
+        formattedShift,
+        source,
+      },
+    });
   } catch (e) {
     next(e);
   }

@@ -255,8 +255,10 @@ export default function EmployeePortal() {
   const todayStr = new Date().toISOString().split('T')[0];
   const [myDate, setMyDate] = useState(todayStr);
   const [myShift, setMyShift] = useState('SÁNG (06:00 - 14:00)');
+  const [myShiftSource, setMyShiftSource] = useState('');
   const [targetDate, setTargetDate] = useState(todayStr);
   const [targetShift, setTargetShift] = useState('CHIỀU (14:00 - 22:00)');
+  const [targetShiftSource, setTargetShiftSource] = useState('');
   const [swapReason, setSwapReason] = useState('');
 
   const [swapSubmitting, setSwapSubmitting] = useState(false);
@@ -265,6 +267,50 @@ export default function EmployeePortal() {
 
   const [swapHistory, setSwapHistory] = useState<SwapHistoryItem[]>([]);
   const [loadingSwapHistory, setLoadingSwapHistory] = useState(false);
+
+  // Tra cứu ca làm việc chuẩn từ Web HR cho bản thân
+  const fetchMyShiftSchedule = useCallback(async (cId: string, date: string) => {
+    if (!cId || !date) return;
+    try {
+      const res = await api.get<{ formattedShift: string; source: string }>(`/public/employee/shift-schedule?candidateId=${encodeURIComponent(cId)}&date=${date}`);
+      const data = (res as any)?.data || res;
+      if (data?.formattedShift) {
+        setMyShift(data.formattedShift);
+        setMyShiftSource(data.source === 'WEB_HR_SCHEDULE' ? 'Lịch trực chốt từ Web HR' : 'Ca làm mặc định hồ sơ HR');
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Tra cứu ca làm việc chuẩn từ Web HR cho Đồng nghiệp
+  const fetchTargetShiftSchedule = useCallback(async (cId: string, date: string) => {
+    if (!cId || !date) return;
+    try {
+      const res = await api.get<{ formattedShift: string; source: string }>(`/public/employee/shift-schedule?candidateId=${encodeURIComponent(cId)}&date=${date}`);
+      const data = (res as any)?.data || res;
+      if (data?.formattedShift) {
+        setTargetShift(data.formattedShift);
+        setTargetShiftSource(data.source === 'WEB_HR_SCHEDULE' ? 'Lịch trực chốt từ Web HR' : 'Ca làm mặc định hồ sơ HR');
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Tự động tra cứu ca của bản thân khi thay đổi ngày hoặc vào Tab SWAP
+  useEffect(() => {
+    if (session?.candidate.id && activeTab === 'SWAP') {
+      fetchMyShiftSchedule(session.candidate.id, myDate);
+    }
+  }, [activeTab, session?.candidate.id, myDate, fetchMyShiftSchedule]);
+
+  // Tự động tra cứu ca của đồng nghiệp khi chọn đồng nghiệp hoặc thay đổi ngày đồng nghiệp
+  useEffect(() => {
+    if (selectedColleagueId && activeTab === 'SWAP') {
+      fetchTargetShiftSchedule(selectedColleagueId, targetDate);
+    }
+  }, [activeTab, selectedColleagueId, targetDate, fetchTargetShiftSchedule]);
 
   // Load danh sách đồng nghiệp
   const loadColleagues = useCallback(async () => {
@@ -735,6 +781,13 @@ export default function EmployeePortal() {
                       </span>
                     </div>
 
+                    {myShiftSource && (
+                      <div className="text-[10px] font-bold text-emerald-400 bg-emerald-950/70 border border-emerald-500/40 p-2 rounded-xl flex items-center gap-1.5">
+                        <CheckCircle2 size={13} className="text-emerald-400 shrink-0" />
+                        <span>✓ Tự động khớp Web HR: <strong>{myShiftSource}</strong></span>
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                       <div>
                         <span className="text-[10px] text-slate-400 font-bold block mb-1">Ngày làm của bạn:</span>
@@ -747,7 +800,7 @@ export default function EmployeePortal() {
                         />
                       </div>
                       <div>
-                        <span className="text-[10px] text-slate-400 font-bold block mb-1">Ca làm hiện tại:</span>
+                        <span className="text-[10px] text-slate-400 font-bold block mb-1">Ca làm hiện tại (Tự động):</span>
                         <select
                           value={myShift}
                           onChange={(e) => setMyShift(e.target.value)}
@@ -757,6 +810,7 @@ export default function EmployeePortal() {
                           <option value="CHIỀU (14:00 - 22:00)">☀️ CHIỀU (14:00 - 22:00)</option>
                           <option value="HÀNH CHÍNH (08:00 - 17:00)">🏢 HÀNH CHÍNH (08:00 - 17:00)</option>
                           <option value="TỐI (18:00 - 22:00)">🌙 TỐI (18:00 - 22:00)</option>
+                          <option value="NGHỈ (OFF)">☕ NGHỈ (OFF)</option>
                         </select>
                       </div>
                     </div>
@@ -773,6 +827,13 @@ export default function EmployeePortal() {
                         MUỐN ĐỔI
                       </span>
                     </div>
+
+                    {targetShiftSource && (
+                      <div className="text-[10px] font-bold text-amber-400 bg-amber-950/70 border border-amber-500/40 p-2 rounded-xl flex items-center gap-1.5">
+                        <CheckCircle2 size={13} className="text-amber-400 shrink-0" />
+                        <span>✓ Tự động khớp Web HR: <strong>{targetShiftSource}</strong></span>
+                      </div>
+                    )}
 
                     <div>
                       <span className="text-[10px] text-slate-400 font-bold block mb-1">Chọn Đồng nghiệp:</span>
@@ -803,7 +864,7 @@ export default function EmployeePortal() {
                         />
                       </div>
                       <div>
-                        <span className="text-[10px] text-slate-400 font-bold block mb-1">Ca làm đồng nghiệp:</span>
+                        <span className="text-[10px] text-slate-400 font-bold block mb-1">Ca làm đồng nghiệp (Tự động):</span>
                         <select
                           value={targetShift}
                           onChange={(e) => setTargetShift(e.target.value)}
@@ -813,6 +874,7 @@ export default function EmployeePortal() {
                           <option value="SÁNG (06:00 - 14:00)">🌅 SÁNG (06:00 - 14:00)</option>
                           <option value="HÀNH CHÍNH (08:00 - 17:00)">🏢 HÀNH CHÍNH (08:00 - 17:00)</option>
                           <option value="TỐI (18:00 - 22:00)">🌙 TỐI (18:00 - 22:00)</option>
+                          <option value="NGHỈ (OFF)">☕ NGHỈ (OFF)</option>
                         </select>
                       </div>
                     </div>
