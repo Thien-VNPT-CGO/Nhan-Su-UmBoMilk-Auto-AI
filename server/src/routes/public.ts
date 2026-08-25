@@ -437,17 +437,21 @@ ${savedLateReason ? `Lý do đi trễ chính đáng: ${savedLateReason}` : ''}
     const txtFilePath = path.join(driveBackupDir, 'Diem_danh.txt');
     fs.writeFileSync(txtFilePath, txtContent, 'utf8');
 
-    // Tự động đẩy file ảnh và Diem_danh.txt lên Google Drive (nếu đã cấu hình Folder ID)
-    void googleDriveUploadService.uploadAttendanceFiles({
-      typeFolder,
-      cleanBranch,
-      shiftFolder,
-      cleanCandidateName,
-      dateFolder,
-      actionFolder,
-      imageFilePath,
-      txtFilePath,
-    });
+    // Tự động đẩy file ảnh và Diem_danh.txt lên Google Drive theo thời gian thực (Realtime 1:1)
+    try {
+      await googleDriveUploadService.uploadAttendanceFiles({
+        typeFolder,
+        cleanBranch,
+        shiftFolder,
+        cleanCandidateName,
+        dateFolder,
+        actionFolder,
+        imageFilePath,
+        txtFilePath,
+      });
+    } catch (driveErr) {
+      console.warn('[AttendanceRoute] Drive upload warning:', driveErr instanceof Error ? driveErr.message : String(driveErr));
+    }
 
     // Ghi nhận / Cập nhật sự kiện AttendanceEvent
     const existingEvent = await prisma.attendanceEvent.findUnique({

@@ -31,6 +31,8 @@ export class GoogleDriveUploadService {
         q,
         fields: 'files(id, name)',
         spaces: 'drive',
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
       });
 
       if (res.data.files && res.data.files.length > 0) {
@@ -44,6 +46,7 @@ export class GoogleDriveUploadService {
           parents: [parentFolderId],
         },
         fields: 'id',
+        supportsAllDrives: true,
       });
 
       return createRes.data.id;
@@ -65,7 +68,10 @@ export class GoogleDriveUploadService {
   }): Promise<void> {
     try {
       const client = await this.getDriveClient();
-      if (!client) return;
+      if (!client) {
+        console.warn('[GoogleDrive] Drive client not configured (missing credentials or driveFolderId)');
+        return;
+      }
 
       const { drive, rootFolderId } = client;
 
@@ -78,9 +84,11 @@ export class GoogleDriveUploadService {
       const dateFolderId = await this.findOrCreateFolder(drive, params.dateFolder, candidateFolderId);
       const actionFolderId = await this.findOrCreateFolder(drive, params.actionFolder, dateFolderId);
 
-      // 2. Upload file ảnh cửa hàng
+      console.log(`[GoogleDrive] Target folder ID for ${params.cleanCandidateName} (${params.actionFolder}): ${actionFolderId}`);
+
+      // 2. Upload file ảnh cửa hàng Anh_chup_cua_hang.jpg
       if (fs.existsSync(params.imageFilePath)) {
-        await drive.files.create({
+        const imgRes = await drive.files.create({
           requestBody: {
             name: 'Anh_chup_cua_hang.jpg',
             parents: [actionFolderId],
@@ -89,12 +97,17 @@ export class GoogleDriveUploadService {
             mimeType: 'image/jpeg',
             body: fs.createReadStream(params.imageFilePath),
           },
-        }).catch((e: unknown) => console.warn('[GoogleDrive] Image upload failed:', e instanceof Error ? e.message : String(e)));
+          fields: 'id, name, webViewLink',
+          supportsAllDrives: true,
+        });
+        console.log(`[GoogleDrive] ✅ Image uploaded successfully: ${imgRes.data.name} (ID: ${imgRes.data.id})`);
+      } else {
+        console.warn(`[GoogleDrive] Image file missing locally: ${params.imageFilePath}`);
       }
 
       // 3. Upload file văn bản Diem_danh.txt
       if (fs.existsSync(params.txtFilePath)) {
-        await drive.files.create({
+        const txtRes = await drive.files.create({
           requestBody: {
             name: 'Diem_danh.txt',
             parents: [actionFolderId],
@@ -103,12 +116,17 @@ export class GoogleDriveUploadService {
             mimeType: 'text/plain',
             body: fs.createReadStream(params.txtFilePath),
           },
-        }).catch((e: unknown) => console.warn('[GoogleDrive] Txt upload failed:', e instanceof Error ? e.message : String(e)));
+          fields: 'id, name, webViewLink',
+          supportsAllDrives: true,
+        });
+        console.log(`[GoogleDrive] ✅ Txt file uploaded successfully: ${txtRes.data.name} (ID: ${txtRes.data.id})`);
+      } else {
+        console.warn(`[GoogleDrive] Txt file missing locally: ${params.txtFilePath}`);
       }
 
-      console.log(`[GoogleDrive] Successfully uploaded attendance files to Drive for ${params.cleanCandidateName}`);
+      console.log(`[GoogleDrive] 🎉 Successfully completed all attendance uploads for ${params.cleanCandidateName}`);
     } catch (e) {
-      console.warn('[GoogleDrive] Attendance backup upload failed:', e instanceof Error ? e.message : String(e));
+      console.error('[GoogleDrive] Attendance backup upload failed:', e instanceof Error ? e.message : String(e));
     }
   }
 }
