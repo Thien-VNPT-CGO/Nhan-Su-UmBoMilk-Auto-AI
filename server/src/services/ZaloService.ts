@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { zaloPersonalService } from './ZaloPersonalService';
 import { TZ, formatDate } from '../lib/date';
+import { getSettings } from './SettingsService';
 
 /** Định dạng giờ phỏng vấn "dd/MM/yyyy lúc HH:mm" theo múi giờ hệ thống. */
 function formatInterviewTime(d: Date): string {
@@ -81,7 +82,13 @@ export class ZaloService {
 
     const keyRecord = c.employeeKeys[0];
     const keyStr = customKey || keyRecord?.key || 'Chưa cấp Key (Vui lòng liên hệ Admin/HR)';
-    const webAppUrl = domainUrl || process.env.PUBLIC_WEBAPP_URL || 'http://localhost:3100/portal';
+
+    const settings = await getSettings().catch(() => null);
+    let baseDomain = domainUrl || process.env.EMPLOYEE_PORTAL_URL || process.env.PUBLIC_WEBAPP_URL || (settings as any)?.employeePortalUrl || (settings as any)?.domainUrl || 'http://localhost:3100';
+    if (!baseDomain.includes('/portal')) {
+      baseDomain = baseDomain.replace(/\/+$/, '') + '/portal';
+    }
+    const fullPortalLink = baseDomain.includes('?id=') ? baseDomain : `${baseDomain}?id=${encodeURIComponent(c.id)}`;
 
     const content = [
       '🐮 [UMBO MILK] – LINK WEB APP TỔNG HỢP NHÂN VIÊN 📱',
@@ -89,7 +96,7 @@ export class ZaloService {
       `Chào ${c.tenUv.trim()} ❤️`,
       'Dưới đây là link Web App tổng hợp duy nhất chứa trọn vẹn các chức năng (Điểm danh GPS, Đổi ca, Reset máy, Lương AI):',
       '',
-      `🔗 Link Web App Tổng Hợp: ${webAppUrl}`,
+      `🔗 Link Web App Tổng Hợp: ${fullPortalLink}`,
       `🆔 Mã Nhân Viên (User): ${c.id}`,
       `🔑 Key Kích Hoạt: ${keyStr}`,
       '',
