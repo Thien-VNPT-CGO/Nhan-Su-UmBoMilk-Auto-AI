@@ -93,7 +93,7 @@ function normalizeShiftName(rawShift: string | null | undefined): string {
     return 'CHIỀU (12:00 - 18:00)';
   }
   if (s === 'HANCHINH' || s === 'HÀNH CHÍNH' || s === 'CA_HANCHINH' || s.includes('HÀNH CHÍNH')) {
-    return 'HÀNH CHÍNH (08:00 - 17:00)';
+    return 'SÁNG (07:00 - 12:00)';
   }
   if (s === 'TOI' || s === 'CA_TOI' || s.includes('TỐI') || s.includes('TOI')) {
     return 'TỐI (18:00 - 23:00)';

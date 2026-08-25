@@ -825,7 +825,6 @@ export default function EmployeePortal() {
                         >
                           <option value="SÁNG (07:00 - 12:00)">🌅 SÁNG (07:00 - 12:00)</option>
                           <option value="CHIỀU (12:00 - 18:00)">☀️ CHIỀU (12:00 - 18:00)</option>
-                          <option value="HÀNH CHÍNH (08:00 - 17:00)">🏢 HÀNH CHÍNH (08:00 - 17:00)</option>
                           <option value="TỐI (18:00 - 23:00)">🌙 TỐI (18:00 - 23:00)</option>
                           <option value="NGHỈ (OFF)">☕ NGHỈ (OFF)</option>
                         </select>
@@ -889,7 +888,6 @@ export default function EmployeePortal() {
                         >
                           <option value="CHIỀU (12:00 - 18:00)">☀️ CHIỀU (12:00 - 18:00)</option>
                           <option value="SÁNG (07:00 - 12:00)">🌅 SÁNG (07:00 - 12:00)</option>
-                          <option value="HÀNH CHÍNH (08:00 - 17:00)">🏢 HÀNH CHÍNH (08:00 - 17:00)</option>
                           <option value="TỐI (18:00 - 23:00)">🌙 TỐI (18:00 - 23:00)</option>
                           <option value="NGHỈ (OFF)">☕ NGHỈ (OFF)</option>
                         </select>
