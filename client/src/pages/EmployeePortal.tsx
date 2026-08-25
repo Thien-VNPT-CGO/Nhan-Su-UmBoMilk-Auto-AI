@@ -56,6 +56,48 @@ interface PayrollData {
   summaryText: string;
 }
 
+function extractCandidateIdFromWindow(): string | null {
+  const href = window.location.href;
+  const decodedHref = decodeURIComponent(href);
+
+  // 1. Chạy Regex tìm chuẩn format UBM_DD/MM/YYYY_NVXXXX hoặc UBM_... trong URL
+  const ubmMatch = decodedHref.match(/UBM_\d{2}[\/\%2F]\d{2}[\/\%2F]\d{4}_NV\d{4}/i)
+    || decodedHref.match(/UBM_[A-Za-z0-9_\/]+/i)
+    || href.match(/UBM_[A-Za-z0-9_%-]+/i);
+
+  if (ubmMatch && ubmMatch[0]) {
+    let raw = decodeURIComponent(ubmMatch[0]).trim();
+    raw = raw.replace(/%2F/gi, '/');
+    return raw;
+  }
+
+  // 2. Query parameters (?id=... hoặc ?candidateId=... hoặc ?madv=...)
+  try {
+    const searchParams = new URLSearchParams(window.location.search);
+    const fromSearch = searchParams.get('id') || searchParams.get('candidateId') || searchParams.get('madv') || searchParams.get('code');
+    if (fromSearch) {
+      return decodeURIComponent(fromSearch).trim().replace(/%2F/gi, '/');
+    }
+  } catch {
+    // ignore
+  }
+
+  // 3. Hash parameters (#id=...)
+  if (window.location.hash) {
+    try {
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      const fromHash = hashParams.get('id') || hashParams.get('candidateId');
+      if (fromHash) {
+        return decodeURIComponent(fromHash).trim().replace(/%2F/gi, '/');
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return null;
+}
+
 export default function EmployeePortal() {
   const [candidateIdInput, setCandidateIdInput] = useState('');
   const [keyInput, setKeyInput] = useState('');
@@ -86,15 +128,13 @@ export default function EmployeePortal() {
 
   const [isAutoFilledId, setIsAutoFilledId] = useState(false);
 
-  // Tự động nhận và gán cứng MÃ NHÂN VIÊN từ URL params (?id=UBM_...) hoặc localStorage
+  // Tự động nhận và gán cứng MÃ NHÂN VIÊN từ URL params (?id=UBM_...) hoặc Regex quét URL
   useEffect(() => {
-    const searchParams = new URLSearchParams(window.location.search);
-    const idFromUrl = searchParams.get('id') || searchParams.get('candidateId') || searchParams.get('madv');
-    if (idFromUrl) {
-      const cleanId = decodeURIComponent(idFromUrl).trim();
-      setCandidateIdInput(cleanId);
+    const extractedId = extractCandidateIdFromWindow();
+    if (extractedId) {
+      setCandidateIdInput(extractedId);
       setIsAutoFilledId(true);
-      localStorage.setItem('umbomilk_last_candidate_id', cleanId);
+      localStorage.setItem('umbomilk_last_candidate_id', extractedId);
     } else {
       const savedId = localStorage.getItem('umbomilk_last_candidate_id');
       if (savedId) {
@@ -240,9 +280,18 @@ export default function EmployeePortal() {
                   MÃ NHÂN VIÊN (GÁN CỨNG)
                 </label>
                 {isAutoFilledId && (
-                  <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-500/50 px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
-                    ✓ TỰ ĐỘNG ĐIỀN TỪ LINK HR
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-500/50 px-2 py-0.5 rounded-full flex items-center gap-1">
+                      ✓ TỰ ĐỘNG ĐIỀN
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsAutoFilledId(false)}
+                      className="text-[10px] font-semibold text-slate-400 hover:text-pink-400 underline"
+                    >
+                      (Sửa Mã)
+                    </button>
+                  </div>
                 )}
               </div>
               <div className="relative">
