@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
-import { RefreshCw, CalendarDays, GraduationCap, Briefcase, Lock, CheckCircle2, AlertTriangle, XCircle, Clock, ShieldAlert } from 'lucide-react';
+import { useEffect, useState, useCallback, useMemo, Fragment } from 'react';
+import { RefreshCw, CalendarDays, GraduationCap, Briefcase, Lock, CheckCircle2, AlertTriangle, XCircle, Clock, ShieldAlert, Building2 } from 'lucide-react';
 import { api, ApiError } from '../api/client';
 import { Skeleton, Badge, Modal, Spinner, Field } from '../components/ui';
 
@@ -124,6 +124,16 @@ export default function Shifts() {
   }, [loadData]);
 
   const activeRows = tab === 'training' ? trainingRows : employeeRows;
+
+  const groupedRows = useMemo(() => {
+    const map = new Map<string, RowData[]>();
+    activeRows.forEach((row) => {
+      const branchKey = row.chiNhanh?.trim() || 'Chưa phân chi nhánh';
+      if (!map.has(branchKey)) map.set(branchKey, []);
+      map.get(branchKey)!.push(row);
+    });
+    return Array.from(map.entries());
+  }, [activeRows]);
 
   // Kiểm tra ca nào user được phép bấm chọn (VIEWER: 0 ca, HR: OFF + ca Gốc, ADMIN/MANAGER: tất cả)
   const isShiftKeyAllowedForUser = (shiftKey: string, caLamStr?: string) => {
@@ -422,234 +432,271 @@ export default function Shifts() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs">
-                {activeRows.map((r) => {
-                  const lockedKey = getLockedShiftKey(r.caLam);
-
-                  // Thuật toán đếm 7 Ngày Training nối tiếp (bỏ qua OFF)
-                  const trainingDayMap: Record<string, number | null> = {};
-                  let currentTCount = 0;
-
-                  dates.forEach((d) => {
-                    const cellObj = r.shifts[d];
-                    const shiftsRaw = cellObj?.shifts || '';
-                    let shifts = shiftsRaw ? shiftsRaw.split('|').filter(Boolean) : [];
-
-                    if (shifts.length === 0) {
-                      if (currentTCount < 7 && lockedKey) {
-                        shifts = [lockedKey];
-                      } else {
-                        shifts = ['OFF'];
-                      }
-                    }
-
-                    const isOff = shifts.includes('OFF');
-                    if (!isOff && currentTCount < 7) {
-                      currentTCount++;
-                      trainingDayMap[d] = currentTCount;
-                    } else {
-                      trainingDayMap[d] = null;
-                    }
-                  });
-
-                  return (
-                    <tr key={r.candidateId} className="hover:bg-slate-50/60 transition-colors">
-                      {/* Left info column */}
-                      <td className="p-3 border-r border-slate-200 align-top">
-                        <div className="font-bold text-slate-800 text-sm leading-snug">{r.tenUv}</div>
-                        <div className="text-[11px] text-pink-600 font-mono font-bold mt-0.5">{r.candidateId}</div>
-                        <div className="text-[11px] text-slate-500 mt-1 truncate max-w-[210px]" title={r.chiNhanh}>
-                          • {r.chiNhanh || 'Chưa chọn chi nhánh'}
-                        </div>
-                        <div className="text-[11px] text-amber-700 font-medium mt-0.5">
-                          • Ca làm: <span className="font-bold">{r.caLam || 'Chưa chốt ca'}</span>
-                        </div>
-
-                        {tab === 'training' && (
-                          <div className="text-[10px] font-bold mt-1.5">
-                            {currentTCount >= 7 ? (
-                              <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-300 inline-block shadow-2xs">
-                                📊 Tiến độ: 7/7 Đủ ca Training
-                              </span>
-                            ) : (
-                              <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-300 inline-block shadow-2xs">
-                                ⚠️ Mới xếp: {currentTCount}/7 Ngày
-                              </span>
-                            )}
-                          </div>
-                        )}
-
-                        <div className="mt-2 space-y-1">
-                          <button
-                            type="button"
-                            disabled={isViewer || user?.username === 'umbomilk'}
-                            onClick={() => handleSendAttendanceZaloLink(r)}
-                            className={cn(
-                              'w-full text-[10px] font-bold px-2 py-1 rounded-xl flex items-center justify-center gap-1 shadow-2xs transition-transform',
-                              isViewer || user?.username === 'umbomilk'
-                                ? 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed opacity-60'
-                                : 'bg-[#0068ff] hover:bg-[#0052cc] text-white active:scale-95 cursor-pointer'
-                            )}
-                            title={isViewer || user?.username === 'umbomilk' ? 'Tài khoản không có quyền gửi Zalo' : 'Sao chép tin nhắn chứa Link Web App + Link Điểm Danh & Mở Zalo 1-1'}
-                          >
-                            <span>💬 Mở App Zalo gửi Link Web App</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            disabled={isViewer || user?.username === 'umbomilk' || sendingZaloId === r.candidateId}
-                            onClick={() => handleSendZaloBackend(r)}
-                            className={cn(
-                              'w-full text-[10px] font-bold px-2 py-1 rounded-xl flex items-center justify-center gap-1 shadow-2xs transition-transform',
-                              isViewer || user?.username === 'umbomilk' || sendingZaloId === r.candidateId
-                                ? 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed opacity-60'
-                                : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white active:scale-95 cursor-pointer'
-                            )}
-                            title="Tự động gửi Tin nhắn Zalo chứa Link Web App + Key + Điểm danh qua AI Backend"
-                          >
-                            {sendingZaloId === r.candidateId ? <Spinner size={12} /> : null}
-                            <span>📲 Gửi Zalo Tự Động (AI Backend)</span>
-                          </button>
+                {groupedRows.map(([branchName, branchRows]) => (
+                  <Fragment key={branchName}>
+                    {/* Visual Header Divider cho Chi nhánh */}
+                    <tr className="bg-slate-100/90 text-slate-800 font-extrabold border-y border-slate-300/80">
+                      <td colSpan={dates.length + 1} className="px-3 py-2 text-xs">
+                        <div className="flex items-center gap-2">
+                          <Building2 size={15} className="text-pink-600" />
+                          <span className="font-extrabold text-slate-900 uppercase tracking-wide">
+                            🏢 CHI NHÁNH: {branchName}
+                          </span>
+                          <span className="text-[10px] font-bold bg-pink-100 text-pink-700 px-2 py-0.5 rounded-full border border-pink-200 shadow-2xs">
+                            {branchRows.length} nhân sự
+                          </span>
                         </div>
                       </td>
+                    </tr>
 
-                      {/* 7 dates columns */}
-                      {dates.map((d) => {
+                    {branchRows.map((r) => {
+                      const lockedKey = getLockedShiftKey(r.caLam);
+
+                      // Thuật toán đếm 7 Ngày Training TOÀN CỤC (bắt đầu từ ngayBatDauTraining)
+                      const trainingDayMap: Record<string, number | null> = {};
+                      const resolvedShiftsMap: Record<string, string[]> = {};
+                      let currentTCount = 0;
+
+                      const startAnchorDate = (r as any).ngayBatDauTraining || dates[0];
+                      const lastViewDate = dates[dates.length - 1];
+
+                      const allTimelineDates: string[] = [];
+                      if (startAnchorDate && startAnchorDate <= lastViewDate) {
+                        const [sy, sm, sd] = startAnchorDate.split('-').map(Number);
+                        const curr = new Date(sy, sm - 1, sd);
+                        const [ey, em, ed] = lastViewDate.split('-').map(Number);
+                        const end = new Date(ey, em - 1, ed);
+
+                        while (curr <= end) {
+                          allTimelineDates.push(dateKey(curr));
+                          curr.setDate(curr.getDate() + 1);
+                        }
+                      } else {
+                        allTimelineDates.push(...dates);
+                      }
+
+                      allTimelineDates.forEach((d) => {
                         const cellObj = r.shifts[d];
                         const shiftsRaw = cellObj?.shifts || '';
                         let shifts = shiftsRaw ? shiftsRaw.split('|').filter(Boolean) : [];
-                        const tNum = tab === 'training' ? trainingDayMap[d] : null;
 
                         if (shifts.length === 0) {
-                          if (tab === 'training') {
-                            shifts = tNum ? (lockedKey ? [lockedKey] : ['SANG']) : ['OFF'];
-                          } else if (lockedKey) {
+                          if (currentTCount < 7 && lockedKey) {
                             shifts = [lockedKey];
+                          } else {
+                            shifts = ['OFF'];
                           }
                         }
 
-                        const colors = shifts.map((s) => shiftBadgeColors[s] || 'bg-slate-100 text-slate-600 border-slate-200');
-                        const attStatus = cellObj?.attendanceStatus;
-                        const checkinTime = cellObj?.checkinTime;
-
-                        // RÀNG BUỘC KHOÁ REALTIME DƯỚI CLIENT:
-                        const todayStr = startOfToday();
-                        const normCa = (r.caLam || '').toLowerCase();
-                        let startH = 7;
-                        if (normCa.includes('chieu') || normCa.includes('12h')) startH = 12;
-                        else if (normCa.includes('toi') || normCa.includes('18h')) startH = 18;
-
-                        const currentVnHour = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' })).getHours();
-                        const isPastOrOngoing = d < todayStr || (d === todayStr && currentVnHour >= startH);
-
-                        const isAttendedOrLocked = cellObj?.isLocked || !!attStatus || isPastOrOngoing;
-
-                        let attBadge = null;
-                        if (attStatus === 'ON_TIME') {
-                          attBadge = (
-                            <span className="text-[9px] font-black bg-emerald-600 text-white px-1 py-0.5 rounded shadow-2xs flex items-center gap-0.5 mt-0.5">
-                              ✓ ĐÚNG GIỜ
-                            </span>
-                          );
-                        } else if (attStatus === 'LATE_5P') {
-                          attBadge = (
-                            <span className="text-[9px] font-black bg-amber-600 text-white px-1 py-0.5 rounded shadow-2xs flex items-center gap-0.5 mt-0.5 animate-pulse">
-                              ⚠️ TRỄ 5P (30K)
-                            </span>
-                          );
-                        } else if (attStatus === 'LATE_30P') {
-                          attBadge = (
-                            <span className="text-[9px] font-black bg-rose-600 text-white px-1 py-0.5 rounded shadow-2xs flex items-center gap-0.5 mt-0.5 animate-pulse">
-                              ⚠️ TRỄ 30P (50%L)
-                            </span>
-                          );
-                        } else if (attStatus === 'LATE_60P') {
-                          attBadge = (
-                            <span className="text-[9px] font-black bg-purple-700 text-white px-1 py-0.5 rounded shadow-2xs flex items-center gap-0.5 mt-0.5 animate-pulse">
-                              🚨 TRỄ 60P (100%L)
-                            </span>
-                          );
-                        } else if (attStatus === 'ABSENT') {
-                          attBadge = (
-                            <span className="text-[9px] font-bold bg-slate-500 text-white px-1 py-0.5 rounded opacity-80 mt-0.5">
-                              ✖ VẮNG
-                            </span>
-                          );
+                        const isOff = shifts.includes('OFF') || shifts.length === 0;
+                        if (!isOff && currentTCount < 7) {
+                          currentTCount++;
+                          if (dates.includes(d)) {
+                            trainingDayMap[d] = currentTCount;
+                          }
+                        } else {
+                          if (dates.includes(d)) {
+                            trainingDayMap[d] = null;
+                          }
                         }
 
-                        return (
-                          <td key={d} className="border-r border-slate-100 p-1 text-center">
-                            <button
-                              onClick={() => {
-                                if (isAttendedOrLocked) {
-                                  setViewAttDetail({
-                                    candidateId: r.candidateId,
-                                    tenUv: r.tenUv,
-                                    date: d,
-                                    chiNhanh: r.chiNhanh,
-                                    caLam: r.caLam,
-                                    attendanceStatus: attStatus || (isPastOrOngoing && !attStatus ? 'ABSENT' : 'ON_TIME'),
-                                    checkinTime: checkinTime || 'Chưa ghi nhận',
-                                    lateMinutes: cellObj?.lateMinutes || 0,
-                                    fineAmount: cellObj?.fineAmount || 0,
-                                    reason: cellObj?.reason || '',
-                                    isOngoingOrPastNoAtt: !attStatus && isPastOrOngoing,
-                                  });
-                                  return;
-                                }
-                                setEdit({ candidateId: r.candidateId, tenUv: r.tenUv, date: d, current: shifts.join('|'), caLam: r.caLam });
-                                setSelected(shifts.length ? shifts : ['OFF']);
-                              }}
-                              className={cn(
-                                'w-full min-h-[38px] p-1 rounded-lg flex flex-col items-center justify-center gap-0.5 transition-all hover:ring-2 hover:ring-brand-300 relative group cursor-pointer',
-                                shifts.length === 0 && 'bg-slate-50 hover:bg-slate-100',
-                                isToday(d) && 'ring-1 ring-brand-300 font-bold',
-                                shifts.length === 1 ? colors[0] : 'bg-slate-100',
-                                attStatus === 'ON_TIME' && '!bg-emerald-100 border border-emerald-300',
-                                attStatus === 'LATE_5P' && '!bg-amber-100 border border-amber-300',
-                                attStatus === 'LATE_30P' && '!bg-rose-100 border border-rose-300',
-                                attStatus === 'LATE_60P' && '!bg-purple-100 border border-purple-300',
-                                attStatus === 'ABSENT' && '!bg-slate-200/80 border border-slate-300',
-                                isAttendedOrLocked && 'cursor-default opacity-90'
-                              )}
-                              title={
-                                isAttendedOrLocked
-                                  ? `${r.tenUv} – ${formatDate(d)}\n🔒 CA LÀM NÀY ĐÃ ĐẾN/QUA GIỜ HOẶC ĐÃ ĐƯỢC AI CHẤM CÔNG (Lịch đã bị khóa)\nCheck-in: ${checkinTime || 'Chưa nhận'}`
-                                  : `${r.tenUv} – ${formatDate(d)}: ${shifts.join(' + ') || 'Chưa xếp'}`
-                              }
-                            >
-                              {/* Biểu tượng khóa cho ca đã bị khóa */}
-                              {isAttendedOrLocked && (
-                                <span className="absolute top-1 right-1 text-slate-500 opacity-60 group-hover:opacity-100 transition-opacity">
-                                  <Lock size={10} />
-                                </span>
-                              )}
+                        if (dates.includes(d)) {
+                          resolvedShiftsMap[d] = shifts;
+                        }
+                      });
 
-                              {shifts.length > 1 ? (
-                                <span className="flex gap-0.5">
-                                  {shifts.map((sStr, iIdx) => (
-                                    <span key={iIdx} className={cn('w-2.5 h-4 rounded-sm', shiftColor(sStr).bg)} />
-                                  ))}
-                                </span>
-                              ) : (
-                                <span className="font-extrabold text-[11px] uppercase tracking-wide">
-                                  {shifts[0] || 'CHƯA'}
-                                </span>
-                              )}
+                      return (
+                        <tr key={r.candidateId} className="hover:bg-slate-50/60 transition-colors">
+                          {/* Left info column */}
+                          <td className="p-3 border-r border-slate-200 align-top">
+                            <div className="font-bold text-slate-800 text-sm leading-snug">{r.tenUv}</div>
+                            <div className="text-[11px] text-pink-600 font-mono font-bold mt-0.5">{r.candidateId}</div>
+                            <div className="text-[11px] text-slate-500 mt-1 truncate max-w-[210px]" title={r.chiNhanh}>
+                              • {r.chiNhanh || 'Chưa chọn chi nhánh'}
+                            </div>
+                            <div className="text-[11px] text-amber-700 font-medium mt-0.5">
+                              • Ca làm: <span className="font-bold">{r.caLam || 'Chưa chốt ca'}</span>
+                            </div>
 
-                              {tab === 'training' && tNum ? (
-                                <span className="text-[9px] font-extrabold bg-gradient-to-r from-pink-500 to-rose-500 text-white px-1.5 py-0.2 rounded-full shadow-2xs mt-0.5 whitespace-nowrap">
-                                  🎯 Ngày {tNum}
-                                </span>
-                              ) : null}
+                            {tab === 'training' && (
+                              <div className="text-[10px] font-bold mt-1.5">
+                                {currentTCount >= 7 ? (
+                                  <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-300 inline-block shadow-2xs">
+                                    📊 Tiến độ: 7/7 Đủ ca Training
+                                  </span>
+                                ) : (
+                                  <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-300 inline-block shadow-2xs">
+                                    ⚠️ Mới xếp: {currentTCount}/7 Ngày
+                                  </span>
+                                )}
+                              </div>
+                            )}
 
-                              {attBadge}
-                            </button>
+                            <div className="mt-2 space-y-1">
+                              <button
+                                type="button"
+                                disabled={isViewer || user?.username === 'umbomilk'}
+                                onClick={() => handleSendAttendanceZaloLink(r)}
+                                className={cn(
+                                  'w-full text-[10px] font-bold px-2 py-1 rounded-xl flex items-center justify-center gap-1 shadow-2xs transition-transform',
+                                  isViewer || user?.username === 'umbomilk'
+                                    ? 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed opacity-60'
+                                    : 'bg-[#0068ff] hover:bg-[#0052cc] text-white active:scale-95 cursor-pointer'
+                                )}
+                                title={isViewer || user?.username === 'umbomilk' ? 'Tài khoản không có quyền gửi Zalo' : 'Sao chép tin nhắn chứa Link Web App + Link Điểm Danh & Mở Zalo 1-1'}
+                              >
+                                <span>💬 Mở App Zalo gửi Link Web App</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                disabled={isViewer || user?.username === 'umbomilk' || sendingZaloId === r.candidateId}
+                                onClick={() => handleSendZaloBackend(r)}
+                                className={cn(
+                                  'w-full text-[10px] font-bold px-2 py-1 rounded-xl flex items-center justify-center gap-1 shadow-2xs transition-transform',
+                                  isViewer || user?.username === 'umbomilk' || sendingZaloId === r.candidateId
+                                    ? 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed opacity-60'
+                                    : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white active:scale-95 cursor-pointer'
+                                )}
+                                title="Tự động gửi Tin nhắn Zalo chứa Link Web App + Key + Điểm danh qua AI Backend"
+                              >
+                                {sendingZaloId === r.candidateId ? <Spinner size={12} /> : null}
+                                <span>📲 Gửi Zalo Tự Động (AI Backend)</span>
+                              </button>
+                            </div>
                           </td>
-                        );
-                      })}
-                    </tr>
-                  );
-                })}
+
+                          {/* 7 dates columns */}
+                          {dates.map((d) => {
+                            const cellObj = r.shifts[d];
+                            const attStatus = cellObj?.attendanceStatus;
+                            const checkinTime = cellObj?.checkinTime;
+                            const tNum = tab === 'training' ? trainingDayMap[d] : null;
+                            const shifts = resolvedShiftsMap[d] || (cellObj?.shifts ? cellObj.shifts.split('|').filter(Boolean) : ['OFF']);
+
+                            const colors = shifts.map((s) => shiftBadgeColors[s] || 'bg-slate-100 text-slate-600 border-slate-200');
+
+                            // RÀNG BUỘC KHOÁ REALTIME DƯỚI CLIENT:
+                            const todayStr = startOfToday();
+                            const normCa = (r.caLam || '').toLowerCase();
+                            let startH = 7;
+                            if (normCa.includes('chieu') || normCa.includes('12h')) startH = 12;
+                            else if (normCa.includes('toi') || normCa.includes('18h')) startH = 18;
+
+                            const currentVnHour = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' })).getHours();
+                            const isPastOrOngoing = d < todayStr || (d === todayStr && currentVnHour >= startH);
+
+                            const isAttendedOrLocked = cellObj?.isLocked || !!attStatus || isPastOrOngoing;
+
+                            let attBadge = null;
+                            if (attStatus === 'ON_TIME') {
+                              attBadge = (
+                                <span className="text-[9px] font-black bg-emerald-600 text-white px-1 py-0.5 rounded shadow-2xs flex items-center gap-0.5 mt-0.5">
+                                  ✓ ĐÚNG GIỜ
+                                </span>
+                              );
+                            } else if (attStatus === 'LATE_5P') {
+                              attBadge = (
+                                <span className="text-[9px] font-black bg-amber-600 text-white px-1 py-0.5 rounded shadow-2xs flex items-center gap-0.5 mt-0.5 animate-pulse">
+                                  ⚠️ TRỄ 5P (30K)
+                                </span>
+                              );
+                            } else if (attStatus === 'LATE_30P') {
+                              attBadge = (
+                                <span className="text-[9px] font-black bg-rose-600 text-white px-1 py-0.5 rounded shadow-2xs flex items-center gap-0.5 mt-0.5 animate-pulse">
+                                  ⚠️ TRỄ 30P (50%L)
+                                </span>
+                              );
+                            } else if (attStatus === 'LATE_60P') {
+                              attBadge = (
+                                <span className="text-[9px] font-black bg-purple-700 text-white px-1 py-0.5 rounded shadow-2xs flex items-center gap-0.5 mt-0.5 animate-pulse">
+                                  🚨 TRỄ 60P (100%L)
+                                </span>
+                              );
+                            } else if (attStatus === 'ABSENT') {
+                              attBadge = (
+                                <span className="text-[9px] font-bold bg-slate-500 text-white px-1 py-0.5 rounded opacity-80 mt-0.5">
+                                  ✖ VẮNG
+                                </span>
+                              );
+                            }
+
+                            return (
+                              <td key={d} className="border-r border-slate-100 p-1 text-center">
+                                <button
+                                  onClick={() => {
+                                    if (isAttendedOrLocked) {
+                                      setViewAttDetail({
+                                        candidateId: r.candidateId,
+                                        tenUv: r.tenUv,
+                                        date: d,
+                                        chiNhanh: r.chiNhanh,
+                                        caLam: r.caLam,
+                                        attendanceStatus: attStatus || (isPastOrOngoing && !attStatus ? 'ABSENT' : 'ON_TIME'),
+                                        checkinTime: checkinTime || 'Chưa ghi nhận',
+                                        lateMinutes: cellObj?.lateMinutes || 0,
+                                        fineAmount: cellObj?.fineAmount || 0,
+                                        reason: cellObj?.reason || '',
+                                        isOngoingOrPastNoAtt: !attStatus && isPastOrOngoing,
+                                      });
+                                      return;
+                                    }
+                                    setEdit({ candidateId: r.candidateId, tenUv: r.tenUv, date: d, current: shifts.join('|'), caLam: r.caLam });
+                                    setSelected(shifts.length ? shifts : ['OFF']);
+                                  }}
+                                  className={cn(
+                                    'w-full min-h-[38px] p-1 rounded-lg flex flex-col items-center justify-center gap-0.5 transition-all hover:ring-2 hover:ring-brand-300 relative group cursor-pointer',
+                                    shifts.length === 0 && 'bg-slate-50 hover:bg-slate-100',
+                                    isToday(d) && 'ring-1 ring-brand-300 font-bold',
+                                    shifts.length === 1 ? colors[0] : 'bg-slate-100',
+                                    attStatus === 'ON_TIME' && '!bg-emerald-100 border border-emerald-300',
+                                    attStatus === 'LATE_5P' && '!bg-amber-100 border border-amber-300',
+                                    attStatus === 'LATE_30P' && '!bg-rose-100 border border-rose-300',
+                                    attStatus === 'LATE_60P' && '!bg-purple-100 border border-purple-300',
+                                    attStatus === 'ABSENT' && '!bg-slate-200/80 border border-slate-300',
+                                    isAttendedOrLocked && 'cursor-default opacity-90'
+                                  )}
+                                  title={
+                                    isAttendedOrLocked
+                                      ? `${r.tenUv} – ${formatDate(d)}\n🔒 CA LÀM NÀY ĐÃ ĐẾN/QUA GIỜ HOẶC ĐÃ ĐƯỢC AI CHẤM CÔNG (Lịch đã bị khóa)\nCheck-in: ${checkinTime || 'Chưa nhận'}`
+                                      : `${r.tenUv} – ${formatDate(d)}: ${shifts.join(' + ') || 'Chưa xếp'}`
+                                  }
+                                >
+                                  {/* Biểu tượng khóa cho ca đã bị khóa */}
+                                  {isAttendedOrLocked && (
+                                    <span className="absolute top-1 right-1 text-slate-500 opacity-60 group-hover:opacity-100 transition-opacity">
+                                      <Lock size={10} />
+                                    </span>
+                                  )}
+
+                                  {shifts.length > 1 ? (
+                                    <span className="flex gap-0.5">
+                                      {shifts.map((sStr, iIdx) => (
+                                        <span key={iIdx} className={cn('w-2.5 h-4 rounded-sm', shiftColor(sStr).bg)} />
+                                      ))}
+                                    </span>
+                                  ) : (
+                                    <span className="font-extrabold text-[11px] uppercase tracking-wide">
+                                      {shifts[0] || 'CHƯA'}
+                                    </span>
+                                  )}
+
+                                  {tab === 'training' && tNum ? (
+                                    <span className="text-[9px] font-extrabold bg-gradient-to-r from-pink-500 to-rose-500 text-white px-1.5 py-0.2 rounded-full shadow-2xs mt-0.5 whitespace-nowrap">
+                                      🎯 Ngày {tNum}
+                                    </span>
+                                  ) : null}
+
+                                  {attBadge}
+                                </button>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+                  </Fragment>
+                ))}
               </tbody>
             </table>
           </div>
