@@ -433,10 +433,16 @@ export default function Shifts() {
                     const cellObj = r.shifts[d];
                     const shiftsRaw = cellObj?.shifts || '';
                     let shifts = shiftsRaw ? shiftsRaw.split('|').filter(Boolean) : [];
-                    if (shifts.length === 0 && lockedKey) {
-                      shifts = [lockedKey];
+
+                    if (shifts.length === 0) {
+                      if (currentTCount < 7 && lockedKey) {
+                        shifts = [lockedKey];
+                      } else {
+                        shifts = ['OFF'];
+                      }
                     }
-                    const isOff = shifts.includes('OFF') || shifts.length === 0;
+
+                    const isOff = shifts.includes('OFF');
                     if (!isOff && currentTCount < 7) {
                       currentTCount++;
                       trainingDayMap[d] = currentTCount;
@@ -511,15 +517,19 @@ export default function Shifts() {
                         const cellObj = r.shifts[d];
                         const shiftsRaw = cellObj?.shifts || '';
                         let shifts = shiftsRaw ? shiftsRaw.split('|').filter(Boolean) : [];
+                        const tNum = tab === 'training' ? trainingDayMap[d] : null;
 
-                        if (shifts.length === 0 && lockedKey) {
-                          shifts = [lockedKey];
+                        if (shifts.length === 0) {
+                          if (tab === 'training') {
+                            shifts = tNum ? (lockedKey ? [lockedKey] : ['SANG']) : ['OFF'];
+                          } else if (lockedKey) {
+                            shifts = [lockedKey];
+                          }
                         }
 
                         const colors = shifts.map((s) => shiftBadgeColors[s] || 'bg-slate-100 text-slate-600 border-slate-200');
                         const attStatus = cellObj?.attendanceStatus;
                         const checkinTime = cellObj?.checkinTime;
-                        const tNum = tab === 'training' ? trainingDayMap[d] : null;
 
                         // RÀNG BUỘC KHOÁ REALTIME DƯỚI CLIENT:
                         const todayStr = startOfToday();
@@ -626,17 +636,11 @@ export default function Shifts() {
                                 </span>
                               )}
 
-                              {tab === 'training' && (
-                                tNum ? (
-                                  <span className="text-[9px] font-extrabold bg-gradient-to-r from-pink-500 to-rose-500 text-white px-1.5 py-0.2 rounded-full shadow-2xs mt-0.5 whitespace-nowrap">
-                                    🎯 Ngày {tNum} (T{tNum})
-                                  </span>
-                                ) : (
-                                  <span className="text-[9px] font-bold text-slate-400 opacity-60 mt-0.5 whitespace-nowrap">
-                                    ☕ NGHỈ (OFF)
-                                  </span>
-                                )
-                              )}
+                              {tab === 'training' && tNum ? (
+                                <span className="text-[9px] font-extrabold bg-gradient-to-r from-pink-500 to-rose-500 text-white px-1.5 py-0.2 rounded-full shadow-2xs mt-0.5 whitespace-nowrap">
+                                  🎯 Ngày {tNum}
+                                </span>
+                              ) : null}
 
                               {attBadge}
                             </button>
