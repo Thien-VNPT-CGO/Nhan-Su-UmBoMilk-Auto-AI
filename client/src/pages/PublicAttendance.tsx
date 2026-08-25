@@ -255,6 +255,9 @@ export default function PublicAttendance() {
   const daysLeft = Math.max(0, 7 - daysDone);
   const progressPercent = Math.min(100, Math.round((daysDone / 7) * 100));
 
+  const isCheckinAllowed = attendanceType === 'CHECK_IN' && !candidate.hasCheckedInToday && !candidate.isTooEarly;
+  const isCheckoutAllowed = attendanceType === 'CHECK_OUT' && !candidate.hasCheckedOutToday && !candidate.isCheckoutTooEarly;
+
   // Determine shift time display
   const shiftStr = (candidate.caLam || 'SÁNG').toUpperCase();
   let shiftTimeStr = '07:00 - 12:00';
@@ -565,7 +568,7 @@ export default function PublicAttendance() {
               </p>
             </div>
           )
-        ) : (
+        ) : (isCheckinAllowed || isCheckoutAllowed) ? (
           /* Photo Upload Section */
           <div className="bg-slate-900/80 backdrop-blur-xl p-4 sm:p-5 rounded-3xl border border-slate-800/90 shadow-2xl space-y-4">
             <h4 className="text-xs font-black text-slate-300 uppercase tracking-wider">
@@ -650,45 +653,17 @@ export default function PublicAttendance() {
             {/* Submit Button */}
             <button
               type="button"
-              disabled={
-                !imageSrc ||
-                isSubmitting ||
-                (attendanceType === 'CHECK_IN' && (candidate?.hasCheckedInToday || candidate?.isTooEarly)) ||
-                (attendanceType === 'CHECK_OUT' && (candidate?.hasCheckedOutToday || candidate?.isCheckoutTooEarly))
-              }
+              disabled={!imageSrc || isSubmitting}
               onClick={handleCheckinSubmit}
               className={`w-full py-4 px-4 rounded-full font-black text-sm transition-all shadow-2xl flex items-center justify-center gap-2 cursor-pointer ${
-                (attendanceType === 'CHECK_IN' && (candidate?.hasCheckedInToday || candidate?.isTooEarly)) ||
-                (attendanceType === 'CHECK_OUT' && (candidate?.hasCheckedOutToday || candidate?.isCheckoutTooEarly))
-                  ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/60 shadow-none'
-                  : imageSrc && !isSubmitting
-                    ? attendanceType === 'CHECK_OUT'
-                      ? 'bg-gradient-to-r from-rose-600 via-pink-600 to-purple-600 hover:from-rose-500 hover:to-pink-500 text-white shadow-rose-600/40 animate-pulse active:scale-[0.98]'
-                      : 'bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-emerald-600/40 animate-pulse active:scale-[0.98]'
-                    : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/60'
+                imageSrc && !isSubmitting
+                  ? attendanceType === 'CHECK_OUT'
+                    ? 'bg-gradient-to-r from-rose-600 via-pink-600 to-purple-600 hover:from-rose-500 hover:to-pink-500 text-white shadow-rose-600/40 animate-pulse active:scale-[0.98]'
+                    : 'bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-emerald-600/40 animate-pulse active:scale-[0.98]'
+                  : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/60'
               }`}
             >
-              {attendanceType === 'CHECK_IN' && candidate?.hasCheckedInToday ? (
-                <>
-                  <CheckCircle2 size={18} className="text-emerald-400" />
-                  <span>✓ ĐÃ ĐIỂM DANH VÀO CA HÔM NAY</span>
-                </>
-              ) : attendanceType === 'CHECK_IN' && candidate?.isTooEarly ? (
-                <>
-                  <AlertCircle size={18} />
-                  <span>⏳ CHƯA ĐẾN GIỜ (MỞ TỪ {candidate.allowedTimeStr})</span>
-                </>
-              ) : attendanceType === 'CHECK_OUT' && candidate?.hasCheckedOutToday ? (
-                <>
-                  <CheckCircle2 size={18} className="text-emerald-400" />
-                  <span>✓ ĐÃ XÁC NHẬN RA CA HÔM NAY</span>
-                </>
-              ) : attendanceType === 'CHECK_OUT' && candidate?.isCheckoutTooEarly ? (
-                <>
-                  <Clock size={18} />
-                  <span>⏳ CHƯA ĐẾN GIỜ CHECK-OUT (MỞ TỪ {candidate.allowedCheckoutTimeStr})</span>
-                </>
-              ) : isSubmitting ? (
+              {isSubmitting ? (
                 <>
                   <Spinner size={18} className="text-white" />
                   <span>Đang ghi nhận {attendanceType === 'CHECK_OUT' ? 'ra ca' : 'điểm danh'}...</span>
@@ -701,7 +676,7 @@ export default function PublicAttendance() {
               )}
             </button>
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* MODAL POPUP CẢNH BÁO ĐI TRỄ VÀ BẮT BUỘC NHẬP LÝ DO */}
