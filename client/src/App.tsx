@@ -18,6 +18,7 @@ import AuditLog from './pages/AuditLog';
 import Settings from './pages/Settings';
 import ConfirmInterview from './pages/ConfirmInterview';
 import PublicAttendance from './pages/PublicAttendance';
+import EmployeePortal from './pages/EmployeePortal';
 import { Spinner } from './components/ui';
 
 function Protected({ children }: { children: React.ReactNode }) {
@@ -38,6 +39,8 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/portal" element={<EmployeePortal />} />
+        <Route path="/employee-portal" element={<EmployeePortal />} />
         <Route path="/confirm-pv/*" element={<ConfirmInterview />} />
         <Route path="/diemdanh/*" element={<PublicAttendance />} />
         <Route path="/public/attendance/*" element={<PublicAttendance />} />

@@ -4,6 +4,7 @@ import { nextId } from '../lib/id';
 import { shiftService } from './ShiftService';
 import { zaloPersonalService } from './ZaloPersonalService';
 import { audit } from './AuditService';
+import { emit } from '../sockets';
 
 export interface CreateSwapInput {
   candidateIdA: string;
@@ -77,6 +78,7 @@ export class ApprovalService {
       },
     });
 
+    emit('shift_swap:created', { requestId: created.id, candidateIdA: candA.id, candidateIdB: candB.id });
     return created;
   }
 
@@ -123,6 +125,8 @@ export class ApprovalService {
       newValue: JSON.stringify({ status: 'APPROVED', approvedBy: managerUsername }),
     });
 
+    emit('shift_swap:approved', { requestId: updated.id, candidateIdA: req.candidateIdA, candidateIdB: req.candidateIdB });
+
     // 4. Tự động gửi tin nhắn Zalo thông báo tới cả NV A và NV B
     const msgA = `🐮 [UMBO MILK] – THÔNG BÁO PHÊ DUYỆT ĐỔI CA ✅\n\nChào ${req.candidateNameA} ❤️\nĐơn hoán đổi ca ngày ${req.dateA} (${req.caLamA}) của bạn với ${req.candidateNameB} (${req.caLamB}) đã được QUẢN LÝ PHÊ DUYỆT thành công.\n\nLịch làm mới đã được tự động cập nhật trên hệ thống! ✨`;
     const msgB = `🐮 [UMBO MILK] – THÔNG BÁO PHÊ DUYỆT ĐỔI CA ✅\n\nChào ${req.candidateNameB} ❤️\nĐơn hoán đổi ca ngày ${req.dateB} (${req.caLamB}) của bạn với ${req.candidateNameA} (${req.caLamA}) đã được QUẢN LÝ PHÊ DUYỆT thành công.\n\nLịch làm mới đã được tự động cập nhật trên hệ thống! ✨`;
@@ -155,6 +159,8 @@ export class ApprovalService {
       entityId: requestId,
       newValue: JSON.stringify({ status: 'REJECTED', rejectReason }),
     });
+
+    emit('shift_swap:rejected', { requestId: updated.id, candidateIdA: req.candidateIdA });
 
     // Thông báo Zalo lý do từ chối cho NV A
     const msgA = `🐮 [UMBO MILK] – THÔNG BÁO TỪ CHỐI ĐỔI CA ❌\n\nChào ${req.candidateNameA},\nYêu cầu đổi ca ngày ${req.dateA} của bạn không được Quản lý phê duyệt.\nLý do: ${rejectReason || 'Không phù hợp nhân sự ca làm'}.`;

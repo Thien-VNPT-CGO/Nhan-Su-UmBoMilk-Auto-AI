@@ -104,6 +104,8 @@ model Candidate {
   conflicts        Conflict[]
   zaloMessages     ZaloMessage[]
   quizAttempts     QuizAttempt[]
+  employeeKeys     EmployeeKey[]
+  deviceResetTickets DeviceResetTicket[]
 
   @@index([chiNhanh])
   @@index([sdtZalo])
@@ -363,5 +365,43 @@ model ShiftSwapRequest {
 
   @@index([candidateIdA])
   @@index([candidateIdB])
+  @@index([status])
+}
+
+model EmployeeKey {
+  id           String    @id
+  key          String    @unique // Mã key kích hoạt (ví dụ: TRN-9821-4412 hoặc EMP-8812-9901)
+  candidateId  String
+  candidate    Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  type         String    // TRAINING | OFFICIAL
+  status       String    @default("ACTIVE") // ACTIVE | EXPIRED | REVOKED
+  deviceId     String?   // UUID gán cứng thiết bị duy nhất
+  activatedAt  DateTime?
+  expiresAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([candidateId])
+  @@index([key])
+  @@index([deviceId])
+}
+
+model DeviceResetTicket {
+  id                String    @id
+  candidateId       String    // Mã NV yêu cầu reset
+  candidate         Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  creatorType       String    @default("EMPLOYEE_SELF") // EMPLOYEE_SELF (TH1: Máy cũ) | STORE_MANAGER_FOR_EMP (TH2: Mất máy)
+  createdBy         String    // Mã NV hoặc Username Quản lý tạo phiếu
+  reason            String    // Lý do đổi điện thoại (đổi máy mới, bị mất điện thoại, máy bị hỏng...)
+  status            String    @default("PENDING_MANAGER") // PENDING_MANAGER | PENDING_IT | APPROVED | REJECTED
+  managerUser       String?   // Quản lý cửa hàng xác nhận
+  managerApprovedAt DateTime?
+  itUser            String?   // IT Admin phê duyệt
+  itApprovedAt      DateTime?
+  rejectReason      String?   // Lý do từ chối nếu có
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([candidateId])
   @@index([status])
 }

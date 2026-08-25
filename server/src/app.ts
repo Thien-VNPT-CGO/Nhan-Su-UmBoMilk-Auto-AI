@@ -33,6 +33,7 @@ import elearningRoutes from './routes/elearning';
 import notificationRoutes from './routes/notifications';
 import backupRoutes from './routes/backup';
 import publicRoutes from './routes/public';
+import employeeRoutes from './routes/employee';
 import { officialEmployeesRouter } from './routes/official-employees';
 
 export function createApp() {
@@ -89,6 +90,7 @@ export function createApp() {
   app.use('/api/notifications', apiLimiter, notificationRoutes);
   app.use('/api/backup', apiLimiter, backupRoutes);
   app.use('/api/public', apiLimiter, publicRoutes);
+  app.use('/api', employeeRoutes);
   app.use('/api/webhooks', webhookRoutes);
 
   // ===== Serve frontend (client/dist) - 1 URL duy nhất cho production =====

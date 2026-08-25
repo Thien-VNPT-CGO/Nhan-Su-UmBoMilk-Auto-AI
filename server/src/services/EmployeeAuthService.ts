@@ -1,0 +1,136 @@
+import { prisma } from '../lib/prisma';
+import { ApiError } from '../lib/errors';
+import { nextId } from '../lib/id';
+import { audit } from './AuditService';
+import { emit } from '../sockets';
+
+export class EmployeeAuthService {
+  /** Admin tạo Key kích hoạt cho Nhân viên (Training hoặc Chính thức) */
+  async generateKey(input: { candidateId: string; type: 'TRAINING' | 'OFFICIAL'; user: string }) {
+    const candidate = await prisma.candidate.findUnique({ where: { id: input.candidateId } });
+    if (!candidate) throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy thông tin nhân sự.');
+
+    // Format Key: TRN-XXXX-YYYY hoặc EMP-XXXX-YYYY
+    const prefix = input.type === 'TRAINING' ? 'TRN' : 'EMP';
+    const randPart = Math.floor(1000 + Math.random() * 9000);
+    const randPart2 = Math.floor(1000 + Math.random() * 9000);
+    const key = `${prefix}-${randPart}-${randPart2}`;
+
+    // Hủy các key ACTIVE cũ nếu có
+    await prisma.employeeKey.updateMany({
+      where: { candidateId: input.candidateId, status: 'ACTIVE' },
+      data: { status: 'REVOKED' },
+    });
+
+    const keyRecord = await prisma.employeeKey.create({
+      data: {
+        id: nextId('KEY'),
+        key,
+        candidateId: input.candidateId,
+        type: input.type,
+        status: 'ACTIVE',
+        deviceId: null,
+      },
+    });
+
+    await audit({
+      user: input.user,
+      action: 'GENERATE_EMPLOYEE_KEY',
+      entity: 'employee_key',
+      entityId: keyRecord.id,
+      newValue: { candidateId: input.candidateId, key, type: input.type },
+    });
+
+    emit('employee_key:generated', { candidateId: input.candidateId, type: input.type });
+    return keyRecord;
+  }
+
+  /** Đăng nhập & Kích hoạt thiết bị (Device Binding) */
+  async activateAndLogin(input: { candidateId: string; key: string; deviceId: string }) {
+    const candidate = await prisma.candidate.findUnique({
+      where: { id: input.candidateId },
+      include: {
+        attendanceEvents: { where: { valid: true } },
+      },
+    });
+    if (!candidate) {
+      throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy Mã nhân viên trong hệ thống.');
+    }
+
+    const keyRecord = await prisma.employeeKey.findFirst({
+      where: { key: input.key.trim(), candidateId: input.candidateId },
+    });
+
+    if (!keyRecord) {
+      throw ApiError.badRequest('INVALID_KEY', 'Key kích hoạt không hợp lệ cho Mã nhân viên này.');
+    }
+
+    if (keyRecord.status === 'REVOKED') {
+      throw ApiError.badRequest('KEY_REVOKED', 'Key kích hoạt đã bị thu hồi. Vui lòng liên hệ Admin để cấp Key mới.');
+    }
+
+    // Kiểm tra thời hạn Key Training (Tự hết hạn nếu đã hoàn thành đủ 7 ngày đào tạo)
+    if (keyRecord.type === 'TRAINING') {
+      const completedDays = candidate.attendanceEvents.filter(
+        (a) => a.checkoutAt != null || a.reason?.includes('CHECK_OUT') || a.method === 'MANUAL' || a.method === 'SYSTEM'
+      );
+      const uniqueDaysCount = new Set(completedDays.map((a) => a.date)).size;
+
+      if (uniqueDaysCount >= 7) {
+        await prisma.employeeKey.update({
+          where: { id: keyRecord.id },
+          data: { status: 'EXPIRED' },
+        });
+        throw ApiError.badRequest('TRAINING_COMPLETED', 'Bạn đã hoàn thành đủ 7 ngày Training! Key đã hết hạn. Vui lòng chờ Admin cấp Key Nhân viên Chính thức.');
+      }
+    }
+
+    // GÁN CỨNG THIẾT BỊ (DEVICE LOCKING)
+    if (!keyRecord.deviceId) {
+      // Lần đầu kích hoạt -> Gán deviceId này làm thiết bị duy nhất
+      await prisma.employeeKey.update({
+        where: { id: keyRecord.id },
+        data: {
+          deviceId: input.deviceId,
+          activatedAt: new Date(),
+        },
+      });
+      keyRecord.deviceId = input.deviceId;
+    } else if (keyRecord.deviceId !== input.deviceId) {
+      // Thiết bị truy cập khác với thiết bị gán cứng
+      throw ApiError.forbidden(
+        'Tài khoản này đã được gán cứng với 1 thiết bị duy nhất trước đó. Không thể đăng nhập từ điện thoại khác! Nếu bạn đã đổi máy, vui lòng gửi phiếu Yêu cầu Reset thiết bị.'
+      );
+    }
+
+    return {
+      candidate: {
+        id: candidate.id,
+        tenUv: candidate.tenUv,
+        sdtZalo: candidate.sdtZalo,
+        chiNhanh: candidate.chiNhanh,
+        caLam: candidate.caLam,
+        trangThaiTraining: candidate.trangThaiTraining,
+        soNgayDaTraining: candidate.soNgayDaTraining,
+      },
+      keyInfo: {
+        key: keyRecord.key,
+        type: keyRecord.type,
+        status: keyRecord.status,
+        deviceId: keyRecord.deviceId,
+        activatedAt: keyRecord.activatedAt,
+      },
+    };
+  }
+
+  /** Kiểm tra tính hợp lệ của Device Token */
+  async validateDevice(candidateId: string, deviceId: string) {
+    const keyRecord = await prisma.employeeKey.findFirst({
+      where: { candidateId, status: 'ACTIVE' },
+    });
+    if (!keyRecord || !keyRecord.deviceId) return false;
+    return keyRecord.deviceId === deviceId;
+  }
+}
+
+export const employeeAuthService = new EmployeeAuthService();
