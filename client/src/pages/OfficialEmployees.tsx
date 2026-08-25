@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   UserCheck,
   Search,
@@ -12,7 +12,14 @@ import {
   Filter,
   Edit2,
   Save,
+  Download,
+  Upload,
+  FileSpreadsheet,
+  FileText,
+  AlertCircle,
+  X,
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { api, ApiError } from '../api/client';
 import { Badge, Tooltip, Modal, Spinner } from '../components/ui';
 import { useToast } from '../stores/Toast';
@@ -61,6 +68,157 @@ export function OfficialEmployees() {
   const [editBranch, setEditBranch] = useState('');
   const [editShift, setEditShift] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
+
+  // Import File States
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importPreview, setImportPreview] = useState<
+    {
+      tenUv: string;
+      sdtZalo: string;
+      chiNhanh: string;
+      caLam: string;
+      namSinh?: string;
+      trinhDo?: string;
+      queQuan?: string;
+      kinhNghiem?: string;
+      linkFb?: string;
+      ngayChinhThuc?: string;
+    }[]
+  >([]);
+  const [importResult, setImportResult] = useState<{
+    insertedCount: number;
+    updatedCount: number;
+    totalProcessed: number;
+    errors: { row: number; name: string; error: string }[];
+  } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // 1. Tải File Excel Mẫu Chuẩn Cho Nhân Viên Chính Thức
+  const handleDownloadSampleExcel = () => {
+    const sampleData = [
+      {
+        'Họ và tên *': 'Nguyễn Văn An',
+        'Số điện thoại Zalo *': '0987654321',
+        'Chi nhánh *': 'Chi nhánh Quận 1',
+        'Ca làm việc *': 'SÁNG',
+        'Năm sinh': '2002',
+        'Trình độ học vấn': 'Đại học',
+        'Quê quán': 'TP.HCM',
+        'Kinh nghiệm': 'Đã từng làm nhân viên thu ngân 1 năm',
+        'Link Facebook': 'https://facebook.com/nguyenvanan',
+        'Ngày bắt đầu làm': '25/08/2026',
+      },
+      {
+        'Họ và tên *': 'Trần Thị Bình',
+        'Số điện thoại Zalo *': '0912345678',
+        'Chi nhánh *': 'Chi nhánh Tân Bình',
+        'Ca làm việc *': 'CHIỀU',
+        'Năm sinh': '2001',
+        'Trình độ học vấn': 'Cao đẳng',
+        'Quê quán': 'Đồng Nai',
+        'Kinh nghiệm': 'Nhân viên pha chế trà sữa',
+        'Link Facebook': '',
+        'Ngày bắt đầu làm': '25/08/2026',
+      },
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(sampleData);
+    worksheet['!cols'] = [
+      { wch: 22 },
+      { wch: 18 },
+      { wch: 22 },
+      { wch: 15 },
+      { wch: 12 },
+      { wch: 18 },
+      { wch: 18 },
+      { wch: 35 },
+      { wch: 30 },
+      { wch: 18 },
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'DS_NhanVien_ChinhThuc');
+    XLSX.writeFile(workbook, 'Mau_Import_Nhan_Vien_Chinh_Thuc_UmboMilk.xlsx');
+    toast('success', '📥 Đã tải xuống File Excel Mẫu thành công!');
+  };
+
+  // 2. Đọc & Parse File Excel / CSV Upload
+  const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImportResult(null);
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const rawData = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
+
+        if (!rawData || rawData.length === 0) {
+          toast('error', 'File Excel không có dữ liệu!');
+          return;
+        }
+
+        const parsed = rawData.map((row) => {
+          const tenUv = row['Họ và tên *'] || row['Họ và tên'] || row['tenUv'] || row['Ho va ten'] || '';
+          const sdtZalo = row['Số điện thoại Zalo *'] || row['Số điện thoại Zalo'] || row['sdtZalo'] || row['So dien thoai'] || '';
+          const chiNhanh = row['Chi nhánh *'] || row['Chi nhánh'] || row['chiNhanh'] || row['Chi nhanh'] || '';
+          const caLam = row['Ca làm việc *'] || row['Ca làm việc'] || row['caLam'] || row['Ca lam'] || '';
+
+          return {
+            tenUv: String(tenUv || '').trim(),
+            sdtZalo: String(sdtZalo || '').trim(),
+            chiNhanh: String(chiNhanh || '').trim(),
+            caLam: String(caLam || '').trim(),
+            namSinh: String(row['Năm sinh'] || row['namSinh'] || '').trim(),
+            trinhDo: String(row['Trình độ học vấn'] || row['trinhDo'] || '').trim(),
+            queQuan: String(row['Quê quán'] || row['queQuan'] || '').trim(),
+            kinhNghiem: String(row['Kinh nghiệm'] || row['kinhNghiem'] || '').trim(),
+            linkFb: String(row['Link Facebook'] || row['linkFb'] || '').trim(),
+            ngayChinhThuc: String(row['Ngày bắt đầu làm'] || row['ngayChinhThuc'] || '').trim(),
+          };
+        });
+
+        setImportPreview(parsed);
+        toast('success', `Đã đọc thành công ${parsed.length} dòng dữ liệu từ file Excel!`);
+      } catch (err) {
+        toast('error', 'Lỗi đọc file Excel/CSV. Vui lòng kiểm tra định dạng file!');
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  // 3. Thực hiện Import Danh sách vào Hệ thống
+  const handleExecuteImport = async () => {
+    if (importPreview.length === 0) {
+      toast('error', 'Vui lòng chọn file Excel có dữ liệu trước!');
+      return;
+    }
+
+    setImporting(true);
+    try {
+      const res = await api.post<{
+        insertedCount: number;
+        updatedCount: number;
+        totalProcessed: number;
+        errors: { row: number; name: string; error: string }[];
+      }>('/official-employees/import', { employees: importPreview });
+
+      if (res) {
+        setImportResult(res);
+        toast('success', `🎉 Import thành công ${res.insertedCount} NV mới + ${res.updatedCount} NV cập nhật!`);
+        void loadData();
+      }
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Import thất bại.');
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -161,14 +319,36 @@ export function OfficialEmployees() {
           </p>
         </div>
 
-        <button
-          onClick={() => void loadData()}
-          disabled={loading}
-          className="btn-secondary flex items-center gap-2 text-xs"
-        >
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          Làm mới
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={handleDownloadSampleExcel}
+            className="btn-secondary flex items-center gap-1.5 text-xs font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200 cursor-pointer"
+            title="Tải xuống File mẫu Excel gồm đầy đủ các trường của Nhân viên chính thức"
+          >
+            <Download size={14} />
+            <span>📥 TẢI FILE EXCEL MẪU</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setImportModalOpen(true)}
+            className="btn-primary flex items-center gap-1.5 text-xs font-black bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white cursor-pointer shadow-sm"
+            title="Import tất cả Nhân viên chính thức từ file Excel/CSV vào hệ thống web"
+          >
+            <Upload size={14} />
+            <span>📤 IMPORT DANH SÁCH NHÂN VIÊN</span>
+          </button>
+
+          <button
+            onClick={() => void loadData()}
+            disabled={loading}
+            className="btn-secondary flex items-center gap-2 text-xs cursor-pointer"
+          >
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            <span>Làm mới</span>
+          </button>
+        </div>
       </div>
 
       {/* Summary Stats Cards */}
@@ -454,6 +634,158 @@ export function OfficialEmployees() {
               Lưu & Đồng Bộ Realtime
             </button>
           </div>
+        </div>
+      </Modal>
+
+      {/* Import Modal */}
+      <Modal
+        open={importModalOpen}
+        onClose={() => {
+          setImportModalOpen(false);
+          setImportPreview([]);
+          setImportResult(null);
+        }}
+        title="📤 IMPORT DANH SÁCH NHÂN VIÊN CHÍNH THỨC TỪ EXCEL"
+      >
+        <div className="space-y-4 max-w-2xl font-sans">
+          <div className="bg-slate-50 dark:bg-slate-800/80 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                <FileSpreadsheet size={16} className="text-emerald-500" />
+                <span>1. Chọn File Excel / CSV cần Import *</span>
+              </span>
+
+              <button
+                type="button"
+                onClick={handleDownloadSampleExcel}
+                className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <Download size={13} />
+                <span>Tải File Mẫu (.xlsx)</span>
+              </button>
+            </div>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx, .xls, .csv"
+              onChange={handleFileSelected}
+              className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-emerald-100 file:text-emerald-700 hover:file:bg-emerald-200 cursor-pointer"
+            />
+          </div>
+
+          {/* Table Preview Dữ liệu đọc được */}
+          {importPreview.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-slate-700 dark:text-slate-200">
+                  📋 XEM TRƯỚC DỮ LIỆU FILE ({importPreview.length} nhân sự):
+                </span>
+                <span className="text-[11px] text-slate-500">Hiển thị tối đa 5 dòng mẫu</span>
+              </div>
+
+              <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-xl max-h-48">
+                <table className="w-full text-[11px] text-left">
+                  <thead className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold sticky top-0">
+                    <tr>
+                      <th className="p-2 border-b">STT</th>
+                      <th className="p-2 border-b">Họ và tên</th>
+                      <th className="p-2 border-b">SĐT Zalo</th>
+                      <th className="p-2 border-b">Chi nhánh</th>
+                      <th className="p-2 border-b">Ca làm</th>
+                      <th className="p-2 border-b">Kiểm tra</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-600 dark:text-slate-300">
+                    {importPreview.slice(0, 5).map((row, idx) => {
+                      const isValid = row.tenUv && row.sdtZalo && row.chiNhanh && row.caLam;
+                      return (
+                        <tr key={idx}>
+                          <td className="p-2 font-mono">{idx + 1}</td>
+                          <td className="p-2 font-bold text-slate-900 dark:text-white">{row.tenUv || '—'}</td>
+                          <td className="p-2 font-mono">{row.sdtZalo || '—'}</td>
+                          <td className="p-2">{row.chiNhanh || '—'}</td>
+                          <td className="p-2 font-bold text-amber-600">{row.caLam || '—'}</td>
+                          <td className="p-2">
+                            {isValid ? (
+                              <span className="text-emerald-600 font-bold">✓ Hợp lệ</span>
+                            ) : (
+                              <span className="text-rose-600 font-bold">⚠️ Thiếu tin</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {importPreview.length > 5 && (
+                <p className="text-[11px] text-slate-400 italic text-center">
+                  ...và còn {importPreview.length - 5} nhân sự khác trong file
+                </p>
+              )}
+
+              <button
+                type="button"
+                disabled={importing}
+                onClick={handleExecuteImport}
+                className="w-full py-3 bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 hover:opacity-95 text-white font-black text-xs rounded-xl shadow-lg flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all mt-3"
+              >
+                {importing ? (
+                  <>
+                    <Spinner size={16} className="text-white" />
+                    <span>ĐANG IMPORT TẤT CẢ NHÂN VIÊN...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 size={16} />
+                    <span>🚀 TỰ ĐỘNG IMPORT TẤT CẢ {importPreview.length} NHÂN VIÊN VÀO HỆ THỐNG</span>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+
+          {/* Báo cáo kết quả Import */}
+          {importResult && (
+            <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700/50 p-4 rounded-2xl space-y-2 text-xs font-sans">
+              <div className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5 text-sm">
+                <CheckCircle2 size={18} />
+                <span>KẾT QUẢ IMPORT HOÀN TẤT:</span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center py-2">
+                <div className="bg-white dark:bg-slate-900 p-2 rounded-xl border border-emerald-200">
+                  <div className="text-slate-500 text-[10px]">TỔNG SỐ DÒNG</div>
+                  <div className="font-black text-slate-900 dark:text-white text-base">{importResult.totalProcessed}</div>
+                </div>
+                <div className="bg-white dark:bg-slate-900 p-2 rounded-xl border border-emerald-200">
+                  <div className="text-emerald-600 text-[10px]">THÊM MỚI</div>
+                  <div className="font-black text-emerald-600 text-base">+{importResult.insertedCount}</div>
+                </div>
+                <div className="bg-white dark:bg-slate-900 p-2 rounded-xl border border-emerald-200">
+                  <div className="text-blue-600 text-[10px]">CẬP NHẬT</div>
+                  <div className="font-black text-blue-600 text-base">+{importResult.updatedCount}</div>
+                </div>
+              </div>
+
+              {importResult.errors && importResult.errors.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-emerald-200 text-rose-700 dark:text-rose-400 space-y-1">
+                  <div className="font-bold flex items-center gap-1">
+                    <AlertTriangle size={14} />
+                    <span>Danh sách dòng bị bỏ qua ({importResult.errors.length} dòng):</span>
+                  </div>
+                  <div className="max-h-24 overflow-y-auto space-y-0.5 font-mono text-[11px]">
+                    {importResult.errors.map((err, i) => (
+                      <div key={i}>
+                        Dòng {err.row} ({err.name || 'Không tên'}): {err.error}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </Modal>
     </div>
