@@ -84,19 +84,19 @@ router.post('/public/employee/device-reset-request', async (req, res, next) => {
 });
 
 function normalizeShiftName(rawShift: string | null | undefined): string {
-  if (!rawShift) return 'SÁNG (06:00 - 14:00)';
+  if (!rawShift) return 'SÁNG (07:00 - 12:00)';
   const s = rawShift.toUpperCase().trim();
   if (s === 'SANG' || s === 'CA_SANG' || s.includes('SÁNG') || s.includes('SANG')) {
-    return 'SÁNG (06:00 - 14:00)';
+    return 'SÁNG (07:00 - 12:00)';
   }
   if (s === 'CHIEU' || s === 'CA_CHIEU' || s.includes('CHIỀU') || s.includes('CHIEU')) {
-    return 'CHIỀU (14:00 - 22:00)';
+    return 'CHIỀU (12:00 - 18:00)';
   }
   if (s === 'HANCHINH' || s === 'HÀNH CHÍNH' || s === 'CA_HANCHINH' || s.includes('HÀNH CHÍNH')) {
     return 'HÀNH CHÍNH (08:00 - 17:00)';
   }
   if (s === 'TOI' || s === 'CA_TOI' || s.includes('TỐI') || s.includes('TOI')) {
-    return 'TỐI (18:00 - 22:00)';
+    return 'TỐI (18:00 - 23:00)';
   }
   if (s === 'OFF' || s.includes('NGHỈ') || s.includes('OFF')) {
     return 'NGHỈ (OFF)';

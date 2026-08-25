@@ -311,6 +311,12 @@ router.post('/candidates/:id(*)/attendance-checkin', async (req, res, next) => {
       startMin = 0;
       endHour = 23;
       endMin = 0;
+    } else if (normShift.includes('hanchinh') || normShift.includes('hanh chinh') || normShift.includes('8h')) {
+      shiftFolder = 'CA_HANCHINH';
+      startHour = 8;
+      startMin = 0;
+      endHour = 17;
+      endMin = 0;
     }
 
     const shiftStartTime = new Date(year, month, day, startHour, startMin, 0);

@@ -254,10 +254,10 @@ export default function EmployeePortal() {
 
   const todayStr = new Date().toISOString().split('T')[0];
   const [myDate, setMyDate] = useState(todayStr);
-  const [myShift, setMyShift] = useState('SÁNG (06:00 - 14:00)');
+  const [myShift, setMyShift] = useState('SÁNG (07:00 - 12:00)');
   const [myShiftSource, setMyShiftSource] = useState('');
   const [targetDate, setTargetDate] = useState(todayStr);
-  const [targetShift, setTargetShift] = useState('CHIỀU (14:00 - 22:00)');
+  const [targetShift, setTargetShift] = useState('CHIỀU (12:00 - 18:00)');
   const [targetShiftSource, setTargetShiftSource] = useState('');
   const [swapReason, setSwapReason] = useState('');
 
@@ -806,10 +806,10 @@ export default function EmployeePortal() {
                           onChange={(e) => setMyShift(e.target.value)}
                           className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500/50 transition-all font-bold"
                         >
-                          <option value="SÁNG (06:00 - 14:00)">🌅 SÁNG (06:00 - 14:00)</option>
-                          <option value="CHIỀU (14:00 - 22:00)">☀️ CHIỀU (14:00 - 22:00)</option>
+                          <option value="SÁNG (07:00 - 12:00)">🌅 SÁNG (07:00 - 12:00)</option>
+                          <option value="CHIỀU (12:00 - 18:00)">☀️ CHIỀU (12:00 - 18:00)</option>
                           <option value="HÀNH CHÍNH (08:00 - 17:00)">🏢 HÀNH CHÍNH (08:00 - 17:00)</option>
-                          <option value="TỐI (18:00 - 22:00)">🌙 TỐI (18:00 - 22:00)</option>
+                          <option value="TỐI (18:00 - 23:00)">🌙 TỐI (18:00 - 23:00)</option>
                           <option value="NGHỈ (OFF)">☕ NGHỈ (OFF)</option>
                         </select>
                       </div>
@@ -870,10 +870,10 @@ export default function EmployeePortal() {
                           onChange={(e) => setTargetShift(e.target.value)}
                           className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50 transition-all font-bold"
                         >
-                          <option value="CHIỀU (14:00 - 22:00)">☀️ CHIỀU (14:00 - 22:00)</option>
-                          <option value="SÁNG (06:00 - 14:00)">🌅 SÁNG (06:00 - 14:00)</option>
+                          <option value="CHIỀU (12:00 - 18:00)">☀️ CHIỀU (12:00 - 18:00)</option>
+                          <option value="SÁNG (07:00 - 12:00)">🌅 SÁNG (07:00 - 12:00)</option>
                           <option value="HÀNH CHÍNH (08:00 - 17:00)">🏢 HÀNH CHÍNH (08:00 - 17:00)</option>
-                          <option value="TỐI (18:00 - 22:00)">🌙 TỐI (18:00 - 22:00)</option>
+                          <option value="TỐI (18:00 - 23:00)">🌙 TỐI (18:00 - 23:00)</option>
                           <option value="NGHỈ (OFF)">☕ NGHỈ (OFF)</option>
                         </select>
                       </div>

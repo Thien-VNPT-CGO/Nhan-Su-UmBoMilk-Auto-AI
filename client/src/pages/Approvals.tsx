@@ -877,6 +877,7 @@ export default function Approvals() {
                     <option value="CA_SANG">Ca Sáng (07:00 - 12:00)</option>
                     <option value="CA_CHIEU">Ca Chiều (12:00 - 18:00)</option>
                     <option value="CA_TOI">Ca Tối (18:00 - 23:00)</option>
+                    <option value="CA_HANCHINH">Ca Hành Chính (08:00 - 17:00)</option>
                     <option value="OFF">Nghỉ OFF</option>
                   </select>
                 </div>
@@ -928,6 +929,7 @@ export default function Approvals() {
                     <option value="CA_SANG">Ca Sáng (07:00 - 12:00)</option>
                     <option value="CA_CHIEU">Ca Chiều (12:00 - 18:00)</option>
                     <option value="CA_TOI">Ca Tối (18:00 - 23:00)</option>
+                    <option value="CA_HANCHINH">Ca Hành Chính (08:00 - 17:00)</option>
                     <option value="OFF">Nghỉ OFF</option>
                   </select>
                 </div>

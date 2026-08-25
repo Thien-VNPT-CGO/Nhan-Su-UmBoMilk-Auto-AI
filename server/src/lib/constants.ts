@@ -49,9 +49,9 @@ export const SHIFT_KEYS = {
 } as const;
 
 export const SHIFT_TIMES = {
-  SANG: { start: '06:45', end: '07:05' },
-  CHIEU: { start: '11:45', end: '12:05' },
-  TOI: { start: '17:45', end: '18:05' },
+  SANG: { start: '07:00', end: '12:00' },
+  CHIEU: { start: '12:00', end: '18:00' },
+  TOI: { start: '18:00', end: '23:00' },
 } as const;
 
 export const TRAINING_DAYS_REQUIRED = 7;
@@ -106,9 +106,9 @@ export const DEFAULT_SETTINGS = {
   },
   attendance: {
     shifts: {
-      SANG: { start: '06:45', end: '07:05', windowMinutesBefore: 30, windowMinutesAfter: 10 },
-      CHIEU: { start: '11:45', end: '12:05', windowMinutesBefore: 30, windowMinutesAfter: 10 },
-      TOI: { start: '17:45', end: '18:05', windowMinutesBefore: 30, windowMinutesAfter: 10 },
+      SANG: { start: '07:00', end: '12:00', windowMinutesBefore: 30, windowMinutesAfter: 60 },
+      CHIEU: { start: '12:00', end: '18:00', windowMinutesBefore: 30, windowMinutesAfter: 60 },
+      TOI: { start: '18:00', end: '23:00', windowMinutesBefore: 30, windowMinutesAfter: 60 },
     },
     trainingDaysRequired: 7,
     trainingDeadlineDays: 14,
