@@ -3,6 +3,7 @@ import { ApiError } from '../lib/errors';
 import { nextId } from '../lib/id';
 import { audit } from './AuditService';
 import { emit } from '../sockets';
+import { getGoogleSheetService } from './GoogleSheetService';
 
 export class DeviceResetService {
   /** Tạo Phiếu Yêu cầu Reset Thiết Bị (TH1: NV tự gửi trên máy cũ | TH2: QL tạo hộ khi mất máy) */
@@ -118,6 +119,14 @@ export class DeviceResetService {
         deviceId: null,
       },
     });
+
+    const activeKeys = await prisma.employeeKey.findMany({
+      where: { candidateId: ticket.candidateId },
+    });
+
+    for (const k of activeKeys) {
+      getGoogleSheetService().syncKeyKichHoat(k).catch(() => null);
+    }
 
     await audit({
       user,

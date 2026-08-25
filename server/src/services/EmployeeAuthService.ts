@@ -3,6 +3,7 @@ import { ApiError } from '../lib/errors';
 import { nextId } from '../lib/id';
 import { audit } from './AuditService';
 import { emit } from '../sockets';
+import { getGoogleSheetService } from './GoogleSheetService';
 
 export class EmployeeAuthService {
   /** Admin tạo Key kích hoạt cho Nhân viên (Training hoặc Chính thức) */
@@ -42,6 +43,18 @@ export class EmployeeAuthService {
     });
 
     emit('employee_key:generated', { candidateId: input.candidateId, type: input.type });
+
+    getGoogleSheetService().syncKeyKichHoat({
+      key: keyRecord.key,
+      candidateId: keyRecord.candidateId,
+      type: keyRecord.type,
+      status: keyRecord.status,
+      deviceId: keyRecord.deviceId,
+      createdAt: keyRecord.createdAt,
+      activatedAt: keyRecord.activatedAt,
+      createdBy: input.user,
+    }).catch((err) => console.error('[Sheets] error syncKeyKichHoat:', err));
+
     return keyRecord;
   }
 
@@ -96,6 +109,16 @@ export class EmployeeAuthService {
         },
       });
       keyRecord.deviceId = input.deviceId;
+
+      getGoogleSheetService().syncKeyKichHoat({
+        key: keyRecord.key,
+        candidateId: keyRecord.candidateId,
+        type: keyRecord.type,
+        status: keyRecord.status,
+        deviceId: keyRecord.deviceId,
+        createdAt: keyRecord.createdAt,
+        activatedAt: new Date(),
+      }).catch((err) => console.error('[Sheets] error syncKeyKichHoat activateAndLogin:', err));
     } else if (keyRecord.deviceId !== input.deviceId) {
       // Thiết bị truy cập khác với thiết bị gán cứng
       throw ApiError.forbidden(

@@ -35,6 +35,11 @@ export const NHAN_VIEN_CHINH_THUC_COLS = [
   'LICH_SU_DIEM_DANH_MOI_NHAT', 'TRANG_THAI', 'UPDATED_AT', 'UPDATED_BY',
 ];
 
+export const KEY_KICH_HOAT_COLS = [
+  'MA_KEY', 'CANDIDATE_ID', 'TEN_NV', 'SDT_ZALO', 'LOAI_KEY',
+  'TRANG_THAI', 'DEVICE_ID', 'NGAY_TAO', 'NGAY_KICH_HOAT', 'NGUOI_TAO',
+];
+
 export interface SheetConfig {
   spreadsheetId: string;
   email: string;
@@ -44,6 +49,7 @@ export interface SheetConfig {
   diemUv: string;
   hoSoNv: string;
   nhanVienChinhThuc: string;
+  keyKichHoat: string;
 }
 
 export interface ProvisionResult {
@@ -56,6 +62,7 @@ const SHEET_DEFS = [
   { name: 'diemUv', cols: DIEM_UV_COLS },
   { name: 'hoSoNv', cols: HO_SO_NV_COLS },
   { name: 'nhanVienChinhThuc', cols: NHAN_VIEN_CHINH_THUC_COLS },
+  { name: 'keyKichHoat', cols: KEY_KICH_HOAT_COLS },
 ] as const;
 
 export class GoogleSheetService {
@@ -79,6 +86,7 @@ export class GoogleSheetService {
       diemUv: env.sheetNameDiemUv,
       hoSoNv: env.sheetNameHoSoNv,
       nhanVienChinhThuc: 'NHAN_VIEN_CHINH_THUC',
+      keyKichHoat: 'KEY_KICH_HOAT',
     };
   }
 
@@ -124,6 +132,7 @@ export class GoogleSheetService {
         diemUv: String(sheets.diemUv || cfg.diemUv),
         hoSoNv: String(sheets.hoSoNv || cfg.hoSoNv),
         nhanVienChinhThuc: String(sheets.nhanVienChinhThuc || cfg.nhanVienChinhThuc || 'NHAN_VIEN_CHINH_THUC'),
+        keyKichHoat: String(sheets.keyKichHoat || cfg.keyKichHoat || 'KEY_KICH_HOAT'),
       };
     } catch {
       // giữ cấu hình .env
@@ -135,12 +144,13 @@ export class GoogleSheetService {
     return this.ready && !!this.cfg?.spreadsheetId;
   }
 
-  get sheetNames(): { locHoSo: string; diemUv: string; hoSoNv: string; nhanVienChinhThuc: string } {
+  get sheetNames(): { locHoSo: string; diemUv: string; hoSoNv: string; nhanVienChinhThuc: string; keyKichHoat: string } {
     return {
       locHoSo: this.cfg?.locHoSo ?? env.sheetNameLocHoSo,
       diemUv: this.cfg?.diemUv ?? env.sheetNameDiemUv,
       hoSoNv: this.cfg?.hoSoNv ?? env.sheetNameHoSoNv,
       nhanVienChinhThuc: this.cfg?.nhanVienChinhThuc ?? 'NHAN_VIEN_CHINH_THUC',
+      keyKichHoat: this.cfg?.keyKichHoat ?? 'KEY_KICH_HOAT',
     };
   }
 
@@ -829,6 +839,85 @@ export class GoogleSheetService {
     // attendance synced as part of training record & official employee record
     await this.syncTraining(c);
     await this.syncOfficialEmployee(c);
+  }
+
+  async syncKeyKichHoat(keyRecord: {
+    key: string;
+    candidateId: string;
+    type: string;
+    status: string;
+    deviceId?: string | null;
+    createdAt: Date;
+    activatedAt?: Date | null;
+    createdBy?: string | null;
+  }): Promise<void> {
+    if (!this.configured) return;
+    await this.ensureHeaders(this.sheetNames.keyKichHoat, KEY_KICH_HOAT_COLS);
+
+    const cand = await prisma.candidate.findUnique({
+      where: { id: keyRecord.candidateId },
+      select: { tenUv: true, sdtZalo: true },
+    });
+
+    const candidateName = cand?.tenUv || '';
+    const candidatePhone = cand?.sdtZalo || '';
+
+    const row: (string | number)[] = KEY_KICH_HOAT_COLS.map((col) => {
+      switch (col) {
+        case 'MA_KEY': return keyRecord.key;
+        case 'CANDIDATE_ID': return keyRecord.candidateId;
+        case 'TEN_NV': return candidateName;
+        case 'SDT_ZALO': return candidatePhone;
+        case 'LOAI_KEY': return keyRecord.type === 'TRAINING' ? 'TRAINING (Thử việc 7 ngày)' : 'OFFICIAL (Chính thức)';
+        case 'TRANG_THAI': return keyRecord.status;
+        case 'DEVICE_ID': return keyRecord.deviceId || 'Chưa gán máy';
+        case 'NGAY_TAO': return formatDateTime(keyRecord.createdAt);
+        case 'NGAY_KICH_HOAT': return keyRecord.activatedAt ? formatDateTime(keyRecord.activatedAt) : 'Chưa kích hoạt';
+        case 'NGUOI_TAO': return keyRecord.createdBy || 'ADMIN';
+        default: return '';
+      }
+    });
+
+    await this.upsertKey(this.sheetNames.keyKichHoat, row, keyRecord.key);
+  }
+
+  async findByKey(sheetName: string, keyValue: string, colName: string): Promise<{ rowIndex: number; row: string[] } | null> {
+    const colMap = await this.ensureColMap(sheetName);
+    const keyCol = colMap[colName];
+    if (keyCol === undefined) throw new Error(`Sheet ${sheetName} thiếu cột ${colName}`);
+    const res = await this.sheets!.spreadsheets.values.get({
+      spreadsheetId: this.id,
+      range: `${sheetName}!A2:Z`,
+    });
+    const rows = res.data.values ?? [];
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      if ((row[keyCol] ?? '').trim() === keyValue) {
+        return { rowIndex: i + 2, row };
+      }
+    }
+    return null;
+  }
+
+  private async upsertKey(sheetName: string, row: (string | number)[], keyValue: string): Promise<void> {
+    const queueKey = `${sheetName}\u0000${keyValue}`;
+    const prev = this.upsertQueues.get(queueKey) ?? Promise.resolve();
+    const run = prev
+      .catch(() => undefined)
+      .then(async () => {
+        const found = await this.findByKey(sheetName, keyValue, 'MA_KEY');
+        if (found) {
+          await this.updateRow(sheetName, found.rowIndex, row);
+        } else {
+          await this.appendRow(sheetName, row);
+        }
+      });
+    this.upsertQueues.set(queueKey, run);
+    try {
+      await run;
+    } finally {
+      if (this.upsertQueues.get(queueKey) === run) this.upsertQueues.delete(queueKey);
+    }
   }
 
   /** Hàng đợi tuần tự theo (sheet, candidateId): 2 luồng cùng sync 1 ứng viên sẽ không bao giờ append 2 dòng. */
