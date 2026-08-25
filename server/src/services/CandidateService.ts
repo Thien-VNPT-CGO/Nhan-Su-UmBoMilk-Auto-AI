@@ -547,6 +547,17 @@ export class CandidateService {
       await this.checkInterviewConflict(id, patch.phongVanAt);
     }
 
+    const targetDecision = patch.hrDecision ?? candidate.hrDecision;
+    if (targetDecision === 'PASS_PV') {
+      const pvTime = patch.phongVanAt ?? candidate.phongVanAt;
+      if (pvTime && new Date(pvTime) > new Date()) {
+        throw ApiError.badRequest(
+          'INTERVIEW_NOT_STARTED',
+          `Lịch phỏng vấn chưa tới giờ (${formatDateTime(pvTime)}). Không thể chốt Hoàn thành PV trước thời gian phỏng vấn.`
+        );
+      }
+    }
+
     const data: Prisma.CandidateUpdateInput = {
       dataVersion: candidate.dataVersion + 1,
       updatedBy: user,

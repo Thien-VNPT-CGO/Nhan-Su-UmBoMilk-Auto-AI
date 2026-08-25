@@ -37,7 +37,7 @@ export class AttendanceService {
     let valid = true;
 
     // 1. Candidate đang Training
-    if (candidate.hrDecision !== 'PASS') {
+    if (candidate.hrDecision !== 'PASS' && candidate.hrDecision !== 'PASS_HS' && candidate.hrDecision !== 'PASS_PV') {
       valid = false;
       reasons.push('KHONG_TRONG_TRAINING');
     }

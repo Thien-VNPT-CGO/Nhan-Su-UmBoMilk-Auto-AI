@@ -598,15 +598,30 @@ export default function Training() {
                                     </button>
                                   );
                                 })()}
-                                <button
-                                  type="button"
-                                  onClick={() => handleUpdateInterviewDecision(r.id, 'PASS_PV')}
-                                  className="btn-success !py-1 !px-2 !text-[10px] font-extrabold shadow-2xs flex items-center gap-0.5 hover:scale-102 cursor-pointer"
-                                  title="Bấm HOÀN THÀNH PHỎNG VẤN cho ứng viên"
-                                >
-                                  <CheckCircle2 size={12} />
-                                  <span>✅ HOÀN THÀNH PV</span>
-                                </button>
+                                {(() => {
+                                  const isFuturePv = Boolean(r.phongVanAt && new Date(r.phongVanAt) > new Date());
+                                  return (
+                                    <button
+                                      type="button"
+                                      disabled={isFuturePv}
+                                      onClick={() => handleUpdateInterviewDecision(r.id, 'PASS_PV')}
+                                      className={cn(
+                                        'btn-success !py-1 !px-2 !text-[10px] font-extrabold shadow-2xs flex items-center gap-0.5 transition-all',
+                                        isFuturePv
+                                          ? 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed opacity-60'
+                                          : 'hover:scale-102 cursor-pointer'
+                                      )}
+                                      title={
+                                        isFuturePv
+                                          ? `⏳ Chưa tới giờ phỏng vấn (${r.phongVanAt ? formatDateTime(r.phongVanAt) : ''}). Nút Hoàn thành PV sẽ tự động mở khi tới giờ.`
+                                          : 'Bấm HOÀN THÀNH PHỎNG VẤN cho ứng viên'
+                                      }
+                                    >
+                                      <CheckCircle2 size={12} />
+                                      <span>{isFuturePv ? '⏳ Chưa tới giờ PV' : '✅ HOÀN THÀNH PV'}</span>
+                                    </button>
+                                  );
+                                })()}
                                 <button
                                   type="button"
                                   onClick={() => handleUpdateInterviewDecision(r.id, 'FAIL')}
