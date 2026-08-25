@@ -91,6 +91,10 @@ const handleConfirmPv = async (req: any, res: any, next: any) => {
       throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy ứng viên.');
     }
 
+    if (candidate.trangThaiTraining === 'XAC_NHAN_PV' || candidate.trangThaiTraining === 'TU_CHOI_PV') {
+      throw ApiError.badRequest('ALREADY_CONFIRMED', 'Bạn đã gửi phản hồi phỏng vấn trước đó rồi. Hệ thống đã ghi nhận 1 lần duy nhất.');
+    }
+
     const { action } = parsed.data;
     const targetStatus = action === 'ACCEPT' ? 'XAC_NHAN_PV' : 'TU_CHOI_PV';
 
@@ -116,6 +120,9 @@ const handleConfirmPv = async (req: any, res: any, next: any) => {
         newStatus: targetStatus,
       },
     });
+
+    emit('candidate:updated', { candidateId: candidate.id, action });
+    emit('training:updated', { candidateId: candidate.id });
 
     res.json({
       success: true,

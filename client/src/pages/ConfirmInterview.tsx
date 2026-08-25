@@ -35,9 +35,9 @@ export default function ConfirmInterview() {
       .then((data) => {
         if (data.success && data.data) {
           setCandidate(data.data);
-          if (['SAP_BAT_DAU', 'BAT_DAU', 'HOAN_THANH', 'NHAN_VIEN_CHINH_THUC'].includes(data.data.trangThaiTraining)) {
+          if (['XAC_NHAN_PV', 'SAP_BAT_DAU', 'BAT_DAU', 'HOAN_THANH', 'NHAN_VIEN_CHINH_THUC'].includes(data.data.trangThaiTraining)) {
             setConfirmedStatus('ACCEPT');
-          } else if (data.data.trangThaiTraining === 'LOAI') {
+          } else if (['TU_CHOI_PV', 'LOAI'].includes(data.data.trangThaiTraining)) {
             setConfirmedStatus('REJECT');
           }
         } else {
