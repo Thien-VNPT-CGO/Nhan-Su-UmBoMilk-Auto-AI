@@ -42,9 +42,9 @@ interface CandidateAttendanceInfo {
   shiftStartTimeStr?: string;
 }
 
-export default function PublicAttendance() {
+export default function PublicAttendance({ propCandidateId }: { propCandidateId?: string }) {
   const params = useParams();
-  const id = (params['*'] || params.id || '').replace(/^\/+/, '');
+  const id = propCandidateId || (params['*'] || params.id || '').replace(/^\/+/, '');
   const [candidate, setCandidate] = useState<CandidateAttendanceInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

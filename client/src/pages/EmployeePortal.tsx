@@ -19,6 +19,7 @@ import {
 import { api, ApiError } from '../api/client';
 import { Spinner } from '../components/ui';
 import { getSocket } from '../api/socket';
+import PublicAttendance from './PublicAttendance';
 
 interface EmployeeSession {
   candidate: {
@@ -362,20 +363,7 @@ export default function EmployeePortal() {
         {/* TAB 1: ĐIỂM DANH CHECK-IN / CHECK-OUT */}
         {activeTab === 'ATTENDANCE' && (
           <div className="space-y-4">
-            <div className="bg-slate-900/80 p-4 rounded-3xl border border-slate-800 text-center space-y-2">
-              <h3 className="text-sm font-black text-pink-400">TRANG ĐIỂM DANH CHECK-IN & CHECK-OUT</h3>
-              <p className="text-xs text-slate-300">
-                Chi nhánh: <strong className="text-white">{session.candidate.chiNhanh || 'Chưa chốt'}</strong> | Ca làm: <strong className="text-amber-400">{session.candidate.caLam || 'SÁNG'}</strong>
-              </p>
-              <a
-                href={`/candidates/${encodeURIComponent(session.candidate.id)}/attendance`}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-2 bg-gradient-to-r from-pink-600 to-rose-600 text-white px-5 py-2.5 rounded-full text-xs font-black shadow-lg shadow-pink-600/30 hover:opacity-90 transition-opacity"
-              >
-                <span>Mở Giao Diện Chụp Ảnh Điểm Danh</span>
-              </a>
-            </div>
+            <PublicAttendance propCandidateId={session.candidate.id} />
           </div>
         )}
 

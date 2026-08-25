@@ -214,21 +214,19 @@ export default function Shifts() {
       return;
     }
     const origin = window.location.origin;
-    const webAppPortalLink = `${origin}/portal`;
-    const attendanceLink = `${origin}/diemdanh/${encodeURIComponent(r.candidateId)}`;
+    const unifiedPortalLink = `${origin}/portal?id=${encodeURIComponent(r.candidateId)}`;
     const msg = [
-      `🐮 [UMBO MILK] – THÔNG TIN TÀI KHOẢN, LINK WEB APP & ĐIỂM DANH 📱`,
+      `🐮 [UMBO MILK] – LINK WEB APP TỔNG HỢP NHÂN VIÊN 📱`,
       ``,
       `Chào ${r.tenUv} ❤️`,
-      `Dưới đây là thông tin tài khoản và đường link điểm danh/làm việc dành riêng cho bạn:`,
+      `Dưới đây là Link Web App tổng hợp duy nhất của bạn tại Umbo Milk (${r.chiNhanh || 'Chi nhánh'}):`,
       ``,
-      `📱 Link Web App Nhân Viên (Portal 4 Tab & Lương AI): ${webAppPortalLink}`,
-      `📸 Link Điểm Danh GPS Nhanh: ${attendanceLink}`,
+      `🔗 Link Web App Tổng Hợp (Điểm danh GPS, Đổi ca, Reset máy, Lương AI): ${unifiedPortalLink}`,
       ``,
       `🆔 Mã Nhân Viên (User): ${r.candidateId}`,
-      `📌 Ca làm đăng ký: ${r.caLam || 'Theo ca phân công'} (${r.chiNhanh || 'Chi nhánh'})`,
+      `📌 Ca làm đăng ký: ${r.caLam || 'Theo ca phân công'}`,
       ``,
-      `Vui lòng truy cập Web App từ điện thoại cá nhân để kích hoạt, điểm danh Check-in/out và theo dõi lương hàng ngày nhé! ✨`,
+      `Vui lòng truy cập đường link trên từ điện thoại cá nhân để điểm danh vào/ra ca và thực hiện toàn bộ thao tác trong 1 giao diện duy nhất nhé! ✨`,
     ].join('\n');
 
     let copied = false;

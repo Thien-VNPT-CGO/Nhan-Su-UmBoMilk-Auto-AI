@@ -84,20 +84,21 @@ export class ZaloService {
     const webAppUrl = domainUrl || process.env.PUBLIC_WEBAPP_URL || 'http://localhost:3100/portal';
 
     const content = [
-      '🐮 [UMBO MILK] – TÀI KHOẢN & LINK WEB APP NHÂN VIÊN 📱',
+      '🐮 [UMBO MILK] – LINK WEB APP TỔNG HỢP NHÂN VIÊN 📱',
       '',
       `Chào ${c.tenUv.trim()} ❤️`,
-      'Dưới đây là thông tin kích hoạt Web App làm việc dành riêng cho bạn:',
+      'Dưới đây là link Web App tổng hợp duy nhất chứa trọn vẹn các chức năng (Điểm danh GPS, Đổi ca, Reset máy, Lương AI):',
       '',
-      `🔗 Link Web App: ${webAppUrl}`,
+      `🔗 Link Web App Tổng Hợp: ${webAppUrl}`,
       `🆔 Mã Nhân Viên (User): ${c.id}`,
       `🔑 Key Kích Hoạt: ${keyStr}`,
       '',
-      '📌 HƯỚNG DẪN KÍCH HOẠT VÀ ĐIỂM DANH:',
+      '📌 HƯỚNG DẪN DÙNG TRÊN ĐIỆN THOẠI:',
       '1. Bấm vào Link Web App ở trên từ điện thoại di động cá nhân.',
-      '2. Nhập đúng Mã Nhân Viên và Key Kích Hoạt.',
+      '2. Nhập Mã Nhân Viên và Key Kích Hoạt.',
       '3. Bấm "KÍCH HOẠT THIẾT BỊ & ĐĂNG NHẬP".',
-      '⚠️ Lưu ý quan trọng: Hệ thống AI sẽ gán cứng với điện thoại này để bảo mật điểm danh, đổi ca và tự động tính lương.',
+      '4. Sử dụng trọn vẹn các tính năng Điểm danh, Đổi ca, Reset máy & Lương AI tại 1 giao diện duy nhất!',
+      '⚠️ Lưu ý quan trọng: Hệ thống AI sẽ gán cứng với điện thoại này để bảo mật điểm danh & tính lương.',
       '',
       'UMBO MILK chúc bạn có trải nghiệm làm việc tuyệt vời! ✨',
     ].join('\n');
