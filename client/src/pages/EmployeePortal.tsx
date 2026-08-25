@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   Shield,
   Smartphone,
@@ -15,12 +15,36 @@ import {
   Lock,
   Send,
   AlertTriangle,
+  History,
 } from 'lucide-react';
 import { api, ApiError } from '../api/client';
-import { Spinner } from '../components/ui';
+import { Spinner, Badge } from '../components/ui';
 import { getSocket } from '../api/socket';
 import { cn } from '../utils/format';
 import PublicAttendance from './PublicAttendance';
+
+interface ColleagueItem {
+  id: string;
+  tenUv: string;
+  sdtZalo: string;
+  chiNhanh?: string;
+  caLam?: string;
+}
+
+interface SwapHistoryItem {
+  id: string;
+  candidateIdA: string;
+  candidateNameA: string;
+  caLamA: string;
+  dateA: string;
+  candidateIdB: string;
+  candidateNameB: string;
+  caLamB: string;
+  dateB: string;
+  reason: string;
+  status: 'PENDING_MANAGER' | 'APPROVED' | 'REJECTED';
+  createdAt: string;
+}
 
 interface EmployeeSession {
   candidate: {
@@ -223,6 +247,108 @@ export default function EmployeePortal() {
         .catch(() => null);
     }
   }, [activeTab, session?.candidate.id]);
+
+  // States cho Đổi ca làm
+  const [colleagues, setColleagues] = useState<ColleagueItem[]>([]);
+  const [selectedColleagueId, setSelectedColleagueId] = useState('');
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const [myDate, setMyDate] = useState(todayStr);
+  const [myShift, setMyShift] = useState('SÁNG (06:00 - 14:00)');
+  const [targetDate, setTargetDate] = useState(todayStr);
+  const [targetShift, setTargetShift] = useState('CHIỀU (14:00 - 22:00)');
+  const [swapReason, setSwapReason] = useState('');
+
+  const [swapSubmitting, setSwapSubmitting] = useState(false);
+  const [swapSuccessMsg, setSwapSuccessMsg] = useState<string | null>(null);
+  const [swapErrorMsg, setSwapErrorMsg] = useState<string | null>(null);
+
+  const [swapHistory, setSwapHistory] = useState<SwapHistoryItem[]>([]);
+  const [loadingSwapHistory, setLoadingSwapHistory] = useState(false);
+
+  // Load danh sách đồng nghiệp
+  const loadColleagues = useCallback(async () => {
+    try {
+      const res = await api.get<ColleagueItem[]>('/public/employee/colleagues');
+      const list = Array.isArray(res) ? res : Array.isArray((res as any)?.data) ? (res as any).data : [];
+      setColleagues(list.filter((c: ColleagueItem) => c.id !== session?.candidate.id));
+    } catch {
+      // ignore
+    }
+  }, [session?.candidate.id]);
+
+  // Load lịch sử đổi ca
+  const loadSwapHistory = useCallback(async () => {
+    if (!session?.candidate.id) return;
+    setLoadingSwapHistory(true);
+    try {
+      const res = await api.get<SwapHistoryItem[]>(`/public/employee/shift-swap-history/${encodeURIComponent(session.candidate.id)}`);
+      const list = Array.isArray(res) ? res : Array.isArray((res as any)?.data) ? (res as any).data : [];
+      setSwapHistory(list);
+    } catch {
+      // ignore
+    } finally {
+      setLoadingSwapHistory(false);
+    }
+  }, [session?.candidate.id]);
+
+  // Tự động nạp dữ liệu khi chuyển sang Tab SWAP
+  useEffect(() => {
+    if (session?.candidate.id && activeTab === 'SWAP') {
+      loadColleagues();
+      loadSwapHistory();
+    }
+  }, [activeTab, session?.candidate.id, loadColleagues, loadSwapHistory]);
+
+  // Lắng nghe Socket.io Realtime khi có cập nhật đơn đổi ca
+  useEffect(() => {
+    if (!session?.candidate.id || activeTab !== 'SWAP') return;
+    const socket = getSocket();
+    const handleUpdate = () => {
+      loadSwapHistory();
+    };
+
+    socket.on('shift_swap:created', handleUpdate);
+    socket.on('shift_swap:approved', handleUpdate);
+    socket.on('shift_swap:rejected', handleUpdate);
+
+    return () => {
+      socket.off('shift_swap:created', handleUpdate);
+      socket.off('shift_swap:approved', handleUpdate);
+      socket.off('shift_swap:rejected', handleUpdate);
+    };
+  }, [activeTab, session?.candidate.id, loadSwapHistory]);
+
+  // Tạo đơn xin đổi ca
+  const handleCreateSwapRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!session?.candidate.id || !selectedColleagueId || !swapReason.trim()) return;
+
+    setSwapSubmitting(true);
+    setSwapSuccessMsg(null);
+    setSwapErrorMsg(null);
+
+    try {
+      await api.post('/public/employee/shift-swap-request', {
+        candidateIdA: session.candidate.id,
+        caLamA: myShift,
+        dateA: myDate,
+        candidateIdB: selectedColleagueId,
+        caLamB: targetShift,
+        dateB: targetDate,
+        reason: swapReason.trim(),
+      });
+
+      setSwapSuccessMsg('🎉 Gửi đơn xin đổi ca thành công! Đơn đã được chuyển trực tiếp tới Quản lý cửa hàng.');
+      setSwapReason('');
+      setSelectedColleagueId('');
+      loadSwapHistory();
+    } catch (err) {
+      setSwapErrorMsg(err instanceof ApiError ? err.message : 'Tạo đơn xin đổi ca thất bại.');
+    } finally {
+      setSwapSubmitting(false);
+    }
+  };
 
   // Xử lý Đăng nhập 1 lần & Kích hoạt Key
   const handleLoginSubmit = (e: React.FormEvent) => {
@@ -560,28 +686,210 @@ export default function EmployeePortal() {
           </div>
         )}
 
-        {/* TAB 3: ĐỔI CA LÀM REALTIME */}
+        {/* TAB 3: HOÁN ĐỔI CA LÀM LINH HOẠT REALTIME */}
         {activeTab === 'SWAP' && (
-          <div className="bg-slate-900/80 p-5 rounded-3xl border border-slate-800 space-y-3">
-            <div className="flex items-center gap-2 text-xs font-bold text-slate-200 pb-2 border-b border-slate-800">
-              <ArrowRightLeft size={16} className="text-pink-400" />
-              <span>HOÁN ĐỔI CA LÀM LINH HOẠT (REALTIME)</span>
-            </div>
-            <p className="text-xs text-slate-300 leading-relaxed">
-              Tạo đơn xin hoán đổi ca làm với đồng nghiệp. Đơn sẽ gửi trực tiếp đến màn hình Phê duyệt của Quản lý cửa hàng theo thời gian thực.
-            </p>
-            <div className="bg-slate-800/60 p-4 rounded-2xl text-center space-y-2">
-              <p className="text-xs text-slate-300">
-                Để tạo đơn đổi ca nhanh, vui lòng mở trang Phê duyệt ca làm việc hoặc liên hệ Quản lý chi nhánh.
+          <div className="space-y-4">
+            {/* Header & Form Đổi ca */}
+            <div className="bg-slate-900/80 p-5 rounded-3xl border border-slate-800 space-y-4">
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-200 pb-2 border-b border-slate-800">
+                <ArrowRightLeft size={16} className="text-pink-400" />
+                <span>HOÁN ĐỔI CA LÀM LINH HOẠT (REALTIME)</span>
+              </div>
+
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Tạo đơn xin hoán đổi ca làm với đồng nghiệp. Đơn sẽ gửi trực tiếp đến màn hình Phê duyệt của Quản lý cửa hàng theo thời gian thực.
               </p>
-              <a
-                href="/approvals"
-                target="_blank"
-                rel="noreferrer"
-                className="inline-block bg-pink-600 hover:bg-pink-500 text-white text-xs font-bold px-4 py-2 rounded-full transition-colors"
-              >
-                Trang Tạo Đơn & Xem Lịch Sử Đổi Ca
-              </a>
+
+              {swapSuccessMsg && (
+                <div className="bg-emerald-950/80 border border-emerald-500/60 p-3 rounded-2xl text-xs text-emerald-200 flex items-start gap-2">
+                  <CheckCircle2 size={16} className="shrink-0 mt-0.5 text-emerald-400" />
+                  <span>{swapSuccessMsg}</span>
+                </div>
+              )}
+              {swapErrorMsg && (
+                <div className="bg-rose-950/80 border border-rose-500/60 p-3 rounded-2xl text-xs text-rose-200 flex items-start gap-2">
+                  <AlertCircle size={16} className="shrink-0 mt-0.5 text-rose-400" />
+                  <span>{swapErrorMsg}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleCreateSwapRequest} className="space-y-3">
+                {/* 1. Chọn Ca & Ngày làm của bạn */}
+                <div className="bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700/80 space-y-2">
+                  <label className="text-[11px] font-bold text-pink-400 uppercase tracking-wider block">
+                    1. CA LÀM & NGÀY CỦA BẠN (CẦN ĐỔI)
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-semibold block mb-1">Ngày làm:</span>
+                      <input
+                        type="date"
+                        value={myDate}
+                        onChange={(e) => setMyDate(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-pink-500"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-semibold block mb-1">Ca làm:</span>
+                      <select
+                        value={myShift}
+                        onChange={(e) => setMyShift(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-pink-500"
+                      >
+                        <option value="SÁNG (06:00 - 14:00)">SÁNG (06:00 - 14:00)</option>
+                        <option value="CHIỀU (14:00 - 22:00)">CHIỀU (14:00 - 22:00)</option>
+                        <option value="HÀNH CHÍNH (08:00 - 17:00)">HÀNH CHÍNH (08:00 - 17:00)</option>
+                        <option value="TỐI (18:00 - 22:00)">TỐI (18:00 - 22:00)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Chọn Đồng nghiệp & Ca làm muốn nhận */}
+                <div className="bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700/80 space-y-2">
+                  <label className="text-[11px] font-bold text-amber-400 uppercase tracking-wider block">
+                    2. ĐỒNG NGHIỆP & CA LÀM MUỐN NHẬN
+                  </label>
+                  
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-semibold block mb-1">Chọn Đồng nghiệp:</span>
+                    <select
+                      value={selectedColleagueId}
+                      onChange={(e) => setSelectedColleagueId(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-amber-500"
+                      required
+                    >
+                      <option value="">-- Bấm để chọn Đồng Nghiệp --</option>
+                      {colleagues.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.tenUv} ({c.sdtZalo}) - {c.chiNhanh || 'Chi nhánh'}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-semibold block mb-1">Ngày làm đồng nghiệp:</span>
+                      <input
+                        type="date"
+                        value={targetDate}
+                        onChange={(e) => setTargetDate(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-amber-500"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-semibold block mb-1">Ca làm đồng nghiệp:</span>
+                      <select
+                        value={targetShift}
+                        onChange={(e) => setTargetShift(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-amber-500"
+                      >
+                        <option value="CHIỀU (14:00 - 22:00)">CHIỀU (14:00 - 22:00)</option>
+                        <option value="SÁNG (06:00 - 14:00)">SÁNG (06:00 - 14:00)</option>
+                        <option value="HÀNH CHÍNH (08:00 - 17:00)">HÀNH CHÍNH (08:00 - 17:00)</option>
+                        <option value="TỐI (18:00 - 22:00)">TỐI (18:00 - 22:00)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Lý do đổi ca */}
+                <div>
+                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                    3. LÝ DO XIN ĐỔI CA
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={swapReason}
+                    onChange={(e) => setSwapReason(e.target.value)}
+                    placeholder="Vui lòng nhập lý do đổi ca (ví dụ: bận việc gia đình, đổi ca trực trùng...)..."
+                    className="w-full bg-slate-800/90 border border-slate-700 focus:border-pink-500 rounded-2xl p-3 text-xs text-white outline-none"
+                    required
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={swapSubmitting || !selectedColleagueId || !swapReason.trim()}
+                  className="w-full py-3 rounded-full text-xs font-black bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 hover:from-pink-500 hover:to-indigo-500 text-white shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {swapSubmitting ? <Spinner size={16} /> : <Send size={15} />}
+                  <span>GỬI ĐƠN XIN ĐỔI CA CHO QUẢN LÝ</span>
+                </button>
+              </form>
+            </div>
+
+            {/* Lịch sử Đổi Ca */}
+            <div className="bg-slate-900/80 p-5 rounded-3xl border border-slate-800 space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <div className="flex items-center gap-2 text-xs font-bold text-slate-200">
+                  <History size={16} className="text-emerald-400" />
+                  <span>LỊCH SỬ ĐƠN ĐỔI CA CỦA BẠN ({swapHistory.length})</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={loadSwapHistory}
+                  className="text-[11px] font-semibold text-slate-400 hover:text-white"
+                >
+                  ↻ Làm mới
+                </button>
+              </div>
+
+              {loadingSwapHistory ? (
+                <div className="py-6 text-center text-xs text-slate-400">
+                  <Spinner size={16} className="mx-auto text-pink-500 mb-1" />
+                  Đang tải lịch sử đổi ca...
+                </div>
+              ) : swapHistory.length === 0 ? (
+                <div className="py-6 text-center text-xs text-slate-500 italic">
+                  Bạn chưa tạo hoặc có đơn xin đổi ca nào.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {swapHistory.map((item) => (
+                    <div key={item.id} className="bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700/80 text-xs space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono font-bold text-[11px] text-slate-400">#{item.id}</span>
+                        <Badge
+                          className={
+                            item.status === 'APPROVED'
+                              ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/50'
+                              : item.status === 'REJECTED'
+                                ? 'bg-rose-950 text-rose-300 border border-rose-500/50'
+                                : 'bg-amber-950 text-amber-300 border border-amber-500/50'
+                          }
+                        >
+                          {item.status === 'APPROVED'
+                            ? '✅ Quản lý Đã Duyệt'
+                            : item.status === 'REJECTED'
+                              ? '❌ Đã Từ Chối'
+                              : '⏳ Chờ QL Cửa Hàng Duyệt'}
+                        </Badge>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 bg-slate-900/60 p-2.5 rounded-xl text-[11px]">
+                        <div>
+                          <div className="text-slate-400 font-semibold">Người gửi (Bạn):</div>
+                          <div className="font-bold text-pink-300">{item.candidateNameA}</div>
+                          <div className="text-slate-300">{item.dateA} ({item.caLamA})</div>
+                        </div>
+                        <div>
+                          <div className="text-slate-400 font-semibold">Đồng nghiệp:</div>
+                          <div className="font-bold text-amber-300">{item.candidateNameB}</div>
+                          <div className="text-slate-300">{item.dateB} ({item.caLamB})</div>
+                        </div>
+                      </div>
+
+                      <div className="text-[11px] text-slate-400 italic">
+                        Lý do: "{item.reason}"
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}

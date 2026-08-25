@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { ApiError } from '../lib/errors';
+import { prisma } from '../lib/prisma';
 import { employeeAuthService } from '../services/EmployeeAuthService';
 import { deviceResetService } from '../services/DeviceResetService';
+import { approvalService } from '../services/ApprovalService';
 import { payrollAIService } from '../services/PayrollAIService';
 import { zaloService } from '../services/ZaloService';
 import { requireAuth, requireRole, AuthedRequest } from '../middleware/auth';
@@ -76,6 +78,69 @@ router.post('/public/employee/device-reset-request', async (req, res, next) => {
       createdBy: parsed.data.candidateId,
     });
     res.json({ success: true, data: ticket });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// 3b. Lấy danh sách đồng nghiệp để chọn đổi ca
+router.get('/public/employee/colleagues', async (req, res, next) => {
+  try {
+    const list = await prisma.candidate.findMany({
+      select: { id: true, tenUv: true, sdtZalo: true, chiNhanh: true, caLam: true },
+      orderBy: { tenUv: 'asc' },
+      take: 300,
+    });
+    res.json({ success: true, data: list });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// 3c. Nhân viên gửi đơn Tạo Yêu Cầu Đổi Ca Làm
+router.post('/public/employee/shift-swap-request', async (req, res, next) => {
+  try {
+    const schema = z.object({
+      candidateIdA: z.string().min(1, 'Thiếu Mã NV người gửi'),
+      caLamA: z.string().min(1, 'Chọn ca làm của bạn'),
+      dateA: z.string().min(1, 'Chọn ngày làm của bạn'),
+      candidateIdB: z.string().min(1, 'Chọn đồng nghiệp muốn đổi ca'),
+      caLamB: z.string().min(1, 'Chọn ca làm của đồng nghiệp'),
+      dateB: z.string().min(1, 'Chọn ngày làm của đồng nghiệp'),
+      reason: z.string().min(1, 'Nhập lý do đổi ca'),
+    });
+    const parsed = schema.parse(req.body);
+    const created = await approvalService.createRequest({
+      candidateIdA: parsed.candidateIdA,
+      caLamA: parsed.caLamA,
+      dateA: parsed.dateA,
+      candidateIdB: parsed.candidateIdB,
+      caLamB: parsed.caLamB,
+      dateB: parsed.dateB,
+      reason: parsed.reason,
+      swapType: 'SWAP_2_WAY',
+    });
+    res.json({ success: true, data: created });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// 3d. Lịch sử đơn đổi ca của nhân viên
+router.get('/public/employee/shift-swap-history/:candidateId', async (req, res, next) => {
+  try {
+    const candidateId = req.params.candidateId;
+    const history = await prisma.shiftSwapRequest.findMany({
+      where: {
+        OR: [
+          { candidateIdA: candidateId },
+          { candidateIdB: candidateId },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+    res.json({ success: true, data: history });
   } catch (e) {
     next(e);
   }
