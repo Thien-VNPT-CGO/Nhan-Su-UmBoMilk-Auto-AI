@@ -143,8 +143,9 @@ export default function Approvals() {
   const loadRequests = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await api.get<{ data: ShiftSwapItem[] }>(`/approvals?status=${statusFilter}&search=${encodeURIComponent(searchTerm)}`);
-      setRequests(r.data || []);
+      const res = await api.get<ShiftSwapItem[] | { data: ShiftSwapItem[] }>(`/approvals?status=${statusFilter}&search=${encodeURIComponent(searchTerm)}`);
+      const list = Array.isArray(res) ? res : Array.isArray((res as any)?.data) ? (res as any).data : [];
+      setRequests(list);
     } catch (e) {
       toast('error', e instanceof ApiError ? e.message : 'Không tải được danh sách đơn phê duyệt.');
     } finally {
@@ -155,8 +156,9 @@ export default function Approvals() {
   const loadResetTickets = useCallback(async () => {
     setLoadingReset(true);
     try {
-      const r = await api.get<{ data: DeviceResetTicketItem[] }>('/approvals/device-reset/tickets');
-      setResetTickets(r.data || []);
+      const res = await api.get<DeviceResetTicketItem[] | { data: DeviceResetTicketItem[] }>('/approvals/device-reset/tickets');
+      const list = Array.isArray(res) ? res : Array.isArray((res as any)?.data) ? (res as any).data : [];
+      setResetTickets(list);
     } catch {
       // ignore
     } finally {
@@ -177,6 +179,8 @@ export default function Approvals() {
         rawList = r.data.rows;
       } else if (Array.isArray(r.rows)) {
         rawList = r.rows;
+      } else if (Array.isArray(r)) {
+        rawList = r as unknown as CandidateOption[];
       }
       setCandidates(rawList);
     } catch {
@@ -201,6 +205,13 @@ export default function Approvals() {
     socket.on('training:updated', handleRealtimeUpdate);
     socket.on('official_employees:updated', handleRealtimeUpdate);
     socket.on('employee_key:generated', handleRealtimeUpdate);
+    socket.on('device_reset:requested', handleRealtimeUpdate);
+    socket.on('device_reset:verified', handleRealtimeUpdate);
+    socket.on('device_reset:approved', handleRealtimeUpdate);
+    socket.on('device_reset:rejected', handleRealtimeUpdate);
+    socket.on('shift_swap:requested', handleRealtimeUpdate);
+    socket.on('shift_swap:approved', handleRealtimeUpdate);
+    socket.on('shift_swap:rejected', handleRealtimeUpdate);
 
     return () => {
       socket.off('candidate:created', handleRealtimeUpdate);
@@ -208,6 +219,13 @@ export default function Approvals() {
       socket.off('training:updated', handleRealtimeUpdate);
       socket.off('official_employees:updated', handleRealtimeUpdate);
       socket.off('employee_key:generated', handleRealtimeUpdate);
+      socket.off('device_reset:requested', handleRealtimeUpdate);
+      socket.off('device_reset:verified', handleRealtimeUpdate);
+      socket.off('device_reset:approved', handleRealtimeUpdate);
+      socket.off('device_reset:rejected', handleRealtimeUpdate);
+      socket.off('shift_swap:requested', handleRealtimeUpdate);
+      socket.off('shift_swap:approved', handleRealtimeUpdate);
+      socket.off('shift_swap:rejected', handleRealtimeUpdate);
     };
   }, [loadRequests, loadResetTickets, loadCandidates]);
 
