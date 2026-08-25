@@ -130,6 +130,15 @@ export default function Login() {
             </button>
           </form>
         )}
+
+        <div className="mt-4 text-center">
+          <a
+            href="/portal"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-pink-600 hover:text-pink-700 bg-pink-50 hover:bg-pink-100 dark:bg-pink-950/40 dark:text-pink-300 dark:hover:bg-pink-900/60 px-4 py-2.5 rounded-xl transition-all shadow-sm border border-pink-200 dark:border-pink-900/40"
+          >
+            <span>📱 Bạn là Nhân viên điểm danh? Bấm vào đây sang Web App Nhân Viên ➔</span>
+          </a>
+        </div>
       </div>
     </div>
   );

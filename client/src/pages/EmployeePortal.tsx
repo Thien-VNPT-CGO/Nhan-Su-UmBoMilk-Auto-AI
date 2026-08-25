@@ -86,7 +86,7 @@ export default function EmployeePortal() {
 
   const [isAutoFilledId, setIsAutoFilledId] = useState(false);
 
-  // Tự động nhận và gán cứng MÃ NHÂN VIÊN từ URL params (?id=UBM_... hoặc ?candidateId=...)
+  // Tự động nhận và gán cứng MÃ NHÂN VIÊN từ URL params (?id=UBM_...) hoặc localStorage
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
     const idFromUrl = searchParams.get('id') || searchParams.get('candidateId') || searchParams.get('madv');
@@ -94,6 +94,13 @@ export default function EmployeePortal() {
       const cleanId = decodeURIComponent(idFromUrl).trim();
       setCandidateIdInput(cleanId);
       setIsAutoFilledId(true);
+      localStorage.setItem('umbomilk_last_candidate_id', cleanId);
+    } else {
+      const savedId = localStorage.getItem('umbomilk_last_candidate_id');
+      if (savedId) {
+        setCandidateIdInput(savedId);
+        setIsAutoFilledId(true);
+      }
     }
   }, []);
 

@@ -1,8 +1,8 @@
 {
-  "name": "UMBO MILK – Tuyển dụng & Đào tạo",
-  "short_name": "UMBO MILK",
-  "description": "Hệ thống tuyển dụng & đào tạo nhân sự UMBO MILK",
-  "start_url": "/",
+  "name": "UMBO MILK – Web App Nhân Viên",
+  "short_name": "UMBO PORTAL",
+  "description": "Hệ thống điểm danh & quản lý lịch làm việc dành cho nhân viên UMBO MILK",
+  "start_url": "/portal",
   "display": "standalone",
   "background_color": "#f8fafc",
   "theme_color": "#db2777",

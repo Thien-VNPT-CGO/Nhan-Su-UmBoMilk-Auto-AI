@@ -21,6 +21,38 @@ import PublicAttendance from './pages/PublicAttendance';
 import EmployeePortal from './pages/EmployeePortal';
 import { Spinner } from './components/ui';
 
+function SmartRootRedirect() {
+  const { user, loading } = useAuth();
+  const empSession = localStorage.getItem('umbomilk_emp_session');
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Spinner className="text-brand-500" size={28} />
+      </div>
+    );
+  }
+
+  // 1. Nếu đã kích hoạt / có phiên làm việc Nhân viên -> mở Web App Nhân viên
+  if (empSession) {
+    return <Navigate to="/portal" replace />;
+  }
+
+  // 2. Nếu đã đăng nhập tài khoản HR/Admin -> chuyển sang Dashboard
+  if (user) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  // 3. Nếu truy cập trên di động -> mặc định mở Web App Nhân viên
+  const isMobile = window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  if (isMobile) {
+    return <Navigate to="/portal" replace />;
+  }
+
+  // 4. Mặc định trên PC -> mở Đăng nhập HR
+  return <Navigate to="/login" replace />;
+}
+
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   if (loading) {
@@ -45,8 +77,8 @@ export default function App() {
         <Route path="/diemdanh/*" element={<PublicAttendance />} />
         <Route path="/public/attendance/*" element={<PublicAttendance />} />
         <Route path="/dang-ky" element={<Navigate to="/" replace />} />
+        <Route path="/" element={<SmartRootRedirect />} />
         <Route
-          path="/"
           element={
             <Protected>
               <AppLayout />
