@@ -9,6 +9,7 @@ import { nextId } from '../lib/id';
 import { TRAINING_STATUS } from '../lib/constants';
 import { formatDateTime } from '../lib/date';
 import { googleDriveUploadService } from '../services/GoogleDriveUploadService';
+import { trainingService } from '../services/TrainingService';
 
 const router = Router();
 
@@ -448,39 +449,78 @@ ${savedLateReason ? `Lý do đi trễ chính đáng: ${savedLateReason}` : ''}
       txtFilePath,
     });
 
-    // Ghi nhận sự kiện AttendanceEvent
-    await prisma.attendanceEvent.create({
-      data: {
-        id: nextId('ATT'),
-        candidateId: candidate.id,
-        date: dateStr,
-        shift: shiftFolder,
-        checkinAt: vnNow,
-        method: 'PUBLIC_WEB',
-        valid: true,
-        reason: errCode,
-        lateReason: savedLateReason,
-        lat: null,
-        lng: null,
-      },
+    // Ghi nhận / Cập nhật sự kiện AttendanceEvent
+    const existingEvent = await prisma.attendanceEvent.findUnique({
+      where: { candidateId_date_shift: { candidateId: candidate.id, date: dateStr, shift: shiftFolder } },
     });
 
-    // 8. Cập nhật số ngày đào tạo (+1 khi Check-in) & trạng thái ĐANG TRAINING
-    let newDaysDone = candidate.soNgayDaTraining;
     if (type === 'CHECK_IN') {
-      newDaysDone = Math.min(7, candidate.soNgayDaTraining + 1);
-    }
+      if (existingEvent) {
+        await prisma.attendanceEvent.update({
+          where: { id: existingEvent.id },
+          data: {
+            checkinAt: vnNow,
+            eventType: 'CHECK_IN',
+            valid: true,
+            reason: errCode,
+            lateReason: savedLateReason,
+          },
+        });
+      } else {
+        await prisma.attendanceEvent.create({
+          data: {
+            id: nextId('ATT'),
+            candidateId: candidate.id,
+            date: dateStr,
+            shift: shiftFolder,
+            checkinAt: vnNow,
+            checkoutAt: null,
+            eventType: 'CHECK_IN',
+            method: 'PUBLIC_WEB',
+            valid: true,
+            reason: errCode,
+            lateReason: savedLateReason,
+          },
+        });
+      }
+      // CHÚ Ý: CHECK-IN CHƯA TÍNH TĂNG NGÀY ĐÀO TẠO! Bắt buộc phải Check-out mới được tính ngày!
+    } else if (type === 'CHECK_OUT') {
+      if (!existingEvent) {
+        throw ApiError.badRequest('NO_CHECK_IN', 'Bạn chưa điểm danh vào ca (Check-in) cho ca này! Vui lòng Check-in trước khi Check-out.');
+      }
 
-    const newVersion = candidate.dataVersion + 1;
-    await prisma.candidate.update({
-      where: { id: candidate.id },
-      data: {
-        soNgayDaTraining: newDaysDone,
-        trangThaiTraining: newDaysDone >= 7 ? TRAINING_STATUS.HOAN_THANH : TRAINING_STATUS.BAT_DAU,
-        dataVersion: newVersion,
-        updatedBy: `PUBLIC_ATTENDANCE_${type}`,
-      },
-    });
+      const updatedReason = `${existingEvent.reason || ''}|CHECK_OUT`.replace(/^\|/, '');
+      await prisma.attendanceEvent.update({
+        where: { id: existingEvent.id },
+        data: {
+          checkoutAt: vnNow,
+          eventType: 'COMPLETED',
+          reason: updatedReason,
+        },
+      });
+
+      // BÂY GIỜ ĐÃ ĐỦ CẢ CHECK-IN VÀ CHECK-OUT -> TÍNH +1 NGÀY ĐÀO TẠO KHI CHECK-OUT THÀNH CÔNG!
+      const allCandidateEvents = await prisma.attendanceEvent.findMany({
+        where: { candidateId: candidate.id, valid: true },
+      });
+      const completedEvents = allCandidateEvents.filter(
+        (a) => a.checkoutAt != null || a.reason?.includes('CHECK_OUT') || a.method === 'MANUAL' || a.method === 'SYSTEM'
+      );
+      const newDaysDone = Math.min(7, new Set(completedEvents.map((a) => a.date)).size);
+
+      const newVersion = candidate.dataVersion + 1;
+      await prisma.candidate.update({
+        where: { id: candidate.id },
+        data: {
+          soNgayDaTraining: newDaysDone,
+          trangThaiTraining: newDaysDone >= 7 ? TRAINING_STATUS.HOAN_THANH : TRAINING_STATUS.BAT_DAU,
+          dataVersion: newVersion,
+          updatedBy: 'PUBLIC_ATTENDANCE_CHECK_OUT',
+        },
+      });
+
+      await trainingService.refreshTrainingStatus(candidate.id);
+    }
 
     await audit({
       user: 'PUBLIC_ATTENDANCE_PAGE',
@@ -509,10 +549,10 @@ ${savedLateReason ? `Lý do đi trễ chính đáng: ${savedLateReason}` : ''}
         fineLabel,
         backupFolder: driveBackupDir,
         message: type === 'CHECK_OUT'
-          ? 'Xác nhận ra ca đúng giờ thành công!'
+          ? '🎉 Xác nhận ra ca thành công! Ca làm việc của bạn đã được tính hoàn thành.'
           : isLate
-            ? `Điểm danh trễ ${lateMinutes} phút. Ghi nhận phạt: ${fineLabel}.`
-            : 'Điểm danh vào ca đúng giờ thành công!',
+            ? `Điểm danh trễ ${lateMinutes} phút. Ghi nhận phạt: ${fineLabel}. Vui lòng nhớ Check-out khi hết ca để được tính ngày làm việc.`
+            : '✅ Điểm danh vào ca thành công! Vui lòng nhớ bấm Check-out khi hết ca để được tính ngày làm việc.',
       },
     });
   } catch (e) {

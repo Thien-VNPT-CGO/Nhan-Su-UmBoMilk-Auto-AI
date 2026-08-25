@@ -143,6 +143,8 @@ model AttendanceEvent {
   date        String // yyyy-MM-dd
   shift       String // SANG | CHIEU | TOI
   checkinAt   DateTime
+  checkoutAt  DateTime?
+  eventType   String    @default("CHECK_IN") // CHECK_IN | COMPLETED
   method      String // ZALO | MANUAL | SYSTEM
   valid       Boolean
   reason      String?

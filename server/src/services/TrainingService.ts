@@ -13,7 +13,10 @@ export class TrainingService {
     });
     if (!c) return;
 
-    const days = new Set(c.attendanceEvents.map((a) => a.date));
+    const completedEvents = c.attendanceEvents.filter(
+      (a) => a.checkoutAt != null || a.reason?.includes('CHECK_OUT') || a.method === 'MANUAL' || a.method === 'SYSTEM'
+    );
+    const days = new Set(completedEvents.map((a) => a.date));
     const soNgay = days.size;
     const today = dateKey();
 
@@ -103,7 +106,7 @@ export class TrainingService {
     const rows = await prisma.candidate.findMany({
       where: { trangThaiTraining: { not: TRAINING_STATUS.NHAN_VIEN_CHINH_THUC } },
       include: {
-        attendanceEvents: { where: { valid: true }, select: { date: true } },
+        attendanceEvents: { where: { valid: true }, select: { date: true, checkoutAt: true, reason: true, method: true } },
       },
       orderBy: [{ ngayBatDauTraining: 'asc' }, { thoiGian: 'desc' }],
     });
@@ -122,7 +125,11 @@ export class TrainingService {
         kinhNghiem: c.kinhNghiem,
         ngayBatDauTraining: c.ngayBatDauTraining,
         trangThaiTraining: c.trangThaiTraining,
-        soNgayDaTraining: new Set(c.attendanceEvents.map((a) => a.date)).size,
+        soNgayDaTraining: new Set(
+          c.attendanceEvents
+            .filter((a) => a.checkoutAt != null || a.reason?.includes('CHECK_OUT') || a.method === 'MANUAL' || a.method === 'SYSTEM')
+            .map((a) => a.date)
+        ).size,
         phongVanAt: c.phongVanAt,
         ggMeetLink: c.ggMeetLink,
         interviewStatus: effectiveInterviewStatus,
@@ -138,30 +145,38 @@ export class TrainingService {
     const c = await prisma.candidate.findUnique({ where: { id: candidateId } });
     if (!c) throw new Error('Không tìm thấy ứng viên');
     if (c.hrDecision !== 'PASS') throw new Error('Ứng viên chưa được duyệt PASS');
+
     const newVersion = c.dataVersion + 1;
     await prisma.candidate.update({
       where: { id: candidateId },
-      data: { trangThaiTraining: TRAINING_STATUS.NHAN_VIEN_CHINH_THUC, dataVersion: newVersion, updatedBy: user },
+      data: {
+        trangThaiTraining: TRAINING_STATUS.NHAN_VIEN_CHINH_THUC,
+        dataVersion: newVersion,
+        updatedBy: user,
+      },
     });
+
     await audit({
       user,
-      action: 'CONFIRM_EMPLOYEE',
+      action: 'CONFIRM_AS_EMPLOYEE',
       entity: 'candidate',
       entityId: candidateId,
-      oldValue: c.trangThaiTraining,
+      oldValue: c.trangThaiTraining ?? 'KHAC',
       newValue: TRAINING_STATUS.NHAN_VIEN_CHINH_THUC,
       version: newVersion,
     });
+
     await syncQueue.enqueue({
-      entity: 'candidate',
+      entity: 'training',
       entityId: candidateId,
-      operation: 'UPDATE',
-      field: 'TRANG_THAI_TRAINING',
-      oldValue: c.trangThaiTraining,
-      newValue: TRAINING_STATUS.NHAN_VIEN_CHINH_THUC,
+      operation: 'UPSERT',
+      field: 'CONFIRM_EMPLOYEE',
+      newValue: { trangThaiTraining: TRAINING_STATUS.NHAN_VIEN_CHINH_THUC },
       version: newVersion,
-      idempotencyKey: `candidate:${candidateId}:employee:v${newVersion}`,
+      idempotencyKey: `candidate:${candidateId}:confirm-employee:v${newVersion}`,
     });
+
+    emit('candidate:decision', { candidateId, hrDecision: c.hrDecision });
     emit('training:updated', { candidateId });
   }
 
@@ -175,11 +190,14 @@ export class TrainingService {
     await this.refreshTrainingStatus(candidateId);
   }
 
-  /** Tự cập nhật trạng thái training hàng loạt: 2 query tổng thay vì N+1 query/candidate.
-   *  Chạy mỗi 5 phút (trước là mỗi 60s, mỗi lần N query DB -> web ì khi có nhiều nhân sự). */
+  /**
+   * Quét và cập nhật trạng thái training cho tất cả nhân sự.
+   * Dùng 2 batch query thay vì N queries.
+   */
   async refreshAll(): Promise<number> {
     const candidates = await prisma.candidate.findMany({
       where: {
+        hrDecision: 'PASS',
         ngayBatDauTraining: { not: null },
         trangThaiTraining: { notIn: [TRAINING_STATUS.LOAI, TRAINING_STATUS.NHAN_VIEN_CHINH_THUC] },
       },
@@ -195,10 +213,13 @@ export class TrainingService {
 
     const attended = await prisma.attendanceEvent.findMany({
       where: { candidateId: { in: candidates.map((c) => c.id) }, valid: true },
-      select: { candidateId: true, date: true },
+      select: { candidateId: true, date: true, checkoutAt: true, reason: true, method: true },
     });
     const daysByCandidate = new Map<string, Set<string>>();
     for (const a of attended) {
+      if (a.checkoutAt == null && !a.reason?.includes('CHECK_OUT') && a.method !== 'MANUAL' && a.method !== 'SYSTEM') {
+        continue; // Chỉ tính những ca/ngày đã hoàn thành cả Check-in và Check-out
+      }
       let set = daysByCandidate.get(a.candidateId);
       if (!set) {
         set = new Set();

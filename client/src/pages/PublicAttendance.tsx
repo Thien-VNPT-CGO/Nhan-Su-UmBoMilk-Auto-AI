@@ -324,6 +324,15 @@ export default function PublicAttendance() {
           </button>
         </div>
 
+        {/* Banner Nhắc nhở Quy định Điểm danh */}
+        <div className="bg-amber-950/40 border border-amber-500/40 p-3.5 rounded-2xl text-xs text-amber-200 flex items-start gap-2.5 shadow-md">
+          <AlertTriangle size={18} className="text-amber-400 shrink-0 mt-0.5" />
+          <div className="text-[11px] leading-relaxed">
+            <strong className="text-amber-300 block mb-0.5">⚠️ QUY ĐỊNH BẮT BUỘC ĐIỂM DANH:</strong>
+            Nhân viên vào ca phải bấm <strong>VÀO CA (Check-in)</strong> và khi hết ca làm phải bấm <strong>RA CA (Check-out)</strong>. <span className="text-rose-400 font-bold underline">Nếu chỉ Check-in mà KHÔNG Check-out thì ngày làm đó sẽ KHÔNG ĐƯỢC TÍNH!</span>
+          </div>
+        </div>
+
         {/* Candidate Info Glass Card */}
         <div className="bg-slate-900/80 backdrop-blur-xl p-4 sm:p-5 rounded-3xl border border-slate-800/90 shadow-2xl space-y-4 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-pink-500/10 rounded-full blur-2xl pointer-events-none" />
