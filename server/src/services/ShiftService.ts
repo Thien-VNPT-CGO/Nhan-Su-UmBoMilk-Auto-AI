@@ -8,6 +8,16 @@ import { dateKey, formatDateTime } from '../lib/date';
 
 export const SHIFT_OPTIONS = ['SANG', 'CHIEU', 'TOI', 'OFF'] as const;
 
+export function normalizeShiftCode(raw: string): string {
+  if (!raw) return 'SANG';
+  const u = raw.toUpperCase().trim();
+  if (u.includes('SANG') || u.includes('SÁNG') || u === 'CA_SANG') return 'SANG';
+  if (u.includes('CHIEU') || u.includes('CHIỀU') || u === 'CA_CHIEU') return 'CHIEU';
+  if (u.includes('TOI') || u.includes('TỐI') || u === 'CA_TOI') return 'TOI';
+  if (u.includes('OFF') || u.includes('NGHỈ')) return 'OFF';
+  return u;
+}
+
 export class ShiftService {
   async listForDates(from: string, to: string) {
     const todayStr = dateKey(new Date());
@@ -167,8 +177,9 @@ export class ShiftService {
       );
     }
 
-    const valid = input.shifts.split('|').filter(Boolean);
-    if (!valid.length || valid.some((s) => !SHIFT_OPTIONS.includes(s as never))) {
+    const rawTokens = input.shifts.split('|').map((s) => s.trim()).filter(Boolean);
+    const valid = rawTokens.map(normalizeShiftCode).filter((s) => SHIFT_OPTIONS.includes(s as never));
+    if (!valid.length) {
       throw ApiError.badRequest('INVALID_SHIFT', 'Ca không hợp lệ.');
     }
 
