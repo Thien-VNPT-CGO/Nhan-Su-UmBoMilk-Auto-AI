@@ -831,14 +831,14 @@ export default function Approvals() {
           onClose={() => setCreateModalOpen(false)}
           title="TẠO ĐƠN HOÁN ĐỔI CA LÀM VIỆC"
         >
-          <div className="space-y-4 font-sans text-slate-800">
+          <div className="space-y-4 font-sans text-slate-800 dark:text-slate-100">
             {/* NV A */}
-            <div className="space-y-3 p-3.5 bg-slate-50 rounded-xl border border-slate-200">
-              <label className="text-xs font-extrabold text-slate-700 block uppercase">
+            <div className="space-y-3 p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700/80">
+              <label className="text-xs font-extrabold text-slate-700 dark:text-slate-200 block uppercase">
                 👤 Nhân viên A (Người xin đổi ca)
               </label>
               <select
-                className="input text-xs"
+                className="input text-xs font-semibold"
                 value={form.candidateIdA}
                 onChange={(e) => {
                   const sel = candidates.find((c) => c.id === e.target.value);
@@ -857,20 +857,20 @@ export default function Approvals() {
                 ))}
               </select>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div>
-                  <label className="text-[11px] font-semibold text-slate-500 block">Ngày làm gốc:</label>
+                  <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block mb-1">Ngày làm gốc:</label>
                   <input
                     type="date"
-                    className="input text-xs"
+                    className="input text-xs font-mono font-bold"
                     value={form.dateA}
                     onChange={(e) => setForm({ ...form, dateA: e.target.value })}
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-semibold text-slate-500 block">Ca gốc:</label>
+                  <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block mb-1">Ca gốc:</label>
                   <select
-                    className="input text-xs"
+                    className="input text-xs font-bold"
                     value={form.caLamA}
                     onChange={(e) => setForm({ ...form, caLamA: e.target.value })}
                   >
@@ -884,12 +884,12 @@ export default function Approvals() {
             </div>
 
             {/* NV B */}
-            <div className="space-y-3 p-3.5 bg-slate-50 rounded-xl border border-slate-200">
-              <label className="text-xs font-extrabold text-slate-700 block uppercase">
+            <div className="space-y-3 p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700/80">
+              <label className="text-xs font-extrabold text-slate-700 dark:text-slate-200 block uppercase">
                 🔄 Nhân viên B (Người hoán đổi ca cùng)
               </label>
               <select
-                className="input text-xs"
+                className="input text-xs font-semibold"
                 value={form.candidateIdB}
                 onChange={(e) => {
                   const sel = candidates.find((c) => c.id === e.target.value);
@@ -908,20 +908,20 @@ export default function Approvals() {
                 ))}
               </select>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div>
-                  <label className="text-[11px] font-semibold text-slate-500 block">Ngày đổi ca:</label>
+                  <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block mb-1">Ngày đổi ca:</label>
                   <input
                     type="date"
-                    className="input text-xs"
+                    className="input text-xs font-mono font-bold"
                     value={form.dateB}
                     onChange={(e) => setForm({ ...form, dateB: e.target.value })}
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-semibold text-slate-500 block">Ca đổi mới:</label>
+                  <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block mb-1">Ca đổi mới:</label>
                   <select
-                    className="input text-xs"
+                    className="input text-xs font-bold"
                     value={form.caLamB}
                     onChange={(e) => setForm({ ...form, caLamB: e.target.value })}
                   >
@@ -935,7 +935,7 @@ export default function Approvals() {
             </div>
 
             <div>
-              <label className="text-xs font-bold text-slate-700 block mb-1">Lý do xin đổi ca *</label>
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Lý do xin đổi ca *</label>
               <textarea
                 rows={2}
                 className="input text-xs"

@@ -28,7 +28,7 @@
     @apply btn bg-emerald-600 text-white hover:bg-emerald-700 focus:ring-emerald-400;
   }
   .input {
-    @apply w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-400 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200 dark:placeholder:text-slate-500;
+    @apply w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-400 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100 dark:placeholder:text-slate-400 transition-all [color-scheme:light] dark:[color-scheme:dark];
   }
   .label {
     @apply block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1 dark:text-slate-400;
