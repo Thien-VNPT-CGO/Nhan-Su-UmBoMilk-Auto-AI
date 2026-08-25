@@ -262,6 +262,7 @@ export class ShiftService {
     await syncQueue.enqueue({
       entity: 'shift',
       entityId: `${input.candidateId}:${input.date}`,
+      candidateId: input.candidateId,
       operation: 'UPSERT',
       newValue: {
         candidateId: input.candidateId,

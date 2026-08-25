@@ -11,6 +11,7 @@ export interface EnqueueInput {
   newValue?: unknown;
   version: number;
   idempotencyKey?: string;
+  candidateId?: string;
 }
 
 export const RETRY_BACKOFF_SECONDS = [2, 5, 15, 30, 60, 120, 300, 600];
@@ -42,6 +43,27 @@ export class SyncQueueService {
       return { jobId: existing.id, deduped: true };
     }
 
+    let targetCandidateId: string | null = input.candidateId ?? null;
+    if (!targetCandidateId) {
+      if (input.entity === 'candidate') {
+        targetCandidateId = input.entityId;
+      } else if (input.entityId.includes(':')) {
+        targetCandidateId = input.entityId.split(':')[0];
+      } else if (input.entity === 'shift' || input.entity === 'attendance') {
+        targetCandidateId = input.entityId;
+      }
+    }
+
+    if (targetCandidateId) {
+      const candidateExists = await prisma.candidate.findUnique({
+        where: { id: targetCandidateId },
+        select: { id: true },
+      });
+      if (!candidateExists) {
+        targetCandidateId = null;
+      }
+    }
+
     try {
       const job = await prisma.syncJob.create({
         data: {
@@ -55,7 +77,7 @@ export class SyncQueueService {
           version: input.version,
           status: 'PENDING',
           idempotencyKey: key,
-          candidateId: input.entity === 'candidate' ? input.entityId : input.entity === 'shift' || input.entity === 'attendance' ? input.entityId : null,
+          candidateId: targetCandidateId,
         },
       });
 
