@@ -548,7 +548,7 @@ export class CandidateService {
     }
 
     const targetDecision = patch.hrDecision ?? candidate.hrDecision;
-    if (targetDecision === 'PASS_PV') {
+    if (targetDecision === 'PASS_PV' && !user.toLowerCase().includes('admin')) {
       const pvTime = patch.phongVanAt ?? candidate.phongVanAt;
       if (pvTime && new Date(pvTime) > new Date()) {
         throw ApiError.badRequest(

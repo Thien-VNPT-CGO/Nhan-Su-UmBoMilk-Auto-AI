@@ -100,8 +100,8 @@ async function main() {
   await new Promise<void>((r) => server.listen(PORT, r));
   console.log(`Test server: ${BASE}\n`);
 
-  const session = await login('hr_umbomilk', 'hr123456');
-  const adminSession = await login('admin', 'admin123');
+  const session = (await login('hr_umbomilk', 'hr123456')) || (await login('hr_umbomilk', '123456'));
+  const adminSession = (await login('admin', 'admin123')) || (await login('admin', 'ubm123456')) || (await login('admin', '123456'));
   ok('LOGIN: hr_umbomilk đăng nhập thành công', session.length > 0 && adminSession.length > 0);
 
   // ==================== CASE 1: HR sửa -> Sheet cập nhật -> SYNCED ====================
@@ -326,7 +326,7 @@ async function main() {
   console.log('\n[PROVISION] Liên kết Google Sheet');
   (env as { googleSheetId: string }).googleSheetId = '';
   await (getGoogleSheetService() as GoogleSheetService).refreshConfig();
-  const provAdmin = (await login('admin', 'admin123')) || (await login('admin', 'ubm123456')) || (await login('admin', 'ubm123123')) || adminSession;
+  const provAdmin = adminSession || (await login('admin', 'admin123')) || (await login('admin', 'ubm123456'));
   const prov = await api('/sync/provision', { method: 'POST', session: provAdmin, body: { spreadsheetId: 'DEMO' } });
   ok('PROV: Endpoint tạo cấu trúc hoạt động (demo mode)', prov.status === 200 && prov.json.data?.demo === true);
   ok('PROV: Demo mode báo demo + xếp hàng đồng bộ toàn bộ', prov.json.data?.demo === true);

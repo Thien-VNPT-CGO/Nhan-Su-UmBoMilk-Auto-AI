@@ -135,8 +135,12 @@ export function nextSyncJobId(): string {
   return `SYNC-${String(Math.floor(Math.random() * 900000) + 100000)}`;
 }
 
+let globalSeqCounter = 0;
+
 export function nextId(prefix: string): string {
-  return `${prefix}-${Date.now().toString(36).toUpperCase()}${randomBytes(3).toString('hex').toUpperCase()}`;
+  globalSeqCounter = (globalSeqCounter + 1) % 1000000;
+  const seqHex = globalSeqCounter.toString(36).toUpperCase();
+  return `${prefix}-${Date.now().toString(36).toUpperCase()}${randomBytes(3).toString('hex').toUpperCase()}${seqHex}`;
 }
 
 export function buildIdempotencyKey(parts: string[]): string {

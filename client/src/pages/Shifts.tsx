@@ -301,9 +301,10 @@ export default function Shifts() {
     }
   };
 
-  // RÀNG BUỘC KHÓA DỰA TRÊN THỜI GIAN CA
+  // RÀNG BUỘC KHÓA DỰA TRÊN THỜI GIAN CA (ADMIN & MANAGER DÙNG TOÀN QUYỀN KHÔNG BỊ KHÓA)
   const isEditModalDisabled = useMemo(() => {
     if (!edit) return false;
+    if (isAdmin || isManager) return false;
     const todayStr = startOfToday();
     if (edit.date < todayStr) return true;
     if (edit.date === todayStr) {
@@ -316,7 +317,7 @@ export default function Shifts() {
       if (currentVnHour >= startH) return true;
     }
     return false;
-  }, [edit]);
+  }, [edit, isAdmin, isManager]);
 
   return (
     <div className="space-y-4">
@@ -629,7 +630,7 @@ export default function Shifts() {
                               <td key={d} className="border-r border-slate-100 p-1 text-center">
                                 <button
                                   onClick={() => {
-                                    if (isAttendedOrLocked) {
+                                    if (isAttendedOrLocked && !isAdmin && !isManager) {
                                       setViewAttDetail({
                                         candidateId: r.candidateId,
                                         tenUv: r.tenUv,
