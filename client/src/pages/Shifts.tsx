@@ -206,23 +206,29 @@ export default function Shifts() {
 
   const isToday = (dStr: string) => dStr === startOfToday();
 
+  const [sendingZaloId, setSendingZaloId] = useState<string | null>(null);
+
   const handleSendAttendanceZaloLink = async (r: RowData) => {
     if (isViewer || user?.username === 'umbomilk') {
       toast('error', '🔒 Tài khoản này không có quyền sử dụng chức năng gửi link Zalo!');
       return;
     }
     const origin = window.location.origin;
+    const webAppPortalLink = `${origin}/portal`;
     const attendanceLink = `${origin}/diemdanh/${encodeURIComponent(r.candidateId)}`;
     const msg = [
-      `🐮 [UMBO MILK] – LỊCH VÀ NÚT ĐIỂM DANH HÀNG NGÀY 📋`,
+      `🐮 [UMBO MILK] – THÔNG TIN TÀI KHOẢN, LINK WEB APP & ĐIỂM DANH 📱`,
       ``,
       `Chào ${r.tenUv} ❤️`,
-      `Dưới đây là đường link điểm danh cá nhân của bạn tại Umbo Milk (${r.chiNhanh || 'Chi nhánh'}):`,
+      `Dưới đây là thông tin tài khoản và đường link điểm danh/làm việc dành riêng cho bạn:`,
       ``,
-      `👉 Link điểm danh: ${attendanceLink}`,
+      `📱 Link Web App Nhân Viên (Portal 4 Tab & Lương AI): ${webAppPortalLink}`,
+      `📸 Link Điểm Danh GPS Nhanh: ${attendanceLink}`,
       ``,
-      `📌 Ca làm đăng ký: ${r.caLam || 'Theo ca phân công'}`,
-      `Vui lòng nhấp vào đường link trên để chụp ảnh xác thực tại cửa hàng khi vào ca và ra ca mỗi ngày nhé! ✨`,
+      `🆔 Mã Nhân Viên (User): ${r.candidateId}`,
+      `📌 Ca làm đăng ký: ${r.caLam || 'Theo ca phân công'} (${r.chiNhanh || 'Chi nhánh'})`,
+      ``,
+      `Vui lòng truy cập Web App từ điện thoại cá nhân để kích hoạt, điểm danh Check-in/out và theo dõi lương hàng ngày nhé! ✨`,
     ].join('\n');
 
     let copied = false;
@@ -251,9 +257,9 @@ export default function Shifts() {
     }
 
     if (copied) {
-      toast('success', '📋 Đã sao chép tin nhắn & Link điểm danh! Nhấn (Ctrl + V) trên Zalo để dán & gửi.');
+      toast('success', '📋 Đã sao chép tin nhắn kèm Link Web App & Link điểm danh! Nhấn (Ctrl + V) trên Zalo để dán & gửi.');
     } else {
-      toast('success', 'Đã mở Zalo để gửi link điểm danh cho ứng viên.');
+      toast('success', 'Đã mở Zalo để gửi thông tin Web App & điểm danh.');
     }
 
     try {
@@ -265,6 +271,22 @@ export default function Shifts() {
     const cleanPhone = r.sdtZalo ? r.sdtZalo.replace(/\D/g, '') : '';
     const zaloUrl = cleanPhone ? `https://zalo.me/${cleanPhone}` : 'https://chat.zalo.me';
     window.open(zaloUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleSendZaloBackend = async (r: RowData) => {
+    if (isViewer || user?.username === 'umbomilk') {
+      toast('error', '🔒 Tài khoản này không có quyền sử dụng chức năng gửi Zalo!');
+      return;
+    }
+    setSendingZaloId(r.candidateId);
+    try {
+      await api.post('/approvals/send-portal-zalo', { candidateId: r.candidateId });
+      toast('success', `📲 Đã tự động gửi Zalo thông tin Web App & Link điểm danh cho ${r.tenUv}!`);
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Gửi Zalo tự động thất bại.');
+    } finally {
+      setSendingZaloId(null);
+    }
   };
 
   // RÀNG BUỘC KHÓA DỰA TRÊN THỜI GIAN CA
@@ -417,20 +439,38 @@ export default function Shifts() {
                         <div className="text-[11px] text-amber-700 font-medium mt-0.5">
                           • Ca làm: <span className="font-bold">{r.caLam || 'Chưa chốt ca'}</span>
                         </div>
-                        <button
-                          type="button"
-                          disabled={isViewer || user?.username === 'umbomilk'}
-                          onClick={() => handleSendAttendanceZaloLink(r)}
-                          className={cn(
-                            'mt-2 text-[10px] font-bold px-2.5 py-1.5 rounded-xl flex items-center gap-1 shadow-2xs transition-transform',
-                            isViewer || user?.username === 'umbomilk'
-                              ? 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed opacity-60'
-                              : 'bg-[#0068ff] hover:bg-[#0052cc] text-white active:scale-95 cursor-pointer'
-                          )}
-                          title={isViewer || user?.username === 'umbomilk' ? 'Tài khoản không có quyền gửi Zalo' : 'Sao chép tin nhắn kèm Link điểm danh & Mở Zalo 1-1 với ứng viên'}
-                        >
-                          <span>💬 Mở App Zalo gửi Link điểm danh</span>
-                        </button>
+                        <div className="mt-2 space-y-1">
+                          <button
+                            type="button"
+                            disabled={isViewer || user?.username === 'umbomilk'}
+                            onClick={() => handleSendAttendanceZaloLink(r)}
+                            className={cn(
+                              'w-full text-[10px] font-bold px-2 py-1 rounded-xl flex items-center justify-center gap-1 shadow-2xs transition-transform',
+                              isViewer || user?.username === 'umbomilk'
+                                ? 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed opacity-60'
+                                : 'bg-[#0068ff] hover:bg-[#0052cc] text-white active:scale-95 cursor-pointer'
+                            )}
+                            title={isViewer || user?.username === 'umbomilk' ? 'Tài khoản không có quyền gửi Zalo' : 'Sao chép tin nhắn chứa Link Web App + Link Điểm Danh & Mở Zalo 1-1'}
+                          >
+                            <span>💬 Mở App Zalo gửi Link Web App</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={isViewer || user?.username === 'umbomilk' || sendingZaloId === r.candidateId}
+                            onClick={() => handleSendZaloBackend(r)}
+                            className={cn(
+                              'w-full text-[10px] font-bold px-2 py-1 rounded-xl flex items-center justify-center gap-1 shadow-2xs transition-transform',
+                              isViewer || user?.username === 'umbomilk' || sendingZaloId === r.candidateId
+                                ? 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed opacity-60'
+                                : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white active:scale-95 cursor-pointer'
+                            )}
+                            title="Tự động gửi Tin nhắn Zalo chứa Link Web App + Key + Điểm danh qua AI Backend"
+                          >
+                            {sendingZaloId === r.candidateId ? <Spinner size={12} /> : null}
+                            <span>📲 Gửi Zalo Tự Động (AI Backend)</span>
+                          </button>
+                        </div>
                       </td>
 
                       {/* 7 dates columns */}
