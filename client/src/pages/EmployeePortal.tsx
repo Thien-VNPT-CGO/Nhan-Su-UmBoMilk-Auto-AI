@@ -690,123 +690,146 @@ export default function EmployeePortal() {
         {activeTab === 'SWAP' && (
           <div className="space-y-4">
             {/* Header & Form Đổi ca */}
-            <div className="bg-slate-900/80 p-5 rounded-3xl border border-slate-800 space-y-4">
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-200 pb-2 border-b border-slate-800">
-                <ArrowRightLeft size={16} className="text-pink-400" />
-                <span>HOÁN ĐỔI CA LÀM LINH HOẠT (REALTIME)</span>
+            <div className="bg-slate-900/90 backdrop-blur-2xl p-5 rounded-3xl border border-slate-800/90 shadow-2xl space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
+                <div className="flex items-center gap-2 text-xs font-black text-slate-100 uppercase tracking-wider">
+                  <div className="p-1.5 rounded-xl bg-pink-500/10 text-pink-400 border border-pink-500/20">
+                    <ArrowRightLeft size={16} />
+                  </div>
+                  <span>HOÁN ĐỔI CA LÀM LINH HOẠT</span>
+                </div>
+                <span className="text-[10px] font-extrabold text-emerald-400 bg-emerald-950/80 border border-emerald-500/40 px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
+                  🟢 REALTIME 0MS
+                </span>
               </div>
 
-              <p className="text-xs text-slate-300 leading-relaxed">
-                Tạo đơn xin hoán đổi ca làm với đồng nghiệp. Đơn sẽ gửi trực tiếp đến màn hình Phê duyệt của Quản lý cửa hàng theo thời gian thực.
+              <p className="text-[11px] text-slate-300 leading-relaxed">
+                Tạo đơn xin hoán đổi ca làm với đồng nghiệp. Đơn sẽ chuyển trực tiếp đến Quản lý cửa hàng phê duyệt theo thời gian thực.
               </p>
 
               {swapSuccessMsg && (
-                <div className="bg-emerald-950/80 border border-emerald-500/60 p-3 rounded-2xl text-xs text-emerald-200 flex items-start gap-2">
+                <div className="bg-emerald-950/90 border border-emerald-500/70 p-3.5 rounded-2xl text-xs text-emerald-200 flex items-start gap-2 shadow-lg shadow-emerald-950/50">
                   <CheckCircle2 size={16} className="shrink-0 mt-0.5 text-emerald-400" />
-                  <span>{swapSuccessMsg}</span>
+                  <span className="font-semibold">{swapSuccessMsg}</span>
                 </div>
               )}
               {swapErrorMsg && (
-                <div className="bg-rose-950/80 border border-rose-500/60 p-3 rounded-2xl text-xs text-rose-200 flex items-start gap-2">
+                <div className="bg-rose-950/90 border border-rose-500/70 p-3.5 rounded-2xl text-xs text-rose-200 flex items-start gap-2 shadow-lg shadow-rose-950/50">
                   <AlertCircle size={16} className="shrink-0 mt-0.5 text-rose-400" />
-                  <span>{swapErrorMsg}</span>
+                  <span className="font-semibold">{swapErrorMsg}</span>
                 </div>
               )}
 
-              <form onSubmit={handleCreateSwapRequest} className="space-y-3">
-                {/* 1. Chọn Ca & Ngày làm của bạn */}
-                <div className="bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700/80 space-y-2">
-                  <label className="text-[11px] font-bold text-pink-400 uppercase tracking-wider block">
-                    1. CA LÀM & NGÀY CỦA BẠN (CẦN ĐỔI)
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <div>
-                      <span className="text-[10px] text-slate-400 font-semibold block mb-1">Ngày làm:</span>
-                      <input
-                        type="date"
-                        value={myDate}
-                        onChange={(e) => setMyDate(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-pink-500"
-                        required
-                      />
+              <form onSubmit={handleCreateSwapRequest} className="space-y-4">
+                {/* Visual 2-Side Grid */}
+                <div className="grid grid-cols-1 gap-3">
+                  {/* Card 1: Ca làm của Bạn */}
+                  <div className="bg-slate-950/70 p-4 rounded-2xl border border-pink-500/30 space-y-3 relative overflow-hidden shadow-inner">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-extrabold text-pink-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <User size={14} />
+                        <span>1. CA LÀM & NGÀY CỦA BẠN</span>
+                      </label>
+                      <span className="text-[9px] font-black text-pink-300 bg-pink-950/80 px-2 py-0.5 rounded-md border border-pink-500/40">
+                        CẦN ĐỔI
+                      </span>
                     </div>
-                    <div>
-                      <span className="text-[10px] text-slate-400 font-semibold block mb-1">Ca làm:</span>
-                      <select
-                        value={myShift}
-                        onChange={(e) => setMyShift(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-pink-500"
-                      >
-                        <option value="SÁNG (06:00 - 14:00)">SÁNG (06:00 - 14:00)</option>
-                        <option value="CHIỀU (14:00 - 22:00)">CHIỀU (14:00 - 22:00)</option>
-                        <option value="HÀNH CHÍNH (08:00 - 17:00)">HÀNH CHÍNH (08:00 - 17:00)</option>
-                        <option value="TỐI (18:00 - 22:00)">TỐI (18:00 - 22:00)</option>
-                      </select>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <div>
+                        <span className="text-[10px] text-slate-400 font-bold block mb-1">Ngày làm của bạn:</span>
+                        <input
+                          type="date"
+                          value={myDate}
+                          onChange={(e) => setMyDate(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500/50 [color-scheme:dark] transition-all font-mono font-bold"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 font-bold block mb-1">Ca làm hiện tại:</span>
+                        <select
+                          value={myShift}
+                          onChange={(e) => setMyShift(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500/50 transition-all font-bold"
+                        >
+                          <option value="SÁNG (06:00 - 14:00)">🌅 SÁNG (06:00 - 14:00)</option>
+                          <option value="CHIỀU (14:00 - 22:00)">☀️ CHIỀU (14:00 - 22:00)</option>
+                          <option value="HÀNH CHÍNH (08:00 - 17:00)">🏢 HÀNH CHÍNH (08:00 - 17:00)</option>
+                          <option value="TỐI (18:00 - 22:00)">🌙 TỐI (18:00 - 22:00)</option>
+                        </select>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* 2. Chọn Đồng nghiệp & Ca làm muốn nhận */}
-                <div className="bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700/80 space-y-2">
-                  <label className="text-[11px] font-bold text-amber-400 uppercase tracking-wider block">
-                    2. ĐỒNG NGHIỆP & CA LÀM MUỐN NHẬN
-                  </label>
-                  
-                  <div>
-                    <span className="text-[10px] text-slate-400 font-semibold block mb-1">Chọn Đồng nghiệp:</span>
-                    <select
-                      value={selectedColleagueId}
-                      onChange={(e) => setSelectedColleagueId(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-amber-500"
-                      required
-                    >
-                      <option value="">-- Bấm để chọn Đồng Nghiệp --</option>
-                      {colleagues.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.tenUv} ({c.sdtZalo}) - {c.chiNhanh || 'Chi nhánh'}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                    <div>
-                      <span className="text-[10px] text-slate-400 font-semibold block mb-1">Ngày làm đồng nghiệp:</span>
-                      <input
-                        type="date"
-                        value={targetDate}
-                        onChange={(e) => setTargetDate(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-amber-500"
-                        required
-                      />
+                  {/* Card 2: Đồng nghiệp & Ca muốn nhận */}
+                  <div className="bg-slate-950/70 p-4 rounded-2xl border border-amber-500/30 space-y-3 relative overflow-hidden shadow-inner">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-extrabold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <User size={14} />
+                        <span>2. ĐỒNG NGHIỆP & CA CẦN NHẬN</span>
+                      </label>
+                      <span className="text-[9px] font-black text-amber-300 bg-amber-950/80 px-2 py-0.5 rounded-md border border-amber-500/40">
+                        MUỐN ĐỔI
+                      </span>
                     </div>
+
                     <div>
-                      <span className="text-[10px] text-slate-400 font-semibold block mb-1">Ca làm đồng nghiệp:</span>
+                      <span className="text-[10px] text-slate-400 font-bold block mb-1">Chọn Đồng nghiệp:</span>
                       <select
-                        value={targetShift}
-                        onChange={(e) => setTargetShift(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-amber-500"
+                        value={selectedColleagueId}
+                        onChange={(e) => setSelectedColleagueId(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50 transition-all font-bold"
+                        required
                       >
-                        <option value="CHIỀU (14:00 - 22:00)">CHIỀU (14:00 - 22:00)</option>
-                        <option value="SÁNG (06:00 - 14:00)">SÁNG (06:00 - 14:00)</option>
-                        <option value="HÀNH CHÍNH (08:00 - 17:00)">HÀNH CHÍNH (08:00 - 17:00)</option>
-                        <option value="TỐI (18:00 - 22:00)">TỐI (18:00 - 22:00)</option>
+                        <option value="">-- Bấm vào đây để chọn Đồng Nghiệp --</option>
+                        {colleagues.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            👤 {c.tenUv} ({c.sdtZalo}) - {c.chiNhanh || 'Chi nhánh'}
+                          </option>
+                        ))}
                       </select>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                      <div>
+                        <span className="text-[10px] text-slate-400 font-bold block mb-1">Ngày làm đồng nghiệp:</span>
+                        <input
+                          type="date"
+                          value={targetDate}
+                          onChange={(e) => setTargetDate(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50 [color-scheme:dark] transition-all font-mono font-bold"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 font-bold block mb-1">Ca làm đồng nghiệp:</span>
+                        <select
+                          value={targetShift}
+                          onChange={(e) => setTargetShift(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50 transition-all font-bold"
+                        >
+                          <option value="CHIỀU (14:00 - 22:00)">☀️ CHIỀU (14:00 - 22:00)</option>
+                          <option value="SÁNG (06:00 - 14:00)">🌅 SÁNG (06:00 - 14:00)</option>
+                          <option value="HÀNH CHÍNH (08:00 - 17:00)">🏢 HÀNH CHÍNH (08:00 - 17:00)</option>
+                          <option value="TỐI (18:00 - 22:00)">🌙 TỐI (18:00 - 22:00)</option>
+                        </select>
+                      </div>
                     </div>
                   </div>
                 </div>
 
                 {/* 3. Lý do đổi ca */}
-                <div>
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-extrabold text-slate-300 uppercase tracking-wider block">
                     3. LÝ DO XIN ĐỔI CA
                   </label>
                   <textarea
-                    rows={2}
+                    rows={2.5}
                     value={swapReason}
                     onChange={(e) => setSwapReason(e.target.value)}
-                    placeholder="Vui lòng nhập lý do đổi ca (ví dụ: bận việc gia đình, đổi ca trực trùng...)..."
-                    className="w-full bg-slate-800/90 border border-slate-700 focus:border-pink-500 rounded-2xl p-3 text-xs text-white outline-none"
+                    placeholder="Nhập lý do hoán đổi ca (ví dụ: bận việc gia đình, trùng ca trực...)..."
+                    className="w-full bg-slate-950/70 border border-slate-700/80 focus:border-pink-500 focus:ring-1 focus:ring-pink-500/40 rounded-2xl p-3 text-xs text-white outline-none transition-all placeholder:text-slate-500"
                     required
                   />
                 </div>
@@ -814,7 +837,7 @@ export default function EmployeePortal() {
                 <button
                   type="submit"
                   disabled={swapSubmitting || !selectedColleagueId || !swapReason.trim()}
-                  className="w-full py-3 rounded-full text-xs font-black bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 hover:from-pink-500 hover:to-indigo-500 text-white shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full py-3.5 rounded-2xl text-xs font-black bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 hover:from-pink-500 hover:to-indigo-500 text-white shadow-xl shadow-pink-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {swapSubmitting ? <Spinner size={16} /> : <Send size={15} />}
                   <span>GỬI ĐƠN XIN ĐỔI CA CHO QUẢN LÝ</span>
@@ -823,36 +846,37 @@ export default function EmployeePortal() {
             </div>
 
             {/* Lịch sử Đổi Ca */}
-            <div className="bg-slate-900/80 p-5 rounded-3xl border border-slate-800 space-y-3">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                <div className="flex items-center gap-2 text-xs font-bold text-slate-200">
+            <div className="bg-slate-900/90 backdrop-blur-2xl p-5 rounded-3xl border border-slate-800/90 shadow-2xl space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+                <div className="flex items-center gap-2 text-xs font-black text-slate-100 uppercase">
                   <History size={16} className="text-emerald-400" />
-                  <span>LỊCH SỬ ĐƠN ĐỔI CA CỦA BẠN ({swapHistory.length})</span>
+                  <span>LỊCH SỬ ĐƠN ĐỔI CA ({swapHistory.length})</span>
                 </div>
                 <button
                   type="button"
                   onClick={loadSwapHistory}
-                  className="text-[11px] font-semibold text-slate-400 hover:text-white"
+                  className="text-[11px] font-bold text-pink-400 hover:text-pink-300 transition-colors flex items-center gap-1"
                 >
-                  ↻ Làm mới
+                  <RefreshCw size={12} />
+                  <span>Làm mới</span>
                 </button>
               </div>
 
               {loadingSwapHistory ? (
-                <div className="py-6 text-center text-xs text-slate-400">
-                  <Spinner size={16} className="mx-auto text-pink-500 mb-1" />
-                  Đang tải lịch sử đổi ca...
+                <div className="py-8 text-center text-xs text-slate-400 space-y-2">
+                  <Spinner size={18} className="mx-auto text-pink-500" />
+                  <p>Đang nạp lịch sử đổi ca Realtime...</p>
                 </div>
               ) : swapHistory.length === 0 ? (
-                <div className="py-6 text-center text-xs text-slate-500 italic">
+                <div className="py-8 text-center text-xs text-slate-500 italic">
                   Bạn chưa tạo hoặc có đơn xin đổi ca nào.
                 </div>
               ) : (
                 <div className="space-y-3">
                   {swapHistory.map((item) => (
-                    <div key={item.id} className="bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700/80 text-xs space-y-2">
+                    <div key={item.id} className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800/90 text-xs space-y-2.5 shadow-sm">
                       <div className="flex items-center justify-between">
-                        <span className="font-mono font-bold text-[11px] text-slate-400">#{item.id}</span>
+                        <span className="font-mono font-bold text-[11px] text-slate-400">Mã đơn: #{item.id}</span>
                         <Badge
                           className={
                             item.status === 'APPROVED'
@@ -870,20 +894,22 @@ export default function EmployeePortal() {
                         </Badge>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2 bg-slate-900/60 p-2.5 rounded-xl text-[11px]">
+                      <div className="grid grid-cols-2 gap-2 bg-slate-900/90 p-3 rounded-xl border border-slate-800 text-[11px]">
                         <div>
-                          <div className="text-slate-400 font-semibold">Người gửi (Bạn):</div>
+                          <div className="text-slate-400 font-semibold text-[10px]">Người xin (Bạn):</div>
                           <div className="font-bold text-pink-300">{item.candidateNameA}</div>
-                          <div className="text-slate-300">{item.dateA} ({item.caLamA})</div>
+                          <div className="text-slate-300 font-mono">{item.dateA}</div>
+                          <div className="text-slate-400 text-[10px]">{item.caLamA}</div>
                         </div>
                         <div>
-                          <div className="text-slate-400 font-semibold">Đồng nghiệp:</div>
+                          <div className="text-slate-400 font-semibold text-[10px]">Đồng nghiệp:</div>
                           <div className="font-bold text-amber-300">{item.candidateNameB}</div>
-                          <div className="text-slate-300">{item.dateB} ({item.caLamB})</div>
+                          <div className="text-slate-300 font-mono">{item.dateB}</div>
+                          <div className="text-slate-400 text-[10px]">{item.caLamB}</div>
                         </div>
                       </div>
 
-                      <div className="text-[11px] text-slate-400 italic">
+                      <div className="text-[11px] text-slate-400 italic bg-slate-900/40 p-2 rounded-lg">
                         Lý do: "{item.reason}"
                       </div>
                     </div>
