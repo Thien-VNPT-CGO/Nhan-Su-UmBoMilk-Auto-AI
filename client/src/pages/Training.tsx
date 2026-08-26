@@ -139,6 +139,33 @@ export default function Training() {
 
   const saveTrainingInfo = async () => {
     if (!edit) return;
+    if (startDate && newBranch && newShift) {
+      const targetStartKey = startDate;
+      const targetCaNorm = (newShift || '').toLowerCase();
+
+      const collision = rows.find((other) => {
+        if (other.id === edit.id) return false;
+        if (!other.ngayBatDauTraining) return false;
+        const otherStartKey = typeof other.ngayBatDauTraining === 'string'
+          ? other.ngayBatDauTraining.slice(0, 10)
+          : dateKey(other.ngayBatDauTraining);
+        const otherCaNorm = (other.caLam || '').toLowerCase();
+        return (
+          other.chiNhanh === newBranch &&
+          otherCaNorm === targetCaNorm &&
+          otherStartKey === targetStartKey
+        );
+      });
+
+      if (collision) {
+        toast(
+          'error',
+          `⛔ CẢNH BÁO TRÙNG CA TRAINING: Ứng viên "${edit.tenUv}" và "${collision.tenUv}" đều thuộc chi nhánh "${newBranch}" và học ${newShift}. Không thể chọn cùng ngày bắt đầu ${formatDate(startDate)}! Vui lòng chọn ngày bắt đầu khác.`
+        );
+        return;
+      }
+    }
+
     try {
       await api.patch(`/training/${edit.id}`, {
         chiNhanh: newBranch,

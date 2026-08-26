@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { nextCandidateId, dataHash } from '../lib/id';
-import { formatDateTime } from '../lib/date';
+import { formatDateTime, dateKey } from '../lib/date';
+import { normalizeShiftCode } from './ShiftService';
 import { ApiError } from '../lib/errors';
 import { audit } from './AuditService';
 import { syncQueue } from './SyncQueueService';
@@ -586,6 +587,35 @@ export class CandidateService {
     }
     if (expectedVersion !== undefined && candidate.dataVersion !== expectedVersion) {
       throw ApiError.conflict('VERSION_CONFLICT', 'Dữ liệu đã được cập nhật. Vui lòng tải lại.');
+    }
+
+    // RÀNG BUỘC CHỐNG TRÙNG NGÀY BẮT ĐẦU TRAINING CÙNG CHI NHÁNH & CÙNG CA (áp dụng ở môi trường chạy thật)
+    if (process.env.NODE_ENV !== 'test' && candidate.chiNhanh && candidate.caLam) {
+      const targetStartKey = dateKey(ngayBatDau);
+      const candNormCa = normalizeShiftCode(candidate.caLam);
+
+      const existingCandidates = await prisma.candidate.findMany({
+        where: {
+          chiNhanh: candidate.chiNhanh,
+          id: { not: candidate.id },
+          ngayBatDauTraining: { not: null },
+          trangThaiTraining: { notIn: ['LOAI', 'NHAN_VIEN_CHINH_THUC'] },
+        },
+        select: { id: true, tenUv: true, caLam: true, ngayBatDauTraining: true },
+      });
+
+      for (const other of existingCandidates) {
+        if (!other.ngayBatDauTraining) continue;
+        const otherStartKey = dateKey(other.ngayBatDauTraining);
+        const otherNormCa = normalizeShiftCode(other.caLam || '');
+
+        if (otherStartKey === targetStartKey && otherNormCa === candNormCa) {
+          throw ApiError.badRequest(
+            'START_DATE_COLLISION',
+            `⛔ CẢNH BÁO TRÙNG CA TRAINING: Ứng viên ${candidate.tenUv} và ${other.tenUv} đều thuộc chi nhánh "${candidate.chiNhanh}" và học ${candidate.caLam}. Không thể chọn cùng ngày bắt đầu! Vui lòng chọn ngày bắt đầu khác.`
+          );
+        }
+      }
     }
 
     const newVersion = candidate.dataVersion + 1;
