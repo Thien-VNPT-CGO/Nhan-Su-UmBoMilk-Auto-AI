@@ -635,7 +635,7 @@ export default function Shifts() {
                               <td key={d} className="border-r border-slate-100 p-1 text-center">
                                 <button
                                   onClick={() => {
-                                    if (isAttendedOrLocked && !isAdmin && !isManager) {
+                                    if (isAttendedOrLocked) {
                                       setViewAttDetail({
                                         candidateId: r.candidateId,
                                         tenUv: r.tenUv,
@@ -817,7 +817,7 @@ export default function Shifts() {
             <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-xl text-xs flex items-start gap-2">
               <Lock size={16} className="text-amber-600 shrink-0 mt-0.5" />
               <div>
-                <strong>Lưu ý dành cho HR:</strong> Ca làm việc ngày <span className="font-bold">{formatDate(viewAttDetail.date)}</span> đã đến/qua giờ bắt đầu ca làm hoặc đã được hệ thống AI tự động chấm công. Theo quy chế bảo mật chấm công, tài khoản HR <strong>không thể chỉnh sửa ca</strong> của ngày này.
+                <strong>Lưu ý dành cho HR:</strong> Ca làm việc ngày <span className="font-bold">{formatDate(viewAttDetail.date)}</span> đã đến/qua giờ bắt đầu ca làm hoặc đã được hệ thống AI tự động chấm công. Theo quy chế bảo mật chấm công, tài khoản <strong>không thể chỉnh sửa ca</strong> của ngày này.
               </div>
             </div>
 

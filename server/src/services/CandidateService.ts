@@ -71,37 +71,11 @@ export class CandidateService {
 
     const existing = await prisma.candidate.findFirst({ where: { sdtZalo: sdt } });
     if (existing) {
-      const parsedTs = parseFormTimestamp(input.thoiGian);
-      const incoming = parsedTs ? parsedTs.getTime() : NaN;
-      const sameTs = !Number.isNaN(incoming) &&
-        Math.abs(incoming - existing.thoiGian.getTime()) < 1000;
-      if (sameTs) {
-        // Dòng form này đã được nhập rồi → KHÔNG tạo/thay thế lại (chống trùng lặp mỗi chu kỳ import)
-        const dataSame =
-          existing.tenUv === input.tenUv &&
-          (existing.gioiTinh ?? '') === (input.gioiTinh ?? '') &&
-          existing.namSinh === input.namSinh &&
-          existing.trinhDo === input.trinhDo &&
-          existing.queQuan === input.queQuan &&
-          existing.caLam === input.caLam &&
-          existing.chiNhanh === input.chiNhanh &&
-          existing.kinhNghiem === input.kinhNghiem &&
-          existing.xuLy === input.xuLy &&
-          existing.linkFb === input.linkFb &&
-          (existing.kenhBietTin ?? '') === (input.kenhBietTin ?? '');
-        if (dataSame) return existing;
-        // Cùng thời gian nhưng dữ liệu đã sửa trên web → chỉ cập nhật nếu chưa bị HR can thiệp
-        return this.updateFromForm(existing, input, existing.thoiGian);
-      }
-      const isNewer = Number.isNaN(incoming) || incoming > existing.thoiGian.getTime();
-      if (isNewer) {
-        // Cùng SĐT nhưng đăng ký mới hơn → thay thế hồ sơ cũ, giữ hồ sơ mới nhất
-        console.log(`[REPLACE] ${existing.id} -> bản đăng ký mới hơn, thay thế hồ sơ cũ (SĐT ${sdt})`);
-        await deleteCandidateWithCleanup(existing.id, 'SYSTEM-REPLACE', 'DELETE_CANDIDATE_REPLACE');
-      } else {
-        // Bản trong form cũ hơn hồ sơ đang có → đồng bộ dữ liệu + thời gian thật từ form
-        return this.updateFromForm(existing, input, parsedTs ?? new Date());
-      }
+      console.log(`[DUPLICATE_PHONE_REJECT] SĐT ${sdt} đã tồn tại trong DB (${existing.id}). Bản đăng ký mới bị tự động loại bỏ.`);
+      throw ApiError.badRequest(
+        'DUPLICATE_PHONE',
+        `Số điện thoại ${sdt} đã đăng ký hồ sơ trên hệ thống (${existing.id}). Bản mới bị hệ thống tự động loại bỏ.`
+      );
     }
 
     const parsedFormTime = parseFormTimestamp(input.thoiGian) ?? new Date();
