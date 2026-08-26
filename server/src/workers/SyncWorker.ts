@@ -77,13 +77,13 @@ export class SyncWorker {
     }, this.intervalMs);
     this.formTimer = setInterval(() => {
       void this.tickFormImport();
-    }, 60_000);
+    }, 15_000);
     this.dedupTimer = setInterval(() => {
       void this.tickAutoDedup();
     }, 5 * 60_000);
     this.scoreTimer = setInterval(() => {
       void this.tickAutoScore();
-    }, 60_000);
+    }, 15_000);
     this.noticeTimer = setInterval(() => {
       void this.tickTrainingNotices();
     }, 60_000);
@@ -134,6 +134,9 @@ export class SyncWorker {
     this.alertTimer = null;
     if (this.idleTimer) clearTimeout(this.idleTimer);
     this.idleTimer = null;
+    if (this.pruneReferralTimer) clearInterval(this.pruneReferralTimer);
+    this.pruneReferralTimer = null;
+    console.log('[SyncWorker] stopped');
   }
 
 
