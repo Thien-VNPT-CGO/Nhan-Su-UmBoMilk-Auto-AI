@@ -132,7 +132,7 @@ export async function migrateAllCandidateIdsToUBMFormat() {
 }
 
 export function nextSyncJobId(): string {
-  return `SYNC-${String(Math.floor(Math.random() * 900000) + 100000)}`;
+  return nextId('SYNC');
 }
 
 let globalSeqCounter = 0;

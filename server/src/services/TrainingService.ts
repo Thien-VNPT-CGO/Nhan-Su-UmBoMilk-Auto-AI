@@ -334,19 +334,14 @@ export class TrainingService {
             const dStr = dateKey(curr);
             const userShift = shiftMap.get(c.id)?.get(dStr);
 
-            const isManualOff = userShift?.shifts === 'OFF' && userShift?.note?.includes('MANUAL');
-            if (isManualOff) {
-              await prisma.shift.upsert({
-                where: { candidateId_date: { candidateId: c.id, date: dStr } },
-                create: { id: nextId('SFT'), candidateId: c.id, date: dStr, shifts: 'OFF' },
-                update: { shifts: 'OFF' },
-              });
+            if (userShift) {
+              if (userShift.shifts !== 'OFF') {
+                assignedDays++;
+              }
             } else {
-              await prisma.shift.upsert({
-                where: { candidateId_date: { candidateId: c.id, date: dStr } },
-                create: { id: nextId('SFT'), candidateId: c.id, date: dStr, shifts: shiftCode },
-                update: { shifts: shiftCode },
-              });
+              await prisma.shift.create({
+                data: { id: nextId('SFT'), candidateId: c.id, date: dStr, shifts: shiftCode },
+              }).catch(() => undefined);
               assignedDays++;
             }
             curr.setDate(curr.getDate() + 1);
@@ -390,19 +385,25 @@ export class TrainingService {
           for (const cs of cState) {
             if (dStr < cs.startKey) continue;
 
+            const userShift = shiftMap.get(cs.candidate.id)?.get(dStr);
+
+            if (userShift) {
+              // PRESERVE EXISTING SHIFT (HR edits or previously generated shift)
+              if (userShift.shifts !== 'OFF') {
+                cs.assignedDays++;
+              }
+              continue;
+            }
+
             if (cs.candidate.id === workingCS.candidate.id) {
-              await prisma.shift.upsert({
-                where: { candidateId_date: { candidateId: cs.candidate.id, date: dStr } },
-                create: { id: nextId('SFT'), candidateId: cs.candidate.id, date: dStr, shifts: shiftCode },
-                update: { shifts: shiftCode },
-              });
+              await prisma.shift.create({
+                data: { id: nextId('SFT'), candidateId: cs.candidate.id, date: dStr, shifts: shiftCode },
+              }).catch(() => undefined);
               cs.assignedDays++;
             } else if (cs.assignedDays < 7) {
-              await prisma.shift.upsert({
-                where: { candidateId_date: { candidateId: cs.candidate.id, date: dStr } },
-                create: { id: nextId('SFT'), candidateId: cs.candidate.id, date: dStr, shifts: 'OFF' },
-                update: { shifts: 'OFF' },
-              });
+              await prisma.shift.create({
+                data: { id: nextId('SFT'), candidateId: cs.candidate.id, date: dStr, shifts: 'OFF' },
+              }).catch(() => undefined);
             }
           }
           curr.setDate(curr.getDate() + 1);
