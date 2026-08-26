@@ -273,6 +273,11 @@ export class CandidateService {
       else if (query.status === 'SCORED') where.tongDiem = { not: null };
     }
 
+    // Ràng buộc tab Ứng viên chỉ hiển thị ứng viên đăng ký qua Form, loại bỏ nhân viên import trực tiếp
+    if (query.status !== 'EMPLOYEE') {
+      where.source = { notIn: ['IMPORT', 'MANUAL_IMPORT'] };
+    }
+
     const orderBy: Prisma.CandidateOrderByWithRelationInput[] = [];
     switch (query.sort) {
       case 'oldest': orderBy.push({ thoiGian: 'asc' }); break;

@@ -277,7 +277,12 @@ export class SyncWorker {
         | undefined;
       if (autoScoring?.enabled === false) return;
       const pending = await prisma.candidate.findMany({
-        where: { aiScoredAt: null, aiRecommendation: null },
+        where: {
+          aiScoredAt: null,
+          aiRecommendation: null,
+          source: { notIn: ['IMPORT', 'MANUAL_IMPORT'] },
+          trangThaiTraining: { not: 'NHAN_VIEN_CHINH_THUC' },
+        },
         orderBy: [{ thoiGian: 'asc' }, { id: 'asc' }],
         take: 10,
       });

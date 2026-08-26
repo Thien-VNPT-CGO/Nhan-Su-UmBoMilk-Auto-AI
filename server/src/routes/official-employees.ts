@@ -154,6 +154,22 @@ const importSchema = z.object({
   ),
 });
 
+function normalizeCaLam(raw: string): string {
+  if (!raw) return 'SÁNG';
+  const str = String(raw).trim().toLowerCase();
+  if (str.includes('sang') || str.includes('7h') || str.includes('sáng')) return 'SÁNG';
+  if (str.includes('chieu') || str.includes('12h') || str.includes('trua') || str.includes('trưa') || str.includes('chiều')) return 'CHIỀU';
+  if (str.includes('toi') || str.includes('18h') || str.includes('dem') || str.includes('đêm') || str.includes('tối')) return 'TỐI';
+  return 'SÁNG';
+}
+
+function normalizeChiNhanh(raw: string): string {
+  if (!raw) return 'Chưa chọn chi nhánh';
+  const str = String(raw).trim();
+  if (!str) return 'Chưa chọn chi nhánh';
+  return str;
+}
+
 officialEmployeesRouter.post('/import', requireAuth, requireRole('ADMIN', 'MANAGER', 'HR'), async (req: AuthedRequest, res: Response, next: NextFunction) => {
   try {
     const parsed = importSchema.safeParse(req.body);
@@ -171,6 +187,8 @@ officialEmployeesRouter.post('/import', requireAuth, requireRole('ADMIN', 'MANAG
       const emp = employees[i];
       const lineNo = i + 2; // Row 1 là tiêu đề Excel
       const cleanPhone = emp.sdtZalo.replace(/\D/g, '');
+      const cleanCaLam = normalizeCaLam(emp.caLam);
+      const cleanChiNhanh = normalizeChiNhanh(emp.chiNhanh);
 
       if (cleanPhone.length < 9) {
         errors.push({ row: lineNo, name: emp.tenUv, error: 'SĐT Zalo không đúng định dạng.' });
@@ -188,8 +206,8 @@ officialEmployeesRouter.post('/import', requireAuth, requireRole('ADMIN', 'MANAG
             where: { id: existing.id },
             data: {
               tenUv: emp.tenUv.trim(),
-              chiNhanh: emp.chiNhanh.trim(),
-              caLam: emp.caLam.trim(),
+              chiNhanh: cleanChiNhanh,
+              caLam: cleanCaLam,
               namSinh: emp.namSinh || existing.namSinh,
               trinhDo: emp.trinhDo || existing.trinhDo,
               queQuan: emp.queQuan || existing.queQuan,
@@ -217,8 +235,8 @@ officialEmployeesRouter.post('/import', requireAuth, requireRole('ADMIN', 'MANAG
               thoiGian: new Date(),
               tenUv: emp.tenUv.trim(),
               sdtZalo: cleanPhone,
-              chiNhanh: emp.chiNhanh.trim(),
-              caLam: emp.caLam.trim(),
+              chiNhanh: cleanChiNhanh,
+              caLam: cleanCaLam,
               namSinh: emp.namSinh || '2000',
               trinhDo: emp.trinhDo || 'Không chọn',
               queQuan: emp.queQuan || 'Chưa cập nhật',
@@ -228,6 +246,7 @@ officialEmployeesRouter.post('/import', requireAuth, requireRole('ADMIN', 'MANAG
               trangThaiTraining: 'NHAN_VIEN_CHINH_THUC',
               ngayBatDauTraining: validNgayChinhThuc,
               updatedBy: req.user?.username || 'ADMIN_IMPORT',
+              source: 'IMPORT',
             },
           });
 
@@ -246,6 +265,14 @@ officialEmployeesRouter.post('/import', requireAuth, requireRole('ADMIN', 'MANAG
           error: e instanceof Error ? e.message : 'Lỗi xử lý cơ sở dữ liệu.',
         });
       }
+    }
+
+    // Tự động phân bổ ca AI xoay vòng xen kẽ (3-4 ca/tuần) cho nhân viên chính thức ngay sau khi import
+    try {
+      const { trainingService } = await import('../services/TrainingService');
+      await trainingService.autoAllocateOfficialEmployeeShifts();
+    } catch (e) {
+      console.warn('[official-employees/import] autoAllocateOfficialEmployeeShifts:', e);
     }
 
     await audit({
