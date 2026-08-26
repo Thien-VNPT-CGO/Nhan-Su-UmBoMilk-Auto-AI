@@ -74,4 +74,14 @@ router.put('/*', requireWrite(), async (req: AuthedRequest, res, next) => {
   }
 });
 
+router.post('/auto-stagger', requireWrite(), async (_req: AuthedRequest, res, next) => {
+  try {
+    const { trainingService } = await import('../services/TrainingService');
+    await trainingService.autoStaggerTrainingShifts();
+    res.json({ success: true, message: 'Đã phân bổ ca AI tự động thành công.' });
+  } catch (e) {
+    next(e);
+  }
+});
+
 export default router;

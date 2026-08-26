@@ -109,10 +109,14 @@ export default function Shifts() {
   }, [dates, toast]);
 
   const handleAutoSchedule = async () => {
+    if (isViewer) {
+      toast('error', '🔒 Tài khoản VIEWER không có quyền kích hoạt phân bổ ca!');
+      return;
+    }
     try {
       setLoading(true);
-      await api.post('/training/auto-schedule', {});
-      toast('success', '⚡ AI đã tự động phân bổ & cân bằng lịch chống trùng ca cho tất cả nhân viên Training!');
+      await api.post('/shifts/auto-stagger', {});
+      toast('success', '⚡ AI đã tự động phân bổ & cân bằng lịch xoay vòng xen kẽ 3-4 ca/tuần cho tất cả nhân sự!');
       await loadData();
     } catch (e) {
       toast('error', e instanceof ApiError ? e.message : 'Phân bổ thất bại.');
@@ -514,10 +518,22 @@ export default function Shifts() {
                         let shifts = shiftsRaw ? shiftsRaw.split('|').filter(Boolean) : [];
 
                         if (shifts.length === 0) {
-                          if (currentTCount < 7 && lockedKey) {
-                            shifts = [lockedKey];
+                          if (tab === 'training') {
+                            if (currentTCount < 7 && lockedKey) {
+                              shifts = [lockedKey];
+                            } else {
+                              shifts = ['OFF'];
+                            }
                           } else {
-                            shifts = ['OFF'];
+                            // Official Employee AI fallback: 3-4 ca làm/tuần (xen kẽ đảo ca 1 ON - 1 OFF)
+                            const dayIdx = dates.indexOf(d);
+                            const candOffset = Math.abs(r.candidateId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0));
+                            const isWorkingDay = (dayIdx + candOffset) % 2 === 0;
+                            if (isWorkingDay && lockedKey) {
+                              shifts = [lockedKey];
+                            } else {
+                              shifts = ['OFF'];
+                            }
                           }
                         }
 

@@ -410,6 +410,78 @@ export class TrainingService {
         }
       }
     }
+
+    await this.autoAllocateOfficialEmployeeShifts();
+  }
+
+  /**
+   * AI Thuật toán Tự Động Phân Bổ Ca Cho Nhân Viên Chính Thức (3-4 ca/tuần, xoay vòng xen kẽ chống trùng ca).
+   */
+  async autoAllocateOfficialEmployeeShifts(startDateInput?: Date, daysAhead = 14): Promise<void> {
+    const employees = await prisma.candidate.findMany({
+      where: { trangThaiTraining: 'NHAN_VIEN_CHINH_THUC' },
+      orderBy: { tenUv: 'asc' },
+    });
+
+    if (employees.length === 0) return;
+
+    const empIds = employees.map((e) => e.id);
+    const existingShifts = await prisma.shift.findMany({
+      where: { candidateId: { in: empIds } },
+    });
+
+    const shiftMap = new Map<string, Map<string, typeof existingShifts[number]>>();
+    existingShifts.forEach((s) => {
+      if (!shiftMap.has(s.candidateId)) shiftMap.set(s.candidateId, new Map());
+      shiftMap.get(s.candidateId)!.set(s.date, s);
+    });
+
+    const baseDate = startDateInput ? new Date(startDateInput) : new Date();
+
+    // Phân nhóm nhân viên theo Chi nhánh
+    const byBranch = new Map<string, typeof employees>();
+    employees.forEach((e) => {
+      const bKey = e.chiNhanh?.trim() || 'DEFAULT';
+      if (!byBranch.has(bKey)) byBranch.set(bKey, []);
+      byBranch.get(bKey)!.push(e);
+    });
+
+    for (const [, branchEmps] of byBranch.entries()) {
+      // Phân nhóm nhân viên theo ca làm ưu tiên (SÁNG, CHIỀU, TỐI)
+      const byShift = new Map<string, typeof employees>();
+      branchEmps.forEach((e) => {
+        const normCa = (e.caLam || '').toLowerCase();
+        let code = 'SANG';
+        if (normCa.includes('chieu') || normCa.includes('12h')) code = 'CHIEU';
+        else if (normCa.includes('toi') || normCa.includes('18h')) code = 'TOI';
+        if (!byShift.has(code)) byShift.set(code, []);
+        byShift.get(code)!.push(e);
+      });
+
+      for (const [shiftCode, shiftGroup] of byShift.entries()) {
+        if (shiftGroup.length === 0) continue;
+
+        // Phân bổ 3-4 ca làm việc mỗi tuần với offset xoay vòng xen kẽ (1 ngày ON - 1 ngày OFF)
+        for (let i = 0; i < shiftGroup.length; i++) {
+          const emp = shiftGroup[i];
+          let curr = new Date(baseDate);
+          for (let dayOffset = 0; dayOffset < daysAhead; dayOffset++) {
+            const dStr = dateKey(curr);
+            const userShift = shiftMap.get(emp.id)?.get(dStr);
+
+            if (!userShift) {
+              const isWorkingDay = (dayOffset + i) % 2 === 0;
+              const assignedShift = isWorkingDay ? shiftCode : 'OFF';
+
+              await prisma.shift.create({
+                data: { id: nextId('SFT'), candidateId: emp.id, date: dStr, shifts: assignedShift },
+              }).catch(() => undefined);
+            }
+            curr.setDate(curr.getDate() + 1);
+          }
+        }
+      }
+    }
   }
 
   /**
