@@ -22,6 +22,14 @@ export class ShiftService {
   async listForDates(from: string, to: string) {
     const todayStr = dateKey(new Date());
 
+    // AI THUẬT TOÁN TỰ ĐỘNG CỦNG CỐ KHÔNG TRÙNG CA CÙNG CHI NHÁNH REALTIME:
+    try {
+      const { trainingService } = await import('./TrainingService');
+      await trainingService.autoStaggerTrainingShifts();
+    } catch (e) {
+      console.warn('[ShiftService] autoStaggerTrainingShifts:', e);
+    }
+
     const [trainingCandidates, employeeCandidates] = await Promise.all([
       prisma.candidate.findMany({
         where: {

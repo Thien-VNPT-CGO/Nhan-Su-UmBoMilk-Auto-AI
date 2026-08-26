@@ -256,6 +256,74 @@ export class TrainingService {
   }
 
   /**
+   * AI Thuật toán Tự Động Phân Bổ & Sắp Lịch Chống Trùng Ca Cho Tất Cả Nhân Viên Training.
+   */
+  async autoStaggerTrainingShifts(): Promise<void> {
+    const candidates = await prisma.candidate.findMany({
+      where: {
+        ngayBatDauTraining: { not: null },
+        trangThaiTraining: { notIn: ['LOAI', 'NHAN_VIEN_CHINH_THUC'] },
+      },
+      orderBy: { ngayBatDauTraining: 'asc' },
+    });
+
+    if (candidates.length === 0) return;
+
+    const byBranch = new Map<string, typeof candidates>();
+    candidates.forEach((c) => {
+      const bKey = c.chiNhanh?.trim() || 'DEFAULT';
+      if (!byBranch.has(bKey)) byBranch.set(bKey, []);
+      byBranch.get(bKey)!.push(c);
+    });
+
+    for (const [, candList] of byBranch.entries()) {
+      const branchShiftOccupied = new Map<string, Set<string>>();
+
+      for (const c of candList) {
+        if (!c.ngayBatDauTraining) continue;
+
+        const normCa = (c.caLam || '').toLowerCase();
+        let shiftCode = 'SANG';
+        if (normCa.includes('chieu') || normCa.includes('12h')) shiftCode = 'CHIEU';
+        else if (normCa.includes('toi') || normCa.includes('18h')) shiftCode = 'TOI';
+
+        let assignedDays = 0;
+        let curr = new Date(c.ngayBatDauTraining);
+        let attempts = 0;
+
+        while (assignedDays < 7 && attempts < 30) {
+          attempts++;
+          const dStr = dateKey(curr);
+
+          if (!branchShiftOccupied.has(dStr)) {
+            branchShiftOccupied.set(dStr, new Set());
+          }
+
+          const occupiedShifts = branchShiftOccupied.get(dStr)!;
+          const isCollided = occupiedShifts.has(shiftCode);
+
+          if (isCollided) {
+            await prisma.shift.upsert({
+              where: { candidateId_date: { candidateId: c.id, date: dStr } },
+              create: { id: nextId('SFT'), candidateId: c.id, date: dStr, shifts: 'OFF' },
+              update: { shifts: 'OFF' },
+            });
+          } else {
+            await prisma.shift.upsert({
+              where: { candidateId_date: { candidateId: c.id, date: dStr } },
+              create: { id: nextId('SFT'), candidateId: c.id, date: dStr, shifts: shiftCode },
+              update: { shifts: shiftCode },
+            });
+            occupiedShifts.add(shiftCode);
+            assignedDays++;
+          }
+          curr.setDate(curr.getDate() + 1);
+        }
+      }
+    }
+  }
+
+  /**
    * Quét và cập nhật trạng thái training cho tất cả nhân sự.
    * Dùng 2 batch query thay vì N queries.
    */

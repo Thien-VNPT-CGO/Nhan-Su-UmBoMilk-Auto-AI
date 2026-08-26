@@ -17,6 +17,17 @@ router.get('/', async (_req, res, next) => {
   }
 });
 
+router.post('/auto-schedule', requireWrite(), async (_req, res, next) => {
+  try {
+    await trainingService.autoStaggerTrainingShifts();
+    const { emit } = await import('../sockets');
+    emit('shift:updated', {});
+    res.json({ success: true, data: { ok: true } });
+  } catch (e) {
+    next(e);
+  }
+});
+
 router.post('/:id(*)/employee', requireWrite(), async (req: AuthedRequest, res, next) => {
   try {
     await trainingService.confirmAsEmployee(req.params.id, req.user!.username);

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo, Fragment } from 'react';
-import { RefreshCw, CalendarDays, GraduationCap, Briefcase, Lock, CheckCircle2, AlertTriangle, XCircle, Clock, ShieldAlert, Building2 } from 'lucide-react';
+import { RefreshCw, CalendarDays, GraduationCap, Briefcase, Lock, CheckCircle2, AlertTriangle, XCircle, Clock, ShieldAlert, Building2, Sparkles } from 'lucide-react';
 import { api, ApiError } from '../api/client';
 import { Skeleton, Badge, Modal, Spinner, Field } from '../components/ui';
 
@@ -107,6 +107,19 @@ export default function Shifts() {
       setLoading(false);
     }
   }, [dates, toast]);
+
+  const handleAutoSchedule = async () => {
+    try {
+      setLoading(true);
+      await api.post('/training/auto-schedule', {});
+      toast('success', '⚡ AI đã tự động phân bổ & cân bằng lịch chống trùng ca cho tất cả nhân viên Training!');
+      await loadData();
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Phân bổ thất bại.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     loadData();
@@ -356,6 +369,14 @@ export default function Shifts() {
             className="text-xs font-semibold text-brand-600 hover:bg-brand-50 px-3 py-2 rounded-xl transition-colors cursor-pointer"
           >
             Hôm nay
+          </button>
+          <button
+            onClick={handleAutoSchedule}
+            className="text-xs font-black bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-3 py-2 rounded-xl shadow-sm flex items-center gap-1.5 transition-all cursor-pointer hover:scale-102"
+            title="Kích hoạt thuật toán AI tự động phân bổ lịch đảo ca xen kẽ chống trùng ca cùng ngày"
+          >
+            <Sparkles size={14} className="text-amber-300 animate-pulse" />
+            <span>⚡ AI Phân Bổ Tự Động</span>
           </button>
           <button
             onClick={loadData}
