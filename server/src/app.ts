@@ -187,38 +187,36 @@ async function backfillXepLoai() {
   if (fixed > 0) console.log(`[startSystem] Đã xếp loại lại ${fixed} hồ sơ cũ (Xuất sắc/Giỏi/Đạt)`);
 }
 
-/** Tự tạo tài khoản mặc định khi DB trống (idempotent - an toàn cho deploy tự động). */
+/** Tự tạo tất cả các tài khoản mặc định khi chưa có (idempotent - an toàn cho deploy tự động). */
 async function ensureSeedUsers(prisma: typeof import('./lib/prisma').prisma) {
   try {
     const bcrypt = (await import('bcryptjs')).default;
-    const umbomilkUser = await prisma.user.findUnique({ where: { username: 'umbomilk' } });
-    if (!umbomilkUser) {
-      await prisma.user.create({
-        data: {
-          username: 'umbomilk',
-          password: await bcrypt.hash('ubm123456', 10),
-          fullName: 'Quản lý Umbo Milk',
-          role: 'MANAGER',
-          allowedTabs: ['/shifts', '/approvals'],
-        },
-      });
-      console.log('[startSystem] Đã khởi tạo tài khoản Quản lý umbomilk / ubm123456');
+    const seedUsers = [
+      { username: 'admin', password: 'admin123', fullName: 'Quản trị viên', role: 'ADMIN', allowedTabs: [] as string[] },
+      { username: 'hr_umbomilk', password: 'hr123456', fullName: 'HR UMBO Milk', role: 'HR', allowedTabs: [] as string[] },
+      { username: 'umbomilk', password: 'ubm123456', fullName: 'Quản lý Umbo Milk', role: 'MANAGER', allowedTabs: ['/shifts', '/approvals'] },
+      { username: 'viewer', password: 'view1234', fullName: 'Người xem', role: 'VIEWER', allowedTabs: [] as string[] },
+    ];
+
+    for (const u of seedUsers) {
+      const existing = await prisma.user.findUnique({ where: { username: u.username } });
+      if (!existing) {
+        const hashedPassword = await bcrypt.hash(u.password, 10);
+        await prisma.user.create({
+          data: {
+            username: u.username,
+            password: hashedPassword,
+            fullName: u.fullName,
+            role: u.role,
+            allowedTabs: u.allowedTabs.length > 0 ? u.allowedTabs : undefined,
+          },
+        });
+        console.log(`[startSystem] Đã khởi tạo tài khoản mặc định: ${u.username}`);
+      }
     }
   } catch (e) {
-    // ignore
+    console.warn('[startSystem] ensureSeedUsers error:', e instanceof Error ? e.message : String(e));
   }
-
-  const count = await prisma.user.count();
-  if (count > 0) return;
-  const bcrypt = (await import('bcryptjs')).default;
-  await prisma.user.createMany({
-    data: [
-      { username: 'admin', password: await bcrypt.hash('admin123', 10), fullName: 'Quản trị viên', role: 'ADMIN' },
-      { username: 'hr_umbomilk', password: await bcrypt.hash('hr123456', 10), fullName: 'HR UMBO Milk', role: 'HR' },
-      { username: 'viewer', password: await bcrypt.hash('view1234', 10), fullName: 'Người xem', role: 'VIEWER' },
-    ],
-  });
-  console.log('[startSystem] Đã tạo các tài khoản mặc định');
 }
 
 let trainingRefreshTimer: NodeJS.Timeout | null = null;
