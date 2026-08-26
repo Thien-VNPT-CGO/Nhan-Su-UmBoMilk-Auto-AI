@@ -11,17 +11,16 @@ process.on('uncaughtException', (err) => {
 });
 
 const { server } = createApp();
-void startSystem(server)
-  .catch((e) => {
-    console.error('[UMBO MILK] Khởi động hệ thống thất bại:', e instanceof Error ? e.message : String(e));
-  })
-  .then(() => {
-    server.listen(env.port, () => {
-      console.log(`[UMBO MILK] Server running on http://localhost:${env.port}`);
-      console.log(`[UMBO MILK] Timezone: ${env.timezone}`);
-      console.log(`[UMBO MILK] Demo mode: ${env.demoMode ? 'ON' : 'OFF'}`);
-    });
+
+server.listen(env.port, () => {
+  console.log(`[UMBO MILK] Server running on http://localhost:${env.port}`);
+  console.log(`[UMBO MILK] Timezone: ${env.timezone}`);
+  console.log(`[UMBO MILK] Demo mode: ${env.demoMode ? 'ON' : 'OFF'}`);
+
+  void startSystem(server).catch((e) => {
+    console.error('[UMBO MILK] Background startSystem failed:', e instanceof Error ? e.message : String(e));
   });
+});
 
 process.on('SIGINT', () => {
   void shutdownSystem().finally(() => process.exit(0));
