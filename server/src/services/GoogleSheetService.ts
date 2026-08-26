@@ -1097,17 +1097,31 @@ export function mapFormResponseRow(headers: string[], row: unknown[]): FormRespo
   };
 }
 
-/** Parse thời gian phản hồi dạng "15/08/2026 11:20:33" (locale VN) hoặc ISO với múi giờ chuẩn GMT+7. */
-export function parseFormTimestamp(v: string | undefined): Date | undefined {
-  if (!v) return undefined;
+/** Parse thời gian phản hồi dạng "15/08/2026 11:20:33" (locale VN), số sê-ri Excel (46258) hoặc ISO với múi giờ chuẩn GMT+7. */
+export function parseFormTimestamp(v: string | number | Date | undefined): Date | undefined {
+  if (v === undefined || v === null || v === '') return undefined;
+  if (v instanceof Date && !isNaN(v.getTime())) {
+    if (v.getFullYear() < 1900 || v.getFullYear() > 2100) return new Date();
+    return v;
+  }
+
   const trimmed = String(v).trim();
   if (!trimmed) return undefined;
 
+  // Xử lý Số sê-ri Excel (Ví dụ: 46258, "46258", "46258.5")
+  const num = Number(trimmed);
+  if (!isNaN(num) && num > 1000 && num < 100000) {
+    const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+    const jsDate = new Date(excelEpoch.getTime() + Math.round(num * 86400 * 1000));
+    if (!isNaN(jsDate.getTime()) && jsDate.getFullYear() >= 1900 && jsDate.getFullYear() <= 2100) {
+      return jsDate;
+    }
+  }
+
   // 0. Chuỗi đã có chỉ định múi giờ rõ ràng (Z hoặc +HH:MM / -HH:MM) -> parse trực tiếp
-  // Ví dụ: "2026-08-22T02:13:19.000Z" hoặc "2026-08-22T09:13:19+07:00"
   if (/T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})$/i.test(trimmed)) {
     const d = new Date(trimmed);
-    if (!Number.isNaN(d.getTime())) return d;
+    if (!Number.isNaN(d.getTime()) && d.getFullYear() >= 1900 && d.getFullYear() <= 2100) return d;
   }
 
   // 1. Parse DD/MM/YYYY HH:mm:ss hoặc DD/MM/YYYY (Google Form Việt Nam)
@@ -1117,25 +1131,25 @@ export function parseFormTimestamp(v: string | undefined): Date | undefined {
     const day = Number(dd);
     const month = Number(mm);
     const year = Number(yyyy);
-    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31 && year >= 1900 && year <= 2100) {
       const isoStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hh).padStart(2, '0')}:${String(mi).padStart(2, '0')}:${String(ss).padStart(2, '0')}+07:00`;
       const d = new Date(isoStr);
       if (!Number.isNaN(d.getTime())) return d;
     }
   }
 
-  // 2. Parse YYYY-MM-DD HH:mm:ss hoặc YYYY-MM-DD KHÔNG CÓ múi giờ (Ví dụ: "2026-08-22 09:13:19")
+  // 2. Parse YYYY-MM-DD HH:mm:ss hoặc YYYY-MM-DD
   const isoNoTzMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2})(?::(\d{2}))?)?$/);
   if (isoNoTzMatch) {
     const [, yyyy, mm, dd, hh = '0', mi = '0', ss = '0'] = isoNoTzMatch;
     const isoStr = `${yyyy}-${mm}-${dd}T${hh}:${mi}:${ss}+07:00`;
-    const d = new Date(isoStr);
-    if (!Number.isNaN(d.getTime())) return d;
+    const dIso = new Date(isoStr);
+    if (!Number.isNaN(dIso.getTime()) && dIso.getFullYear() >= 1900 && dIso.getFullYear() <= 2100) return dIso;
   }
 
   // 3. Fallback tiêu chuẩn
-  const d = new Date(trimmed);
-  if (!Number.isNaN(d.getTime())) return d;
+  const dFallback = new Date(trimmed);
+  if (!Number.isNaN(dFallback.getTime()) && dFallback.getFullYear() >= 1900 && dFallback.getFullYear() <= 2100) return dFallback;
 
   return undefined;
 }

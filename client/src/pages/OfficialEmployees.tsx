@@ -153,10 +153,10 @@ export function OfficialEmployees() {
     reader.onload = (evt) => {
       try {
         const bstr = evt.target?.result;
-        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wb = XLSX.read(bstr, { type: 'binary', cellDates: true, dateNF: 'yyyy-mm-dd' });
         const wsname = wb.SheetNames[0];
         const ws = wb.Sheets[wsname];
-        const rawData = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
+        const rawData = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { raw: false, dateNF: 'yyyy-mm-dd' });
 
         if (!rawData || rawData.length === 0) {
           toast('error', 'File Excel không có dữ liệu!');

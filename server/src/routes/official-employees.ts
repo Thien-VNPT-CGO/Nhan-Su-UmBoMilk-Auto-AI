@@ -7,6 +7,7 @@ import { nextCandidateId } from '../lib/id';
 import { employeeAuthService } from '../services/EmployeeAuthService';
 import { audit } from '../services/AuditService';
 import { emit } from '../sockets';
+import { parseFormTimestamp } from '../services/GoogleSheetService';
 
 export const officialEmployeesRouter = Router();
 
@@ -208,7 +209,8 @@ officialEmployeesRouter.post('/import', requireAuth, requireRole('ADMIN', 'MANAG
 
           updatedCount++;
         } else {
-          const newId = await nextCandidateId(emp.ngayChinhThuc || new Date());
+          const validNgayChinhThuc = parseFormTimestamp(emp.ngayChinhThuc) ?? new Date();
+          const newId = await nextCandidateId(validNgayChinhThuc);
           const newCandidate = await prisma.candidate.create({
             data: {
               id: newId,
@@ -224,7 +226,7 @@ officialEmployeesRouter.post('/import', requireAuth, requireRole('ADMIN', 'MANAG
               xuLy: 'Nhân viên chính thức (Import)',
               linkFb: emp.linkFb || '',
               trangThaiTraining: 'NHAN_VIEN_CHINH_THUC',
-              ngayBatDauTraining: emp.ngayChinhThuc ? new Date(emp.ngayChinhThuc) : new Date(),
+              ngayBatDauTraining: validNgayChinhThuc,
               updatedBy: req.user?.username || 'ADMIN_IMPORT',
             },
           });
