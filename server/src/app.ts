@@ -140,6 +140,7 @@ export async function startSystem(server: http.Server) {
   }
   try {
     await backfillXepLoai();
+    await backfillImportSource();
     const { migrateAllCandidateIdsToUBMFormat } = await import('./lib/id');
     await migrateAllCandidateIdsToUBMFormat();
   } catch (e) {
@@ -185,6 +186,25 @@ async function backfillXepLoai() {
     }
   }
   if (fixed > 0) console.log(`[startSystem] Đã xếp loại lại ${fixed} hồ sơ cũ (Xuất sắc/Giỏi/Đạt)`);
+}
+
+/** Đảm bảo toàn bộ các bản ghi Nhân viên chính thức / Import trong CSDL có source = 'IMPORT' (không hiện lên tab Ứng viên & AI chấm hồ sơ). */
+async function backfillImportSource() {
+  const { prisma } = await import('./lib/prisma');
+  const res = await prisma.candidate.updateMany({
+    where: {
+      OR: [
+        { trangThaiTraining: 'NHAN_VIEN_CHINH_THUC' },
+        { xuLy: { contains: 'Import' } },
+        { xuLy: { contains: 'Nhân viên chính thức' } },
+      ],
+      source: { notIn: ['IMPORT', 'MANUAL_IMPORT'] },
+    },
+    data: { source: 'IMPORT' },
+  });
+  if (res.count > 0) {
+    console.log(`[startSystem] Đã chuyển source='IMPORT' cho ${res.count} hồ sơ nhân viên chính thức cũ.`);
+  }
 }
 
 /** Tự tạo tất cả các tài khoản mặc định khi chưa có (idempotent - an toàn cho deploy tự động). */

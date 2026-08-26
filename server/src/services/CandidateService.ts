@@ -273,9 +273,18 @@ export class CandidateService {
       else if (query.status === 'SCORED') where.tongDiem = { not: null };
     }
 
-    // Ràng buộc tab Ứng viên chỉ hiển thị ứng viên đăng ký qua Form, loại bỏ nhân viên import trực tiếp
+    // Ràng buộc tab Ứng viên & AI chấm hồ sơ chỉ hiển thị ứng viên đăng ký qua Form, loại bỏ hoàn toàn nhân viên import / nhân viên chính thức
     if (query.status !== 'EMPLOYEE') {
-      where.source = { notIn: ['IMPORT', 'MANUAL_IMPORT'] };
+      where.AND = [
+        { source: { notIn: ['IMPORT', 'MANUAL_IMPORT'] } },
+        {
+          OR: [
+            { trangThaiTraining: null },
+            { trangThaiTraining: { notIn: ['NHAN_VIEN_CHINH_THUC'] } },
+          ],
+        },
+        { xuLy: { not: { contains: 'Import' } } },
+      ];
     }
 
     const orderBy: Prisma.CandidateOrderByWithRelationInput[] = [];
