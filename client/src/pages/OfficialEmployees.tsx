@@ -18,6 +18,7 @@ import {
   FileText,
   AlertCircle,
   X,
+  Trash2,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { api, ApiError } from '../api/client';
@@ -68,6 +69,25 @@ export function OfficialEmployees() {
   const [editBranch, setEditBranch] = useState('');
   const [editShift, setEditShift] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
+
+  // Delete Modal State
+  const [deleteItem, setDeleteItem] = useState<OfficialEmployeeItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    if (!deleteItem) return;
+    setDeleting(true);
+    try {
+      await api.delete('/official-employees/' + encodeURIComponent(deleteItem.id));
+      toast('success', `Đã xóa thành công nhân viên ${deleteItem.tenUv} (${deleteItem.id})`);
+      setDeleteItem(null);
+      loadData();
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Xóa nhân viên thất bại');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   // Import File States
   const [importModalOpen, setImportModalOpen] = useState(false);
@@ -562,12 +582,21 @@ export function OfficialEmployees() {
                       </Badge>
                     </td>
                     <td className="table-td text-center">
-                      <button
-                        onClick={() => openEdit(r)}
-                        className="btn-secondary !py-1 !px-2 text-xs flex items-center gap-1 mx-auto"
-                      >
-                        <Edit2 size={12} /> Sửa
-                      </button>
+                      <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          onClick={() => openEdit(r)}
+                          className="btn-secondary !py-1 !px-2 text-xs flex items-center gap-1 cursor-pointer"
+                        >
+                          <Edit2 size={12} /> Sửa
+                        </button>
+                        <button
+                          onClick={() => setDeleteItem(r)}
+                          className="btn-danger !py-1 !px-2 text-xs flex items-center gap-1 bg-rose-50 text-rose-600 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-400 dark:hover:bg-rose-900/60 rounded-lg border border-rose-200 dark:border-rose-800 transition-colors cursor-pointer"
+                          title="Xóa nhân viên chính thức"
+                        >
+                          <Trash2 size={12} /> Xóa
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -788,6 +817,46 @@ export function OfficialEmployees() {
           )}
         </div>
       </Modal>
+
+      {/* Modal xác nhận Xóa nhân viên */}
+      {deleteItem && (
+        <Modal open={!!deleteItem} onClose={() => setDeleteItem(null)} title="🗑️ Xác Nhận Xóa Nhân Viên">
+          <div className="space-y-4 p-2">
+            <div className="rounded-xl bg-rose-50 border border-rose-200 p-3 flex items-start gap-3 text-rose-800 dark:bg-rose-950/30 dark:border-rose-800 dark:text-rose-300">
+              <AlertTriangle size={20} className="shrink-0 text-rose-600 mt-0.5" />
+              <div className="text-xs">
+                <p className="font-bold">Bạn có chắc chắn muốn xóa nhân viên này khỏi hệ thống?</p>
+                <p className="mt-1">Hành động này sẽ xóa vĩnh viễn hồ sơ, lịch ca làm việc và mã truy cập điểm danh Portal của nhân viên.</p>
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 space-y-1 text-xs dark:bg-slate-900 dark:border-slate-800">
+              <div>• Mã NV: <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">{deleteItem.id}</span></div>
+              <div>• Nhân viên: <span className="font-bold text-slate-800 dark:text-slate-200">{deleteItem.tenUv}</span></div>
+              <div>• SĐT Zalo: <span className="font-medium text-slate-700 dark:text-slate-300">{deleteItem.sdtZalo}</span></div>
+              <div>• Chi nhánh: <span className="font-medium text-slate-700 dark:text-slate-300">{deleteItem.chiNhanh}</span></div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setDeleteItem(null)}
+                className="btn-secondary !py-1.5 !px-3 text-xs cursor-pointer"
+                disabled={deleting}
+              >
+                Hủy bỏ
+              </button>
+              <button
+                onClick={handleDelete}
+                className="btn-primary bg-rose-600 hover:bg-rose-700 text-white !py-1.5 !px-3 text-xs flex items-center gap-1.5 cursor-pointer"
+                disabled={deleting}
+              >
+                {deleting ? <Spinner size={14} /> : <Trash2 size={14} />}
+                <span>Xác Nhận Xóa</span>
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

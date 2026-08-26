@@ -299,3 +299,46 @@ officialEmployeesRouter.post('/import', requireAuth, requireRole('ADMIN', 'MANAG
     next(e);
   }
 });
+
+// DELETE /api/official-employees/:id - Xóa nhân viên chính thức
+officialEmployeesRouter.delete('/*', requireAuth, requireRole('ADMIN', 'MANAGER', 'HR'), async (req: AuthedRequest, res: Response, next: NextFunction) => {
+  try {
+    const rawPath = (req.params[0] || '').replace(/^\/+/, '');
+    const empId = decodeURIComponent(rawPath);
+
+    if (!empId) {
+      res.status(400).json({ success: false, error: 'Thiếu mã nhân viên.' });
+      return;
+    }
+
+    const existing = await prisma.candidate.findUnique({ where: { id: empId } });
+    if (!existing) {
+      res.status(404).json({ success: false, error: 'Không tìm thấy nhân viên cần xóa.' });
+      return;
+    }
+
+    // Xóa liên hoàn dữ liệu liên quan (Ca làm, Điểm danh, Mã Portal, Hồ sơ)
+    await prisma.$transaction([
+      prisma.shift.deleteMany({ where: { candidateId: empId } }),
+      prisma.attendanceEvent.deleteMany({ where: { candidateId: empId } }),
+      prisma.employeeKey.deleteMany({ where: { candidateId: empId } }),
+      prisma.candidate.delete({ where: { id: empId } }),
+    ]);
+
+    await audit({
+      user: req.user?.username || 'SYSTEM',
+      action: 'DELETE_OFFICIAL_EMPLOYEE',
+      entity: 'official_employee',
+      entityId: empId,
+      oldValue: { tenUv: existing.tenUv, chiNhanh: existing.chiNhanh, caLam: existing.caLam },
+    });
+
+    emit('official_employees:updated', { deletedId: empId });
+    emit('training:updated', {});
+    emit('shift:updated', {});
+
+    res.json({ success: true, message: `Đã xóa thành công nhân viên ${existing.tenUv} (${empId})` });
+  } catch (e) {
+    next(e);
+  }
+});

@@ -141,6 +141,8 @@ export async function startSystem(server: http.Server) {
   try {
     await backfillXepLoai();
     await backfillImportSource();
+    const { autoSanitizeAllCandidates } = await import('./services/CandidateService');
+    await autoSanitizeAllCandidates();
     const { migrateAllCandidateIdsToUBMFormat } = await import('./lib/id');
     await migrateAllCandidateIdsToUBMFormat();
   } catch (e) {

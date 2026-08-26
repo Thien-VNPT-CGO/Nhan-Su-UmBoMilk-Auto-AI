@@ -844,4 +844,35 @@ export async function deleteCandidateWithCleanup(id: string, user: string, actio
   emit('candidate:deleted', { candidateId: id });
 }
 
+export function normalizeCaLamStandard(raw: string): string {
+  if (!raw) return 'SÁNG';
+  const str = String(raw).trim().toLowerCase();
+  if (str.includes('sang') || str.includes('7h') || str.includes('sáng')) return 'SÁNG';
+  if (str.includes('chieu') || str.includes('12h') || str.includes('trua') || str.includes('trưa') || str.includes('chiều')) return 'CHIỀU';
+  if (str.includes('toi') || str.includes('18h') || str.includes('dem') || str.includes('đêm') || str.includes('tối')) return 'TỐI';
+  return 'SÁNG';
+}
+
+export async function autoSanitizeAllCandidates(): Promise<number> {
+  const candidates = await prisma.candidate.findMany({
+    select: { id: true, chiNhanh: true, caLam: true },
+  });
+  let updatedCount = 0;
+  for (const c of candidates) {
+    const cleanCa = normalizeCaLamStandard(c.caLam);
+    if (cleanCa !== c.caLam) {
+      await prisma.candidate.update({
+        where: { id: c.id },
+        data: { caLam: cleanCa },
+      });
+      updatedCount++;
+    }
+  }
+  if (updatedCount > 0) {
+    emit('official_employees:updated', {});
+    emit('training:updated', {});
+  }
+  return updatedCount;
+}
+
 export const candidateService = new CandidateService();
