@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { dateKey, addDays } from '../lib/date';
+import { nextId } from '../lib/id';
 import { audit } from './AuditService';
 import { syncQueue } from './SyncQueueService';
 import { emit } from '../sockets';
@@ -183,10 +184,74 @@ export class TrainingService {
   async setStartDate(candidateId: string, ngayBatDau: Date, user: string): Promise<void> {
     const c = await prisma.candidate.findUnique({ where: { id: candidateId } });
     if (!c) throw new Error('Không tìm thấy ứng viên');
+
     await prisma.candidate.update({
       where: { id: candidateId },
       data: { ngayBatDauTraining: ngayBatDau, trangThaiTraining: TRAINING_STATUS.SAP_BAT_DAU, updatedBy: user },
     });
+
+    // AI THUẬT TOÁN TỰ ĐỘNG PHÂN BỔ 7 NGÀY TRAINING KHÔNG TRÙNG CA CÙNG CHI NHÁNH CÙNG NGÀY:
+    if (c.chiNhanh) {
+      const normCa = (c.caLam || '').toLowerCase();
+      let shiftCode = 'SANG';
+      if (normCa.includes('chieu') || normCa.includes('12h')) shiftCode = 'CHIEU';
+      else if (normCa.includes('toi') || normCa.includes('18h')) shiftCode = 'TOI';
+
+      const sameBranchCandidates = await prisma.candidate.findMany({
+        where: {
+          chiNhanh: c.chiNhanh,
+          id: { not: c.id },
+          trangThaiTraining: { notIn: ['LOAI', 'NHAN_VIEN_CHINH_THUC'] },
+        },
+        select: { id: true, caLam: true },
+      });
+
+      const otherIds = sameBranchCandidates.map((x) => x.id);
+      let otherShiftsMap = new Map<string, Set<string>>();
+      if (otherIds.length > 0) {
+        const otherShifts = await prisma.shift.findMany({
+          where: { candidateId: { in: otherIds } },
+        });
+        otherShifts.forEach((s) => {
+          if (!otherShiftsMap.has(s.date)) otherShiftsMap.set(s.date, new Set());
+          const arr = s.shifts.split('|').map((x) => x.trim().toUpperCase());
+          arr.forEach((code) => {
+            if (code !== 'OFF') otherShiftsMap.get(s.date)!.add(code);
+          });
+        });
+      }
+
+      let assignedDays = 0;
+      let curr = new Date(ngayBatDau);
+      const maxAttempts = 30;
+      let attempts = 0;
+
+      while (assignedDays < 7 && attempts < maxAttempts) {
+        attempts++;
+        const dStr = dateKey(curr);
+        const activeShiftsOnDate = otherShiftsMap.get(dStr);
+        const hasCollision = activeShiftsOnDate?.has(shiftCode);
+
+        if (hasCollision) {
+          // Trùng ca tại chi nhánh trên cùng ngày -> AI tự động phân bổ OFF
+          await prisma.shift.upsert({
+            where: { candidateId_date: { candidateId: c.id, date: dStr } },
+            create: { id: nextId('SFT'), candidateId: c.id, date: dStr, shifts: 'OFF' },
+            update: { shifts: 'OFF' },
+          });
+        } else {
+          // Không trùng ca -> AI phân bổ ca làm chính thức & Tăng đếm ngày
+          await prisma.shift.upsert({
+            where: { candidateId_date: { candidateId: c.id, date: dStr } },
+            create: { id: nextId('SFT'), candidateId: c.id, date: dStr, shifts: shiftCode },
+            update: { shifts: shiftCode },
+          });
+          assignedDays++;
+        }
+        curr.setDate(curr.getDate() + 1);
+      }
+    }
+
     await this.refreshTrainingStatus(candidateId);
   }
 

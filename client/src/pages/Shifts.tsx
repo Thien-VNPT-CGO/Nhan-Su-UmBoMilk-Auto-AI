@@ -217,10 +217,10 @@ export default function Shifts() {
   };
 
   const shiftBadgeColors: Record<string, string> = {
-    SANG: 'bg-amber-100 text-amber-800 border-amber-300',
-    CHIEU: 'bg-teal-100 text-teal-800 border-teal-300',
-    TOI: 'bg-indigo-100 text-indigo-800 border-indigo-300',
-    OFF: 'bg-slate-100 text-slate-600 border-slate-300',
+    SANG: 'bg-emerald-600 text-white font-bold border-emerald-700 shadow-xs',
+    CHIEU: 'bg-emerald-600 text-white font-bold border-emerald-700 shadow-xs',
+    TOI: 'bg-emerald-600 text-white font-bold border-emerald-700 shadow-xs',
+    OFF: 'bg-rose-600 text-white font-bold border-rose-700 shadow-xs',
   };
 
   const isToday = (dStr: string) => dStr === startOfToday();
