@@ -117,6 +117,16 @@ export async function startSystem(server: http.Server) {
   // Mỗi bước chạy độc lập: 1 bước lỗi KHÔNG được phép giết các bước khác
   // (nếu không worker nền sẽ không bao giờ khởi động → auto-score/auto-dedup/import chết âm thầm)
   const { prisma } = await import('./lib/prisma');
+
+  // Tự động kiểm tra và tạo cấu trúc các bảng CSDL trên Neon.tech/PostgreSQL mới
+  try {
+    const { execSync } = await import('child_process');
+    console.log('[startSystem] Tự động tạo cấu trúc CSDL trên Neon.tech (prisma db push)...');
+    execSync('npx prisma db push --skip-generate', { stdio: 'inherit' });
+  } catch (e) {
+    console.warn('[startSystem] auto db push:', e instanceof Error ? e.message : String(e));
+  }
+
   try {
     await ensureSeedUsers(prisma);
   } catch (e) {
