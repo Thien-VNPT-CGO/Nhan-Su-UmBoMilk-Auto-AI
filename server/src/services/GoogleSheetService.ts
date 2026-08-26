@@ -127,7 +127,7 @@ export class GoogleSheetService {
         spreadsheetId: String(g.spreadsheetId || cfg.spreadsheetId),
         email: String(g.serviceAccountEmail || cfg.email),
         key: String(g.privateKey || cfg.key),
-        formResponsesId: String(g.formResponsesId || cfg.formResponsesId),
+        formResponsesId: String(g.formResponsesId || cfg.formResponsesId || g.spreadsheetId || cfg.spreadsheetId || ''),
         locHoSo: String(sheets.locHoSo || cfg.locHoSo),
         diemUv: String(sheets.diemUv || cfg.diemUv),
         hoSoNv: String(sheets.hoSoNv || cfg.hoSoNv),

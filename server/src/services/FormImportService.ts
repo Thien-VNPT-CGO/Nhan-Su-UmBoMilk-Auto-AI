@@ -50,7 +50,8 @@ export async function importFormResponses(): Promise<FormImportResult> {
   };
   try {
     const settings = await getSettings();
-    const formId = String((settings.googleSheet as Record<string, unknown>).formResponsesId ?? '');
+    const gSheet = (settings.googleSheet ?? {}) as Record<string, unknown>;
+    const formId = String(gSheet.formResponsesId || gSheet.spreadsheetId || '');
     if (!formId) {
       result.enabled = false;
       return result;
