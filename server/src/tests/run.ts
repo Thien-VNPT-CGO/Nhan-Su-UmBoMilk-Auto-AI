@@ -65,7 +65,7 @@ async function waitForJob(jobId: string, statuses: string[], timeoutMs = 15000):
 }
 
 function uniquePhone(): string {
-  return `09${String(Math.floor(Math.random() * 100000000)).padStart(8, '0')}`;
+  return `09${String(Date.now()).slice(-6)}${String(Math.floor(Math.random() * 100)).padStart(2, '0')}`;
 }
 
 async function makeCandidate(session: string, phone?: string) {
@@ -328,7 +328,7 @@ async function main() {
   console.log('\n[PROVISION] Liên kết Google Sheet');
   (env as { googleSheetId: string }).googleSheetId = '';
   await (getGoogleSheetService() as GoogleSheetService).refreshConfig();
-  const provAdmin = (await login('admin', 'admin123')) || (await login('admin', 'ubm123456')) || adminSession;
+  const provAdmin = adminSession;
   const prov = await api('/sync/provision', { method: 'POST', session: provAdmin, body: { spreadsheetId: 'DEMO' } });
   ok('PROV: Endpoint tạo cấu trúc hoạt động (demo mode)', prov.status === 200 && prov.json.data?.demo === true);
   ok('PROV: Demo mode báo demo + xếp hàng đồng bộ toàn bộ', prov.json.data?.demo === true);
