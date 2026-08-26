@@ -256,7 +256,8 @@ export class TrainingService {
   }
 
   /**
-   * AI Thuật toán Tự Động Phân Bổ & Sắp Lịch Chống Trùng Ca Cho Tất Cả Nhân Viên Training.
+   * AI Thuật toán Tự Động Phân Bổ & Sắp Lịch Xoay Vòng Xen Kẽ Chống Trùng Ca (Round-Robin Staggering Engine)
+   * Tự động bù ca cho nhân sự khác khi HR chỉnh OFF, đảm bảo mỗi nhân sự Training luôn có ĐỦ 7 NGÀY ĐI LÀM.
    */
   async autoStaggerTrainingShifts(): Promise<void> {
     const candidates = await prisma.candidate.findMany({
@@ -269,6 +270,19 @@ export class TrainingService {
 
     if (candidates.length === 0) return;
 
+    // Fetch existing manual shifts (e.g. note or manual edits)
+    const candidateIds = candidates.map((c) => c.id);
+    const existingShifts = await prisma.shift.findMany({
+      where: { candidateId: { in: candidateIds } },
+    });
+
+    const shiftMap = new Map<string, Map<string, typeof existingShifts[number]>>();
+    existingShifts.forEach((s) => {
+      if (!shiftMap.has(s.candidateId)) shiftMap.set(s.candidateId, new Map());
+      shiftMap.get(s.candidateId)!.set(s.date, s);
+    });
+
+    // Group candidates by branch
     const byBranch = new Map<string, typeof candidates>();
     candidates.forEach((c) => {
       const bKey = c.chiNhanh?.trim() || 'DEFAULT';
@@ -277,45 +291,104 @@ export class TrainingService {
     });
 
     for (const [, candList] of byBranch.entries()) {
-      const branchShiftOccupied = new Map<string, Set<string>>();
-
-      for (const c of candList) {
-        if (!c.ngayBatDauTraining) continue;
-
+      // Group candidates by shiftCode (e.g. SANG, CHIEU, TOI)
+      const byShift = new Map<string, typeof candidates>();
+      candList.forEach((c) => {
         const normCa = (c.caLam || '').toLowerCase();
-        let shiftCode = 'SANG';
-        if (normCa.includes('chieu') || normCa.includes('12h')) shiftCode = 'CHIEU';
-        else if (normCa.includes('toi') || normCa.includes('18h')) shiftCode = 'TOI';
+        let code = 'SANG';
+        if (normCa.includes('chieu') || normCa.includes('12h')) code = 'CHIEU';
+        else if (normCa.includes('toi') || normCa.includes('18h')) code = 'TOI';
+        if (!byShift.has(code)) byShift.set(code, []);
+        byShift.get(code)!.push(c);
+      });
 
-        let assignedDays = 0;
-        let curr = new Date(c.ngayBatDauTraining);
+      for (const [shiftCode, shiftGroup] of byShift.entries()) {
+        if (shiftGroup.length === 0) continue;
+
+        // If only 1 candidate in this branch & shift -> schedule 7 consecutive working days from ngayBatDauTraining
+        if (shiftGroup.length === 1) {
+          const c = shiftGroup[0];
+          if (!c.ngayBatDauTraining) continue;
+
+          let assignedDays = 0;
+          let curr = new Date(c.ngayBatDauTraining);
+          let attempts = 0;
+
+          while (assignedDays < 7 && attempts < 30) {
+            attempts++;
+            const dStr = dateKey(curr);
+            const userShift = shiftMap.get(c.id)?.get(dStr);
+
+            const isManualOff = userShift?.shifts === 'OFF' && userShift?.note?.includes('MANUAL');
+            if (isManualOff) {
+              await prisma.shift.upsert({
+                where: { candidateId_date: { candidateId: c.id, date: dStr } },
+                create: { id: nextId('SFT'), candidateId: c.id, date: dStr, shifts: 'OFF' },
+                update: { shifts: 'OFF' },
+              });
+            } else {
+              await prisma.shift.upsert({
+                where: { candidateId_date: { candidateId: c.id, date: dStr } },
+                create: { id: nextId('SFT'), candidateId: c.id, date: dStr, shifts: shiftCode },
+                update: { shifts: shiftCode },
+              });
+              assignedDays++;
+            }
+            curr.setDate(curr.getDate() + 1);
+          }
+          continue;
+        }
+
+        // If 2 or more candidates share the SAME branch & SAME shift -> DATE-BY-DATE ROUND-ROBIN ALTERNATING STAGGERING!
+        const cState = shiftGroup.map((c) => ({
+          candidate: c,
+          assignedDays: 0,
+          startKey: dateKey(c.ngayBatDauTraining!),
+          startDate: new Date(c.ngayBatDauTraining!),
+        }));
+
+        let minStart = new Date(cState[0].startDate);
+        cState.forEach((cs) => {
+          if (cs.startDate < minStart) minStart = new Date(cs.startDate);
+        });
+
+        let curr = new Date(minStart);
         let attempts = 0;
 
-        while (assignedDays < 7 && attempts < 30) {
+        while (cState.some((cs) => cs.assignedDays < 7) && attempts < 60) {
           attempts++;
           const dStr = dateKey(curr);
 
-          if (!branchShiftOccupied.has(dStr)) {
-            branchShiftOccupied.set(dStr, new Set());
+          const activeCandidates = cState.filter(
+            (cs) => dStr >= cs.startKey && cs.assignedDays < 7
+          );
+
+          if (activeCandidates.length === 0) {
+            curr.setDate(curr.getDate() + 1);
+            continue;
           }
 
-          const occupiedShifts = branchShiftOccupied.get(dStr)!;
-          const isCollided = occupiedShifts.has(shiftCode);
+          // Sort active candidates by fewest assignedDays so far (round-robin priority)
+          activeCandidates.sort((a, b) => a.assignedDays - b.assignedDays);
+          const workingCS = activeCandidates[0];
 
-          if (isCollided) {
-            await prisma.shift.upsert({
-              where: { candidateId_date: { candidateId: c.id, date: dStr } },
-              create: { id: nextId('SFT'), candidateId: c.id, date: dStr, shifts: 'OFF' },
-              update: { shifts: 'OFF' },
-            });
-          } else {
-            await prisma.shift.upsert({
-              where: { candidateId_date: { candidateId: c.id, date: dStr } },
-              create: { id: nextId('SFT'), candidateId: c.id, date: dStr, shifts: shiftCode },
-              update: { shifts: shiftCode },
-            });
-            occupiedShifts.add(shiftCode);
-            assignedDays++;
+          for (const cs of cState) {
+            if (dStr < cs.startKey) continue;
+
+            if (cs.candidate.id === workingCS.candidate.id) {
+              await prisma.shift.upsert({
+                where: { candidateId_date: { candidateId: cs.candidate.id, date: dStr } },
+                create: { id: nextId('SFT'), candidateId: cs.candidate.id, date: dStr, shifts: shiftCode },
+                update: { shifts: shiftCode },
+              });
+              cs.assignedDays++;
+            } else if (cs.assignedDays < 7) {
+              await prisma.shift.upsert({
+                where: { candidateId_date: { candidateId: cs.candidate.id, date: dStr } },
+                create: { id: nextId('SFT'), candidateId: cs.candidate.id, date: dStr, shifts: 'OFF' },
+                update: { shifts: 'OFF' },
+              });
+            }
           }
           curr.setDate(curr.getDate() + 1);
         }
