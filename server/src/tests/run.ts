@@ -64,8 +64,11 @@ async function waitForJob(jobId: string, statuses: string[], timeoutMs = 15000):
   return 'TIMEOUT';
 }
 
+let phoneSeq = 0;
 function uniquePhone(): string {
-  return `09${String(Date.now()).slice(-6)}${String(Math.floor(Math.random() * 100)).padStart(2, '0')}`;
+  phoneSeq++;
+  const rand = Math.floor(Math.random() * 1000);
+  return `09${String(Date.now()).slice(-5)}${String(phoneSeq).padStart(2, '0')}${String(rand).padStart(3, '0')}`.slice(0, 10);
 }
 
 async function makeCandidate(session: string, phone?: string) {

@@ -128,16 +128,18 @@ export default function Shifts() {
   useEffect(() => {
     const socket = getSocket();
     if (!socket) return;
-    const debouncedReload = debounce(() => loadData(), 500);
+    const debouncedReload = debounce(() => loadData(), 100);
 
     const handler = () => debouncedReload();
     socket.on('shift:updated', handler);
     socket.on('attendance:updated', handler);
     socket.on('candidate:updated', handler);
+    socket.on('training:updated', handler);
     return () => {
       socket.off('shift:updated', handler);
       socket.off('attendance:updated', handler);
       socket.off('candidate:updated', handler);
+      socket.off('training:updated', handler);
     };
   }, [loadData]);
 
