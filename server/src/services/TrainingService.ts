@@ -45,6 +45,19 @@ export class TrainingService {
         where: { id: candidateId },
         data: { trangThaiTraining: status, soNgayDaTraining: soNgay },
       });
+
+      // RÀNG BUỘC REALTIME: Tự động XÓA TÀI KHOẢN WEB APP nếu quá 12 ngày thử việc mà chưa đủ 7 ca (KHONG_DU_NGAY) hoặc bị LOẠI
+      if (status === TRAINING_STATUS.KHONG_DU_NGAY || status === TRAINING_STATUS.LOAI) {
+        await prisma.user.deleteMany({
+          where: {
+            OR: [
+              { username: c.sdtZalo },
+              { username: c.id },
+            ],
+          },
+        }).catch((e) => console.warn('[TrainingService] delete user error:', e));
+      }
+
       // Đồng bộ trạng thái/ngày đã training xuống HO_SO_NV (chỉ khi có lịch training)
       if (c.ngayBatDauTraining) {
         await syncQueue.enqueue({
@@ -55,6 +68,8 @@ export class TrainingService {
           idempotencyKey: `candidate:${candidateId}:training-status:v${c.dataVersion}:${status}`,
         });
         emit('training:updated', { candidateId });
+        emit('candidate:updated', { candidateId });
+        emit('shift:updated', { candidateId });
       }
     }
   }

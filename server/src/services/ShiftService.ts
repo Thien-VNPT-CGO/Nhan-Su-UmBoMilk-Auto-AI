@@ -185,6 +185,13 @@ export class ShiftService {
     const candidate = await prisma.candidate.findUnique({ where: { id: input.candidateId } });
     if (!candidate) throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy ứng viên.');
 
+    if (candidate.trangThaiTraining === 'KHONG_DU_NGAY') {
+      throw ApiError.badRequest(
+        'TRAINING_EXPIRED_LOCKED',
+        'Lịch làm việc đã bị KHÓA TỰ ĐỘNG do nhân sự vượt quá 12 ngày thử việc mà không hoàn thành đủ 7 ngày điểm danh! HR không thể thao tác.'
+      );
+    }
+
     const todayStr = dateKey(new Date());
     const vnNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
     const currentVnHour = vnNow.getHours();
@@ -315,6 +322,43 @@ export class ShiftService {
         dataVersion: newVersion,
       },
     });
+
+    // TỰ ĐỘNG BÙ CA XOAY VÒNG CHỐNG TRÙNG REALTIME CHO NHÂN VIÊN TRAINING:
+    if (candidate.trangThaiTraining !== 'NHAN_VIEN_CHINH_THUC' && candidate.chiNhanh) {
+      const validTarget = valid[0] || 'OFF';
+      const normCandCa = normalizeShiftCode(candidate.caLam || '');
+
+      const sameBranchTrainingCandidates = await prisma.candidate.findMany({
+        where: {
+          chiNhanh: candidate.chiNhanh,
+          id: { not: candidate.id },
+          trangThaiTraining: { in: ['BAT_DAU', 'SAP_BAT_DAU'] },
+        },
+        select: { id: true, caLam: true },
+      });
+
+      const matchedCandidates = sameBranchTrainingCandidates.filter(
+        (c) => normalizeShiftCode(c.caLam || '') === normCandCa
+      );
+
+      for (const bCand of matchedCandidates) {
+        if (validTarget === 'OFF') {
+          // HR đổi candidate A sang OFF -> candidate B tự động chuyển sang đi làm ca normCandCa!
+          await prisma.shift.upsert({
+            where: { candidateId_date: { candidateId: bCand.id, date: input.date } },
+            create: { id: nextId('SFT'), candidateId: bCand.id, date: input.date, shifts: normCandCa, note: 'AI_RECIPROCAL_SWAP' },
+            update: { shifts: normCandCa, note: 'AI_RECIPROCAL_SWAP' },
+          });
+        } else {
+          // HR đổi candidate A sang GIỜ LÀM -> candidate B tự động chuyển sang OFF!
+          await prisma.shift.upsert({
+            where: { candidateId_date: { candidateId: bCand.id, date: input.date } },
+            create: { id: nextId('SFT'), candidateId: bCand.id, date: input.date, shifts: 'OFF', note: 'AI_RECIPROCAL_SWAP' },
+            update: { shifts: 'OFF', note: 'AI_RECIPROCAL_SWAP' },
+          });
+        }
+      }
+    }
 
     await audit({
       user: input.user,
