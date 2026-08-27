@@ -138,18 +138,20 @@ export default function Shifts() {
     loadWindowsStatus();
   }, [loadWindowsStatus]);
 
+  const isBypassWindow = isAdmin || isManager;
+
   const handleAutoScheduleWeekly = async () => {
     if (isViewer) {
       toast('error', '🔒 Tài khoản VIEWER không có quyền kích hoạt phân bổ ca!');
       return;
     }
-    if (!windowsStatus?.isHrWindow && !isAdmin) {
+    if (!windowsStatus?.isHrWindow && !isBypassWindow) {
       toast('error', windowsStatus?.hrWindowMessage || '🔒 Nút AI Xếp Lịch Tuần CHỈ MỞ sau 15h00 Thứ 7!');
       return;
     }
     try {
       setLoading(true);
-      await api.post('/shifts/auto-schedule-weekly', { forceWindow: isAdmin });
+      await api.post('/shifts/auto-schedule-weekly', { forceWindow: isBypassWindow });
       toast('success', '⚡ AI đã tự động bảo lưu lịch OFF của nhân viên và phân bổ lịch làm việc tuần sau (T2 - CN) thành công!');
       await loadData();
     } catch (e) {
@@ -505,18 +507,22 @@ export default function Shifts() {
           </button>
           <button
             onClick={handleAutoScheduleWeekly}
-            disabled={!windowsStatus?.isHrWindow && !isAdmin}
+            disabled={!windowsStatus?.isHrWindow && !isBypassWindow}
             className={cn(
               'text-xs font-black px-3 py-2 rounded-xl shadow-sm flex items-center gap-1.5 transition-all cursor-pointer',
-              windowsStatus?.isHrWindow || isAdmin
+              windowsStatus?.isHrWindow || isBypassWindow
                 ? 'bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 text-white hover:scale-102'
                 : 'bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-300'
             )}
-            title={windowsStatus?.hrWindowMessage || 'Nút AI Xếp Lịch Tuần mở sau 15h00 Thứ 7'}
+            title={
+              isBypassWindow
+                ? '👑 Quyền Admin/Manager: AI Xếp Lịch Tuần mở 24/7 không bị khóa thời gian'
+                : (windowsStatus?.hrWindowMessage || 'Nút AI Xếp Lịch Tuần mở sau 15h00 Thứ 7')
+            }
           >
-            <Sparkles size={14} className={windowsStatus?.isHrWindow || isAdmin ? 'text-amber-300 animate-pulse' : 'text-slate-400'} />
+            <Sparkles size={14} className={windowsStatus?.isHrWindow || isBypassWindow ? 'text-amber-300 animate-pulse' : 'text-slate-400'} />
             <span>🤖 AI Xếp Lịch Tuần</span>
-            {!windowsStatus?.isHrWindow && !isAdmin && (
+            {!windowsStatus?.isHrWindow && !isBypassWindow && (
               <Badge className="bg-slate-800 text-white text-[10px] py-0 px-1.5 ml-1">Mở sau 15h T7</Badge>
             )}
           </button>

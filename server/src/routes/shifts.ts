@@ -152,14 +152,15 @@ router.get('/windows-status', async (_req, res, next) => {
   }
 });
 
-// POST /api/shifts/auto-schedule-weekly (AI Xếp Lịch Tuần HR sau 15h Thứ 7)
+// POST /api/shifts/auto-schedule-weekly (AI Xếp Lịch Tuần: HR sau 15h Thứ 7, Admin/Manager mở 24/7)
 router.post('/auto-schedule-weekly', requireWrite(), async (req: AuthedRequest, res, next) => {
   try {
     const { weekStartDate, forceWindow } = req.body ?? {};
+    const isAdminOrManager = req.user?.role === 'ADMIN' || req.user?.role === 'MANAGER' || req.user?.username === 'umbomilk';
     const result = await shiftService.autoScheduleWeekly({
       weekStartDate,
       user: req.user!.username,
-      forceWindow: !!forceWindow,
+      forceWindow: isAdminOrManager || !!forceWindow,
     });
     res.json({ success: true, data: result });
   } catch (e) {
