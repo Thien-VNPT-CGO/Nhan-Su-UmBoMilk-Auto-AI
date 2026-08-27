@@ -82,19 +82,40 @@ export class EmployeeAuthService {
       throw ApiError.badRequest('KEY_REVOKED', 'Key kích hoạt đã bị thu hồi. Vui lòng liên hệ Admin để cấp Key mới.');
     }
 
-    // Kiểm tra thời hạn Key Training (Tự hết hạn nếu đã hoàn thành đủ 7 ngày đào tạo)
-    if (keyRecord.type === 'TRAINING') {
-      const completedDays = candidate.attendanceEvents.filter(
-        (a) => a.checkoutAt != null || a.reason?.includes('CHECK_OUT') || a.method === 'MANUAL' || a.method === 'SYSTEM'
-      );
-      const uniqueDaysCount = new Set(completedDays.map((a) => a.date)).size;
+    // Tự động khôi phục Key ACTIVE nếu nhân sự đang trong đợt thử việc / chờ HR đánh giá cửa hàng
+    if (keyRecord.status === 'EXPIRED' && keyRecord.type === 'TRAINING' && candidate.trangThaiTraining !== 'NHAN_VIEN_CHINH_THUC' && candidate.trangThaiTraining !== 'LOAI') {
+      await prisma.employeeKey.update({
+        where: { id: keyRecord.id },
+        data: { status: 'ACTIVE' },
+      });
+      keyRecord.status = 'ACTIVE';
+    }
 
-      if (uniqueDaysCount >= 7) {
+    if (keyRecord.status === 'EXPIRED') {
+      throw ApiError.badRequest('KEY_EXPIRED', 'Key kích hoạt đã hết hạn.');
+    }
+
+    // Kiểm tra loại Key với trạng thái hồ sơ thực tế
+    if (keyRecord.type === 'TRAINING') {
+      if (candidate.trangThaiTraining === 'NHAN_VIEN_CHINH_THUC') {
         await prisma.employeeKey.update({
           where: { id: keyRecord.id },
           data: { status: 'EXPIRED' },
         });
-        throw ApiError.badRequest('TRAINING_COMPLETED', 'Bạn đã hoàn thành đủ 7 ngày Training! Key đã hết hạn. Vui lòng chờ Admin cấp Key Nhân viên Chính thức.');
+        throw ApiError.badRequest(
+          'TRAINING_COMPLETED',
+          'Bạn đã trở thành Nhân viên chính thức! Vui lòng đăng nhập bằng Key Nhân viên chính thức (EMP-XXXX-XXXX) do Admin/HR cấp.'
+        );
+      }
+      if (candidate.trangThaiTraining === 'LOAI') {
+        await prisma.employeeKey.update({
+          where: { id: keyRecord.id },
+          data: { status: 'EXPIRED' },
+        });
+        throw ApiError.badRequest(
+          'KEY_EXPIRED',
+          'Tài khoản đã kết thúc đợt thử việc. Vui lòng liên hệ Bộ phận HR.'
+        );
       }
     }
 
