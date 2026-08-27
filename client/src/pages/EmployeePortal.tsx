@@ -132,12 +132,12 @@ export default function EmployeePortal() {
   const [candidateIdInput, setCandidateIdInput] = useState('');
   const [keyInput, setKeyInput] = useState('');
   const [session, setSession] = useState<EmployeeSession | null>(null);
-  const [activeTab, setActiveTab] = useState<'ATTENDANCE' | 'LEAVE_48H' | 'SHIFTS' | 'PAYROLL' | 'SWAP' | 'DEVICE'>('ATTENDANCE');
+  const [activeTab, setActiveTab] = useState<'ATTENDANCE' | 'LEAVE_48H' | 'SHIFTS' | 'PAYROLL' | 'DEVICE'>('ATTENDANCE');
 
   const [loading, setLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
-  // States cho Reset thiết bị TH1
+  // States cho Reset thiết bị / Đổi máy Gửi IT Admin
   const [resetReason, setResetReason] = useState('');
   const [resetSubmitting, setResetSubmitting] = useState(false);
   const [resetSuccessMsg, setResetSuccessMsg] = useState<string | null>(null);
@@ -433,104 +433,6 @@ export default function EmployeePortal() {
         .catch(() => null);
     }
   }, [activeTab, session?.candidate.id]);
-
-  // Tự động tra cứu ca của bản thân khi thay đổi ngày hoặc vào Tab SWAP
-  useEffect(() => {
-    if (session?.candidate.id && activeTab === 'SWAP') {
-      fetchMyShiftSchedule(session.candidate.id, myDate);
-    }
-  }, [activeTab, session?.candidate.id, myDate, fetchMyShiftSchedule]);
-
-  // Tự động tra cứu ca của đồng nghiệp khi chọn đồng nghiệp hoặc thay đổi ngày đồng nghiệp
-  useEffect(() => {
-    if (selectedColleagueId && activeTab === 'SWAP') {
-      fetchTargetShiftSchedule(selectedColleagueId, targetDate);
-    }
-  }, [activeTab, selectedColleagueId, targetDate, fetchTargetShiftSchedule]);
-
-  // Load danh sách đồng nghiệp
-  const loadColleagues = useCallback(async () => {
-    try {
-      const res = await api.get<ColleagueItem[]>('/public/employee/colleagues');
-      const list = Array.isArray(res) ? res : Array.isArray((res as any)?.data) ? (res as any).data : [];
-      setColleagues(list.filter((c: ColleagueItem) => c.id !== session?.candidate.id));
-    } catch {
-      // ignore
-    }
-  }, [session?.candidate.id]);
-
-  // Load lịch sử đổi ca
-  const loadSwapHistory = useCallback(async () => {
-    if (!session?.candidate.id) return;
-    setLoadingSwapHistory(true);
-    try {
-      const res = await api.get<SwapHistoryItem[]>(`/public/employee/shift-swap-history/${encodeURIComponent(session.candidate.id)}`);
-      const list = Array.isArray(res) ? res : Array.isArray((res as any)?.data) ? (res as any).data : [];
-      setSwapHistory(list);
-    } catch {
-      // ignore
-    } finally {
-      setLoadingSwapHistory(false);
-    }
-  }, [session?.candidate.id]);
-
-  // Tự động nạp dữ liệu khi chuyển sang Tab SWAP
-  useEffect(() => {
-    if (session?.candidate.id && activeTab === 'SWAP') {
-      loadColleagues();
-      loadSwapHistory();
-    }
-  }, [activeTab, session?.candidate.id, loadColleagues, loadSwapHistory]);
-
-  // Lắng nghe Socket.io Realtime khi có cập nhật đơn đổi ca
-  useEffect(() => {
-    if (!session?.candidate.id || activeTab !== 'SWAP') return;
-    const socket = getSocket();
-    const handleUpdate = () => {
-      loadSwapHistory();
-    };
-
-    socket.on('shift_swap:created', handleUpdate);
-    socket.on('shift_swap:approved', handleUpdate);
-    socket.on('shift_swap:rejected', handleUpdate);
-
-    return () => {
-      socket.off('shift_swap:created', handleUpdate);
-      socket.off('shift_swap:approved', handleUpdate);
-      socket.off('shift_swap:rejected', handleUpdate);
-    };
-  }, [activeTab, session?.candidate.id, loadSwapHistory]);
-
-  // Tạo đơn xin đổi ca
-  const handleCreateSwapRequest = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!session?.candidate.id || !selectedColleagueId || !swapReason.trim()) return;
-
-    setSwapSubmitting(true);
-    setSwapSuccessMsg(null);
-    setSwapErrorMsg(null);
-
-    try {
-      await api.post('/public/employee/shift-swap-request', {
-        candidateIdA: session.candidate.id,
-        caLamA: myShift,
-        dateA: myDate,
-        candidateIdB: selectedColleagueId,
-        caLamB: targetShift,
-        dateB: targetDate,
-        reason: swapReason.trim(),
-      });
-
-      setSwapSuccessMsg('🎉 Gửi đơn xin đổi ca thành công! Đơn đã được chuyển trực tiếp tới Quản lý cửa hàng.');
-      setSwapReason('');
-      setSelectedColleagueId('');
-      loadSwapHistory();
-    } catch (err) {
-      setSwapErrorMsg(err instanceof ApiError ? err.message : 'Tạo đơn xin đổi ca thất bại.');
-    } finally {
-      setSwapSubmitting(false);
-    }
-  };
 
   // Xử lý Đăng nhập 1 lần & Kích hoạt Key
   const handleLoginSubmit = (e: React.FormEvent) => {
@@ -855,15 +757,15 @@ export default function EmployeePortal() {
 
           <button
             type="button"
-            onClick={() => setActiveTab('SWAP')}
+            onClick={() => setActiveTab('DEVICE')}
             className={`py-2 px-1 rounded-xl text-[10px] font-black flex flex-col items-center gap-1 transition-all cursor-pointer ${
-              activeTab === 'SWAP'
+              activeTab === 'DEVICE'
                 ? 'bg-gradient-to-br from-pink-500 to-rose-600 text-white shadow-lg shadow-pink-500/40 scale-102'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
-            <ArrowRightLeft size={15} />
-            <span>Đổi ca/máy</span>
+            <Smartphone size={15} />
+            <span>Đổi máy</span>
           </button>
         </div>
 
@@ -1026,315 +928,82 @@ export default function EmployeePortal() {
           </div>
         )}
 
-        {/* TAB 2: QUẢN LÝ THIẾT BỊ & YÊU CẦU RESET (TH1: TẠO TRÊN MÁY CỦ) */}
+        {/* TAB 5: YÊU CẦU ĐỔI MÁY / RESET KEY GỬI IT ADMIN */}
         {activeTab === 'DEVICE' && (
-          <div className="bg-slate-900/80 p-5 rounded-3xl border border-slate-800 space-y-4">
-            <div className="flex items-center gap-2 text-xs font-bold text-slate-200 pb-2 border-b border-slate-800">
-              <Smartphone size={16} className="text-pink-400" />
-              <span>THÔNG TIN THIẾT BỊ GÁN CỨNG (DEVICE LOCK)</span>
+          <div className="bg-slate-900/90 backdrop-blur-2xl p-5 rounded-3xl border border-slate-800 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2 text-xs font-black text-white uppercase tracking-wider">
+                <div className="p-1.5 rounded-xl bg-pink-500/20 text-pink-400 border border-pink-500/30">
+                  <Smartphone size={16} />
+                </div>
+                <span>TẠO PHIẾU XIN ĐỔI MÁY / RESET KEY</span>
+              </div>
+              <span className="text-[10px] font-black text-amber-400 bg-amber-950/80 border border-amber-500/40 px-2.5 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
+                🔑 GỬI IT ADMIN
+              </span>
             </div>
 
-            <div className="bg-slate-800/80 p-3.5 rounded-2xl text-xs space-y-1.5 font-mono">
-              <div className="flex justify-between">
-                <span className="text-slate-400 font-sans">Key loại:</span>
+            <p className="text-[11px] text-slate-300 leading-relaxed font-medium">
+              Khi bạn mua điện thoại mới hoặc cần chuyển sang thiết bị khác, hãy điền lý do bên dưới để gửi phiếu xin Reset Key. <strong>IT Admin và Quản lý</strong> sẽ nhận phiếu Realtime để duyệt & cấp Key Reset thiết bị mới cho bạn.
+            </p>
+
+            {/* Thông tin thiết bị gán cứng */}
+            <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800 space-y-2 font-mono text-xs shadow-inner">
+              <div className="text-[10px] font-sans font-bold text-pink-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                <Smartphone size={13} />
+                <span>THÔNG TIN THIẾT BỊ ĐANG GÁN CỨNG (DEVICE LOCK):</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-800/60 pb-1 text-slate-300">
+                <span className="text-slate-400 font-sans">Loại Key:</span>
                 <span className="font-bold text-pink-400">{session.keyInfo.type}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400 font-sans">Mã Key:</span>
+              <div className="flex justify-between border-b border-slate-800/60 pb-1 text-slate-300">
+                <span className="text-slate-400 font-sans">Mã Key Kích Hoạt:</span>
                 <span className="font-bold text-white">{session.keyInfo.key}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400 font-sans">Mã Thiết Bị:</span>
+              <div className="flex justify-between text-slate-300">
+                <span className="text-slate-400 font-sans">Mã Thiết Bị (Device ID):</span>
                 <span className="font-bold text-emerald-400 truncate max-w-[180px]">{session.keyInfo.deviceId}</span>
               </div>
             </div>
 
-            <form onSubmit={handleCreateResetTicket} className="space-y-3 pt-2">
-              <div className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
-                <AlertTriangle size={15} />
-                <span>BÁO ĐỔI ĐIỆN THOẠI / RESET KEY (TH1: TRÊN MÁY CỦ)</span>
+            {resetSuccessMsg && (
+              <div className="bg-emerald-950/90 border border-emerald-500/70 p-3.5 rounded-2xl text-xs text-emerald-200 flex items-start gap-2 shadow-lg">
+                <CheckCircle2 size={16} className="shrink-0 mt-0.5 text-emerald-400" />
+                <span className="font-semibold">{resetSuccessMsg}</span>
               </div>
-              <p className="text-[11px] text-slate-300 leading-relaxed">
-                Nếu bạn muốn chuyển sang dùng điện thoại mới, hãy nhập lý do gửi phiếu bên dưới. Quản lý Cửa hàng và IT Admin sẽ duyệt để tự động kích hoạt máy mới.
-              </p>
+            )}
+            {resetErrorMsg && (
+              <div className="bg-rose-950/90 border border-rose-500/70 p-3.5 rounded-2xl text-xs text-rose-200 flex items-start gap-2 shadow-lg">
+                <AlertCircle size={16} className="shrink-0 mt-0.5 text-rose-400" />
+                <span className="font-semibold">{resetErrorMsg}</span>
+              </div>
+            )}
 
-              {resetSuccessMsg && (
-                <div className="bg-emerald-950/80 border border-emerald-500/60 p-3 rounded-2xl text-xs text-emerald-200">
-                  {resetSuccessMsg}
-                </div>
-              )}
-              {resetErrorMsg && (
-                <div className="bg-rose-950/80 border border-rose-500/60 p-3 rounded-2xl text-xs text-rose-200">
-                  {resetErrorMsg}
-                </div>
-              )}
-
-              <textarea
-                rows={3}
-                value={resetReason}
-                onChange={(e) => setResetReason(e.target.value)}
-                placeholder="Nhập lý do đổi máy (ví dụ: đổi sang máy mới, bán máy cũ...)..."
-                className="w-full bg-slate-800/90 border border-slate-700 focus:border-amber-500 rounded-2xl p-3 text-xs text-white outline-none"
-                required
-              />
+            <form onSubmit={handleCreateResetTicket} className="space-y-4 pt-1">
+              <div>
+                <label className="text-[11px] font-extrabold text-pink-300 uppercase tracking-wider block mb-1">
+                  Nhập Lý Do Đổi Máy / Reset Key:
+                </label>
+                <textarea
+                  rows={3.5}
+                  value={resetReason}
+                  onChange={(e) => setResetReason(e.target.value)}
+                  placeholder="Nhập chi tiết lý do (ví dụ: vừa đổi sang iPhone mới, điện thoại cũ bị hỏng màn hình, bán máy cũ...)..."
+                  className="w-full bg-slate-950 border border-slate-700 focus:border-pink-500 focus:ring-1 focus:ring-pink-500/50 rounded-2xl p-3.5 text-xs text-white outline-none placeholder:text-slate-500 transition-all"
+                  required
+                />
+              </div>
 
               <button
                 type="submit"
                 disabled={resetSubmitting || !resetReason.trim()}
-                className="w-full py-3 rounded-full text-xs font-black bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-500 hover:to-rose-500 text-white shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full py-3.5 rounded-2xl text-xs font-black bg-gradient-to-r from-pink-600 via-rose-600 to-amber-600 hover:from-pink-500 hover:to-amber-500 text-white shadow-xl shadow-pink-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {resetSubmitting ? <Spinner size={16} /> : <Send size={15} />}
-                <span>GỬI PHIẾU YÊU CẦU RESET CHO IT ADMIN</span>
+                <span>🚀 GỬI PHIẾU YÊU CẦU RESET KEY CHO IT ADMIN</span>
               </button>
             </form>
-          </div>
-        )}
-
-        {/* TAB 3: HOÁN ĐỔI CA LÀM LINH HOẠT REALTIME */}
-        {activeTab === 'SWAP' && (
-          <div className="space-y-4">
-            {/* Header & Form Đổi ca */}
-            <div className="bg-slate-900/90 backdrop-blur-2xl p-5 rounded-3xl border border-slate-800/90 shadow-2xl space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
-                <div className="flex items-center gap-2 text-xs font-black text-slate-100 uppercase tracking-wider">
-                  <div className="p-1.5 rounded-xl bg-pink-500/10 text-pink-400 border border-pink-500/20">
-                    <ArrowRightLeft size={16} />
-                  </div>
-                  <span>HOÁN ĐỔI CA LÀM LINH HOẠT</span>
-                </div>
-                <span className="text-[10px] font-extrabold text-emerald-400 bg-emerald-950/80 border border-emerald-500/40 px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
-                  🟢 REALTIME 0MS
-                </span>
-              </div>
-
-              <p className="text-[11px] text-slate-300 leading-relaxed">
-                Tạo đơn xin hoán đổi ca làm với đồng nghiệp. Đơn sẽ chuyển trực tiếp đến Quản lý cửa hàng phê duyệt theo thời gian thực.
-              </p>
-
-              {swapSuccessMsg && (
-                <div className="bg-emerald-950/90 border border-emerald-500/70 p-3.5 rounded-2xl text-xs text-emerald-200 flex items-start gap-2 shadow-lg shadow-emerald-950/50">
-                  <CheckCircle2 size={16} className="shrink-0 mt-0.5 text-emerald-400" />
-                  <span className="font-semibold">{swapSuccessMsg}</span>
-                </div>
-              )}
-              {swapErrorMsg && (
-                <div className="bg-rose-950/90 border border-rose-500/70 p-3.5 rounded-2xl text-xs text-rose-200 flex items-start gap-2 shadow-lg shadow-rose-950/50">
-                  <AlertCircle size={16} className="shrink-0 mt-0.5 text-rose-400" />
-                  <span className="font-semibold">{swapErrorMsg}</span>
-                </div>
-              )}
-
-              <form onSubmit={handleCreateSwapRequest} className="space-y-4">
-                {/* Visual 2-Side Grid */}
-                <div className="grid grid-cols-1 gap-3">
-                  {/* Card 1: Ca làm của Bạn */}
-                  <div className="bg-slate-950/70 p-4 rounded-2xl border border-pink-500/30 space-y-3 relative overflow-hidden shadow-inner">
-                    <div className="flex items-center justify-between">
-                      <label className="text-[11px] font-extrabold text-pink-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <User size={14} />
-                        <span>1. CA LÀM & NGÀY CỦA BẠN</span>
-                      </label>
-                      <span className="text-[9px] font-black text-pink-300 bg-pink-950/80 px-2 py-0.5 rounded-md border border-pink-500/40">
-                        CẦN ĐỔI
-                      </span>
-                    </div>
-
-                    {myShiftSource && (
-                      <div className="text-[10px] font-bold text-emerald-400 bg-emerald-950/70 border border-emerald-500/40 p-2 rounded-xl flex items-center gap-1.5">
-                        <CheckCircle2 size={13} className="text-emerald-400 shrink-0" />
-                        <span>✓ Tự động khớp Web HR: <strong>{myShiftSource}</strong></span>
-                      </div>
-                    )}
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      <div>
-                        <span className="text-[10px] text-slate-400 font-bold block mb-1">Ngày làm của bạn:</span>
-                        <input
-                          type="date"
-                          value={myDate}
-                          onChange={(e) => setMyDate(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500/50 [color-scheme:dark] transition-all font-mono font-bold"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-slate-400 font-bold block mb-1">Ca làm hiện tại (Tự động):</span>
-                        <select
-                          value={myShift}
-                          onChange={(e) => setMyShift(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500/50 transition-all font-bold"
-                        >
-                          <option value="SÁNG (07:00 - 12:00)">🌅 SÁNG (07:00 - 12:00)</option>
-                          <option value="CHIỀU (12:00 - 18:00)">☀️ CHIỀU (12:00 - 18:00)</option>
-                          <option value="TỐI (18:00 - 23:00)">🌙 TỐI (18:00 - 23:00)</option>
-                          <option value="NGHỈ (OFF)">☕ NGHỈ (OFF)</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Card 2: Đồng nghiệp & Ca muốn nhận */}
-                  <div className="bg-slate-950/70 p-4 rounded-2xl border border-amber-500/30 space-y-3 relative overflow-hidden shadow-inner">
-                    <div className="flex items-center justify-between">
-                      <label className="text-[11px] font-extrabold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <User size={14} />
-                        <span>2. ĐỒNG NGHIỆP & CA CẦN NHẬN</span>
-                      </label>
-                      <span className="text-[9px] font-black text-amber-300 bg-amber-950/80 px-2 py-0.5 rounded-md border border-amber-500/40">
-                        MUỐN ĐỔI
-                      </span>
-                    </div>
-
-                    {targetShiftSource && (
-                      <div className="text-[10px] font-bold text-amber-400 bg-amber-950/70 border border-amber-500/40 p-2 rounded-xl flex items-center gap-1.5">
-                        <CheckCircle2 size={13} className="text-amber-400 shrink-0" />
-                        <span>✓ Tự động khớp Web HR: <strong>{targetShiftSource}</strong></span>
-                      </div>
-                    )}
-
-                    <div>
-                      <span className="text-[10px] text-slate-400 font-bold block mb-1">Chọn Đồng nghiệp:</span>
-                      <select
-                        value={selectedColleagueId}
-                        onChange={(e) => setSelectedColleagueId(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50 transition-all font-bold"
-                        required
-                      >
-                        <option value="">-- Bấm vào đây để chọn Đồng Nghiệp --</option>
-                        {colleagues.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            👤 {c.tenUv} ({c.sdtZalo}) - {c.chiNhanh || 'Chi nhánh'}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                      <div>
-                        <span className="text-[10px] text-slate-400 font-bold block mb-1">Ngày làm đồng nghiệp:</span>
-                        <input
-                          type="date"
-                          value={targetDate}
-                          onChange={(e) => setTargetDate(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50 [color-scheme:dark] transition-all font-mono font-bold"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-slate-400 font-bold block mb-1">Ca làm đồng nghiệp (Tự động):</span>
-                        <select
-                          value={targetShift}
-                          onChange={(e) => setTargetShift(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50 transition-all font-bold"
-                        >
-                          <option value="CHIỀU (12:00 - 18:00)">☀️ CHIỀU (12:00 - 18:00)</option>
-                          <option value="SÁNG (07:00 - 12:00)">🌅 SÁNG (07:00 - 12:00)</option>
-                          <option value="TỐI (18:00 - 23:00)">🌙 TỐI (18:00 - 23:00)</option>
-                          <option value="NGHỈ (OFF)">☕ NGHỈ (OFF)</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 3. Lý do đổi ca */}
-                <div className="space-y-1">
-                  <label className="text-[11px] font-extrabold text-slate-300 uppercase tracking-wider block">
-                    3. LÝ DO XIN ĐỔI CA
-                  </label>
-                  <textarea
-                    rows={2.5}
-                    value={swapReason}
-                    onChange={(e) => setSwapReason(e.target.value)}
-                    placeholder="Nhập lý do hoán đổi ca (ví dụ: bận việc gia đình, trùng ca trực...)..."
-                    className="w-full bg-slate-950/70 border border-slate-700/80 focus:border-pink-500 focus:ring-1 focus:ring-pink-500/40 rounded-2xl p-3 text-xs text-white outline-none transition-all placeholder:text-slate-500"
-                    required
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={swapSubmitting || !selectedColleagueId || !swapReason.trim()}
-                  className="w-full py-3.5 rounded-2xl text-xs font-black bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 hover:from-pink-500 hover:to-indigo-500 text-white shadow-xl shadow-pink-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {swapSubmitting ? <Spinner size={16} /> : <Send size={15} />}
-                  <span>GỬI ĐƠN XIN ĐỔI CA CHO QUẢN LÝ</span>
-                </button>
-              </form>
-            </div>
-
-            {/* Lịch sử Đổi Ca */}
-            <div className="bg-slate-900/90 backdrop-blur-2xl p-5 rounded-3xl border border-slate-800/90 shadow-2xl space-y-3">
-              <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
-                <div className="flex items-center gap-2 text-xs font-black text-slate-100 uppercase">
-                  <History size={16} className="text-emerald-400" />
-                  <span>LỊCH SỬ ĐƠN ĐỔI CA ({swapHistory.length})</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={loadSwapHistory}
-                  className="text-[11px] font-bold text-pink-400 hover:text-pink-300 transition-colors flex items-center gap-1"
-                >
-                  <RefreshCw size={12} />
-                  <span>Làm mới</span>
-                </button>
-              </div>
-
-              {loadingSwapHistory ? (
-                <div className="py-8 text-center text-xs text-slate-400 space-y-2">
-                  <Spinner size={18} className="mx-auto text-pink-500" />
-                  <p>Đang nạp lịch sử đổi ca Realtime...</p>
-                </div>
-              ) : swapHistory.length === 0 ? (
-                <div className="py-8 text-center text-xs text-slate-500 italic">
-                  Bạn chưa tạo hoặc có đơn xin đổi ca nào.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {swapHistory.map((item) => (
-                    <div key={item.id} className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800/90 text-xs space-y-2.5 shadow-sm">
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono font-bold text-[11px] text-slate-400">Mã đơn: #{item.id}</span>
-                        <Badge
-                          className={
-                            item.status === 'APPROVED'
-                              ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/50'
-                              : item.status === 'REJECTED'
-                                ? 'bg-rose-950 text-rose-300 border border-rose-500/50'
-                                : 'bg-amber-950 text-amber-300 border border-amber-500/50'
-                          }
-                        >
-                          {item.status === 'APPROVED'
-                            ? '✅ Quản lý Đã Duyệt'
-                            : item.status === 'REJECTED'
-                              ? '❌ Đã Từ Chối'
-                              : '⏳ Chờ QL Cửa Hàng Duyệt'}
-                        </Badge>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 bg-slate-900/90 p-3 rounded-xl border border-slate-800 text-[11px]">
-                        <div>
-                          <div className="text-slate-400 font-semibold text-[10px]">Người xin (Bạn):</div>
-                          <div className="font-bold text-pink-300">{item.candidateNameA}</div>
-                          <div className="text-slate-300 font-mono">{item.dateA}</div>
-                          <div className="text-slate-400 text-[10px]">{item.caLamA}</div>
-                        </div>
-                        <div>
-                          <div className="text-slate-400 font-semibold text-[10px]">Đồng nghiệp:</div>
-                          <div className="font-bold text-amber-300">{item.candidateNameB}</div>
-                          <div className="text-slate-300 font-mono">{item.dateB}</div>
-                          <div className="text-slate-400 text-[10px]">{item.caLamB}</div>
-                        </div>
-                      </div>
-
-                      <div className="text-[11px] text-slate-400 italic bg-slate-900/40 p-2 rounded-lg">
-                        Lý do: "{item.reason}"
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
         )}
 
