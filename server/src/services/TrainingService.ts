@@ -5,6 +5,7 @@ import { audit } from './AuditService';
 import { syncQueue } from './SyncQueueService';
 import { emit } from '../sockets';
 import { TRAINING_STATUS, TRAINING_DAYS_REQUIRED, TRAINING_DEADLINE_DAYS } from '../lib/constants';
+import { normalizeShiftCode } from './ShiftService';
 
 export class TrainingService {
   async refreshTrainingStatus(candidateId: string): Promise<void> {
@@ -305,14 +306,28 @@ export class TrainingService {
       byBranch.get(bKey)!.push(c);
     });
 
+    // RÀNG BUỘC REALTIME: Tự động hiệu chỉnh lại các ca đã tạo nếu bị sai khác với ca đăng ký chuẩn của ứng viên
+    for (const c of candidates) {
+      const targetShift = normalizeShiftCode(c.caLam);
+      const cShifts = shiftMap.get(c.id);
+      if (cShifts) {
+        for (const [dStr, sRow] of cShifts.entries()) {
+          if (sRow.shifts !== 'OFF' && sRow.shifts !== targetShift) {
+            await prisma.shift.update({
+              where: { id: sRow.id },
+              data: { shifts: targetShift },
+            }).catch(() => undefined);
+            sRow.shifts = targetShift;
+          }
+        }
+      }
+    }
+
     for (const [, candList] of byBranch.entries()) {
       // Group candidates by shiftCode (e.g. SANG, CHIEU, TOI)
       const byShift = new Map<string, typeof candidates>();
       candList.forEach((c) => {
-        const normCa = (c.caLam || '').toLowerCase();
-        let code = 'SANG';
-        if (normCa.includes('chieu') || normCa.includes('12h')) code = 'CHIEU';
-        else if (normCa.includes('toi') || normCa.includes('18h')) code = 'TOI';
+        const code = normalizeShiftCode(c.caLam);
         if (!byShift.has(code)) byShift.set(code, []);
         byShift.get(code)!.push(c);
       });
@@ -450,10 +465,7 @@ export class TrainingService {
       // Phân nhóm nhân viên theo ca làm ưu tiên (SÁNG, CHIỀU, TỐI)
       const byShift = new Map<string, typeof employees>();
       branchEmps.forEach((e) => {
-        const normCa = (e.caLam || '').toLowerCase();
-        let code = 'SANG';
-        if (normCa.includes('chieu') || normCa.includes('12h')) code = 'CHIEU';
-        else if (normCa.includes('toi') || normCa.includes('18h')) code = 'TOI';
+        const code = normalizeShiftCode(e.caLam);
         if (!byShift.has(code)) byShift.set(code, []);
         byShift.get(code)!.push(e);
       });

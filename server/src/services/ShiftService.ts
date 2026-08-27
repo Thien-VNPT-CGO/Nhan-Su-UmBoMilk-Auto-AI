@@ -11,12 +11,14 @@ export const SHIFT_OPTIONS = ['SANG', 'CHIEU', 'TOI', 'OFF'] as const;
 
 export function normalizeShiftCode(raw: string): string {
   if (!raw) return 'SANG';
-  const u = raw.toUpperCase().trim();
-  if (u.includes('SANG') || u.includes('SÁNG') || u === 'CA_SANG') return 'SANG';
-  if (u.includes('CHIEU') || u.includes('CHIỀU') || u === 'CA_CHIEU') return 'CHIEU';
-  if (u.includes('TOI') || u.includes('TỐI') || u === 'CA_TOI') return 'TOI';
-  if (u.includes('OFF') || u.includes('NGHỈ')) return 'OFF';
-  return u;
+  const str = String(raw).trim().toLowerCase();
+  const norm = str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
+
+  if (norm.includes('sang') || norm.includes('7h')) return 'SANG';
+  if (norm.includes('toi') || norm.includes('17h') || norm.includes('18h') || norm.includes('dem') || norm.includes('night')) return 'TOI';
+  if (norm.includes('chieu') || norm.includes('12h30') || norm.includes('13h') || norm.includes('trua')) return 'CHIEU';
+  if (norm.includes('off') || norm.includes('nghi')) return 'OFF';
+  return 'SANG';
 }
 
 export class ShiftService {

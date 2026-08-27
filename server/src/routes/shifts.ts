@@ -49,11 +49,9 @@ router.put('/*', requireWrite(), async (req: AuthedRequest, res, next) => {
 
     // Kiểm tra quy định phân quyền nếu là HR
     if (userRole !== 'ADMIN') {
+      const { normalizeShiftCode } = await import('../services/ShiftService');
       const candidate = await prisma.candidate.findUnique({ where: { id: candidateId } });
-      const normCa = (candidate?.caLam || '').toLowerCase();
-      let originalShiftKey = 'SANG';
-      if (normCa.includes('chieu') || normCa.includes('12h')) originalShiftKey = 'CHIEU';
-      else if (normCa.includes('toi') || normCa.includes('18h')) originalShiftKey = 'TOI';
+      const originalShiftKey = normalizeShiftCode(candidate?.caLam || '');
 
       const isOnlyOffOrOriginal = chosenShifts.every((s) => s === 'OFF' || s === originalShiftKey);
       if (!isOnlyOffOrOriginal) {
