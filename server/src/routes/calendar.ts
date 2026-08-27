@@ -8,7 +8,12 @@ import { ApiError } from '../lib/errors';
 const router = Router();
 
 /** Redirect URI lấy từ request thật (domain Render) — phải khớp chính xác với URI đã đăng ký trong Google Cloud Console. */
-const redirectUriOf = (req: Request) => `${req.protocol}://${req.get('host')}/api/calendar/oauth-callback`;
+const redirectUriOf = (req: Request) => {
+  const host = req.get('host') ?? 'localhost:3000';
+  const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
+  const protocol = isLocal ? req.protocol : 'https';
+  return `${protocol}://${host}/api/calendar/oauth-callback`;
+};
 
 /** Bước 1 OAuth: trả URL Google để admin bấm duyệt quyền (state TTL 10 phút). */
 router.get('/oauth-url', requireAuth, async (req, res, next) => {
