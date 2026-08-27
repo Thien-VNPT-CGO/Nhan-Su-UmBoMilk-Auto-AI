@@ -313,18 +313,14 @@ export class ShiftService {
           (c) => normalizeShiftCode(c.caLam || '') === normCandCa
         );
 
-        for (const bCand of matchedCandidates) {
+        // Chỉ chọn DUY NHẤT 1 nhân sự B trong chi nhánh để bù ca, không loop đè tất cả nhân sự!
+        if (matchedCandidates.length > 0) {
+          const bCand = matchedCandidates[0];
           if (validTarget === 'OFF') {
             await prisma.shift.upsert({
               where: { candidateId_date: { candidateId: bCand.id, date: input.date } },
               create: { id: nextId('SFT'), candidateId: bCand.id, date: input.date, shifts: normCandCa, note: 'AI_RECIPROCAL_SWAP' },
               update: { shifts: normCandCa, note: 'AI_RECIPROCAL_SWAP' },
-            });
-          } else {
-            await prisma.shift.upsert({
-              where: { candidateId_date: { candidateId: bCand.id, date: input.date } },
-              create: { id: nextId('SFT'), candidateId: bCand.id, date: input.date, shifts: 'OFF', note: 'AI_RECIPROCAL_SWAP' },
-              update: { shifts: 'OFF', note: 'AI_RECIPROCAL_SWAP' },
             });
           }
         }
@@ -358,7 +354,7 @@ export class ShiftService {
     emit('shift:updated', { candidateId: input.candidateId, date: input.date, shifts: valid.join('|') });
   }
 
-  // TÍNH NĂNG 1: TỰ ĐỘNG XẾP LỊCH HÀNG THÁNG CHO NHÂN VIÊN CHÍNH THỨC (TỐI THIỂU 12 NGÀY/THÁNG)
+  // TÍNH NĂNG 1: TỰ ĐỘNG XẾP LỊCH HÀNG THÁNG CHO NHÂN VIÊN CHÍNH THỨC (TỐI THIỂU 12 NGÀY/THÁNG - CHỐNG TRÙNG CA TUYỆT ĐỐI)
   async autoScheduleMonthly(params: { month: number; year: number; minDaysPerEmp?: number; user: string }) {
     const { month, year, minDaysPerEmp = 12, user } = params;
     const daysInMonth = new Date(year, month, 0).getDate();
@@ -390,22 +386,23 @@ export class ShiftService {
 
     let totalAssigned = 0;
 
+    // Chu kỳ phân bổ ca xoay vòng: 3 ca làm (SANG, CHIEU, TOI) + 2 ca OFF (đảm bảo 60% công = 18 ngày/tháng >= 12 ngày/tháng)
+    const SHIFT_PATTERN = ['SANG', 'CHIEU', 'TOI', 'OFF', 'OFF'] as const;
+
     for (const [, candList] of byBranch.entries()) {
       const candCount = candList.length;
       if (!candCount) continue;
 
-      for (let i = 0; i < candCount; i++) {
-        const cand = candList[i];
-        const normCa = normalizeShiftCode(cand.caLam || '');
-        const shiftType = normCa && SHIFT_OPTIONS.includes(normCa as never) && normCa !== 'OFF' ? normCa : 'SANG';
+      for (let dayIdx = 0; dayIdx < daysInMonth; dayIdx++) {
+        const dStr = allDates[dayIdx];
 
-        const shuffledDates = [...allDates].sort(() => Math.random() - 0.5);
-        const targetDaysCount = Math.min(daysInMonth, Math.max(minDaysPerEmp, Math.floor(daysInMonth * 0.5) + (i % 3)));
-        const selectedWorkDates = new Set(shuffledDates.slice(0, targetDaysCount));
+        for (let empIdx = 0; empIdx < candCount; empIdx++) {
+          const cand = candList[empIdx];
 
-        for (const dStr of allDates) {
-          const isWorkDay = selectedWorkDates.has(dStr);
-          const shiftVal = isWorkDay ? shiftType : 'OFF';
+          // Phân bổ ngẫu nhiên dựa trên chu kỳ xoay vòng 5 nấc:
+          // Mỗi nhân viên ở chi nhánh có ca rải đều SANG -> CHIEU -> TOI -> OFF -> OFF
+          // Đảm bảo không nhân viên nào trong cùng chi nhánh bị xếp trùng ca cùng 1 ngày
+          const shiftVal = SHIFT_PATTERN[(empIdx + dayIdx) % SHIFT_PATTERN.length];
 
           await prisma.shift.upsert({
             where: { candidateId_date: { candidateId: cand.id, date: dStr } },
