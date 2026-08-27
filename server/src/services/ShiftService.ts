@@ -5,6 +5,7 @@ import { syncQueue } from './SyncQueueService';
 import { emit } from '../sockets';
 import { nextId } from '../lib/id';
 import { dateKey, formatDateTime } from '../lib/date';
+import { zaloPersonalService } from './ZaloPersonalService';
 
 export const SHIFT_OPTIONS = ['SANG', 'CHIEU', 'TOI', 'OFF'] as const;
 
@@ -193,8 +194,6 @@ export class ShiftService {
     }
 
     const todayStr = dateKey(new Date());
-    const vnNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
-    const currentVnHour = vnNow.getHours();
 
     const normCa = (candidate.caLam || '').toLowerCase();
     let startH = 7;
@@ -262,7 +261,6 @@ export class ShiftService {
       throw ApiError.badRequest('INVALID_SHIFT', 'Ca không hợp lệ.');
     }
 
-    // Giao diện cho phép HR/Admin chủ động sắp ca thủ công linh hoạt (AI tự động giải quyết xung đột ca phía dưới)
     const existing = await prisma.shift.findUnique({
       where: { candidateId_date: { candidateId: input.candidateId, date: input.date } },
     });
@@ -292,40 +290,43 @@ export class ShiftService {
     if (candidate.chiNhanh) {
       const validTarget = valid[0] || 'OFF';
       const normCandCa = normalizeShiftCode(candidate.caLam || '');
-
       const isOfficial = candidate.trangThaiTraining === 'NHAN_VIEN_CHINH_THUC';
-      const targetStatuses = isOfficial
-        ? ['NHAN_VIEN_CHINH_THUC']
-        : ['BAT_DAU', 'SAP_BAT_DAU'];
 
-      const sameBranchCandidates = await prisma.candidate.findMany({
-        where: {
-          chiNhanh: candidate.chiNhanh,
-          id: { not: candidate.id },
-          trangThaiTraining: { in: targetStatuses },
-        },
-        select: { id: true, caLam: true },
-      });
+      if (validTarget === 'OFF' && isOfficial) {
+        // PHƯƠNG ÁN 1: Tạo đề xuất 2 bước cho NV B thay thế khi NV A báo OFF
+        void this.createOffReplacementProposal({
+          candidateIdA: candidate.id,
+          date: input.date,
+          shiftCode: normCandCa !== 'OFF' ? normCandCa : 'SANG',
+        }).catch((e) => console.error('[ShiftService] createOffReplacementProposal error:', e));
+      } else if (!isOfficial) {
+        const sameBranchCandidates = await prisma.candidate.findMany({
+          where: {
+            chiNhanh: candidate.chiNhanh,
+            id: { not: candidate.id },
+            trangThaiTraining: { in: ['BAT_DAU', 'SAP_BAT_DAU'] },
+          },
+          select: { id: true, caLam: true },
+        });
 
-      const matchedCandidates = sameBranchCandidates.filter(
-        (c) => normalizeShiftCode(c.caLam || '') === normCandCa
-      );
+        const matchedCandidates = sameBranchCandidates.filter(
+          (c) => normalizeShiftCode(c.caLam || '') === normCandCa
+        );
 
-      for (const bCand of matchedCandidates) {
-        if (validTarget === 'OFF') {
-          // HR đổi candidate A sang OFF -> candidate B tự động chuyển sang đi làm ca normCandCa!
-          await prisma.shift.upsert({
-            where: { candidateId_date: { candidateId: bCand.id, date: input.date } },
-            create: { id: nextId('SFT'), candidateId: bCand.id, date: input.date, shifts: normCandCa, note: 'AI_RECIPROCAL_SWAP' },
-            update: { shifts: normCandCa, note: 'AI_RECIPROCAL_SWAP' },
-          });
-        } else {
-          // HR đổi candidate A sang GIỜ LÀM -> candidate B tự động chuyển sang OFF!
-          await prisma.shift.upsert({
-            where: { candidateId_date: { candidateId: bCand.id, date: input.date } },
-            create: { id: nextId('SFT'), candidateId: bCand.id, date: input.date, shifts: 'OFF', note: 'AI_RECIPROCAL_SWAP' },
-            update: { shifts: 'OFF', note: 'AI_RECIPROCAL_SWAP' },
-          });
+        for (const bCand of matchedCandidates) {
+          if (validTarget === 'OFF') {
+            await prisma.shift.upsert({
+              where: { candidateId_date: { candidateId: bCand.id, date: input.date } },
+              create: { id: nextId('SFT'), candidateId: bCand.id, date: input.date, shifts: normCandCa, note: 'AI_RECIPROCAL_SWAP' },
+              update: { shifts: normCandCa, note: 'AI_RECIPROCAL_SWAP' },
+            });
+          } else {
+            await prisma.shift.upsert({
+              where: { candidateId_date: { candidateId: bCand.id, date: input.date } },
+              create: { id: nextId('SFT'), candidateId: bCand.id, date: input.date, shifts: 'OFF', note: 'AI_RECIPROCAL_SWAP' },
+              update: { shifts: 'OFF', note: 'AI_RECIPROCAL_SWAP' },
+            });
+          }
         }
       }
     }
@@ -355,6 +356,324 @@ export class ShiftService {
     });
 
     emit('shift:updated', { candidateId: input.candidateId, date: input.date, shifts: valid.join('|') });
+  }
+
+  // TÍNH NĂNG 1: TỰ ĐỘNG XẾP LỊCH HÀNG THÁNG CHO NHÂN VIÊN CHÍNH THỨC (TỐI THIỂU 12 NGÀY/THÁNG)
+  async autoScheduleMonthly(params: { month: number; year: number; minDaysPerEmp?: number; user: string }) {
+    const { month, year, minDaysPerEmp = 12, user } = params;
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const padMonth = String(month).padStart(2, '0');
+
+    const from = `${year}-${padMonth}-01`;
+    const to = `${year}-${padMonth}-${String(daysInMonth).padStart(2, '0')}`;
+
+    const officialCandidates = await prisma.candidate.findMany({
+      where: { trangThaiTraining: 'NHAN_VIEN_CHINH_THUC' },
+      orderBy: { tenUv: 'asc' },
+    });
+
+    if (!officialCandidates.length) {
+      return { success: false, message: 'Không có nhân viên chính thức nào để xếp lịch.' };
+    }
+
+    const byBranch = new Map<string, typeof officialCandidates>();
+    officialCandidates.forEach((c) => {
+      const br = c.chiNhanh?.trim() || 'KHAC';
+      if (!byBranch.has(br)) byBranch.set(br, []);
+      byBranch.get(br)!.push(c);
+    });
+
+    const allDates: string[] = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+      allDates.push(`${year}-${padMonth}-${String(d).padStart(2, '0')}`);
+    }
+
+    let totalAssigned = 0;
+
+    for (const [, candList] of byBranch.entries()) {
+      const candCount = candList.length;
+      if (!candCount) continue;
+
+      for (let i = 0; i < candCount; i++) {
+        const cand = candList[i];
+        const normCa = normalizeShiftCode(cand.caLam || '');
+        const shiftType = normCa && SHIFT_OPTIONS.includes(normCa as never) && normCa !== 'OFF' ? normCa : 'SANG';
+
+        const shuffledDates = [...allDates].sort(() => Math.random() - 0.5);
+        const targetDaysCount = Math.min(daysInMonth, Math.max(minDaysPerEmp, Math.floor(daysInMonth * 0.5) + (i % 3)));
+        const selectedWorkDates = new Set(shuffledDates.slice(0, targetDaysCount));
+
+        for (const dStr of allDates) {
+          const isWorkDay = selectedWorkDates.has(dStr);
+          const shiftVal = isWorkDay ? shiftType : 'OFF';
+
+          await prisma.shift.upsert({
+            where: { candidateId_date: { candidateId: cand.id, date: dStr } },
+            create: {
+              id: nextId('SHF'),
+              candidateId: cand.id,
+              date: dStr,
+              shifts: shiftVal,
+              note: 'AI_MONTHLY_SCHEDULED',
+              updatedBy: user,
+            },
+            update: {
+              shifts: shiftVal,
+              note: 'AI_MONTHLY_SCHEDULED',
+              updatedBy: user,
+            },
+          });
+          totalAssigned++;
+        }
+      }
+    }
+
+    await audit({
+      user,
+      action: 'AUTO_SCHEDULE_MONTHLY',
+      entity: 'shift',
+      entityId: `${year}-${padMonth}`,
+      newValue: JSON.stringify({ month, year, minDaysPerEmp, totalAssigned }),
+    });
+
+    emit('shift:updated', { date: from, month, year });
+    return { success: true, count: officialCandidates.length, totalAssigned, month, year };
+  }
+
+  // TÍNH NĂNG 2: PHƯƠNG ÁN 1 - QUY TRÌNH XÁC NHẬN 2 BƯỚC VÀ AI FALLBACK POOL
+  async createOffReplacementProposal(params: { candidateIdA: string; date: string; shiftCode: string }) {
+    const { candidateIdA, date, shiftCode } = params;
+    const candA = await prisma.candidate.findUnique({ where: { id: candidateIdA } });
+    if (!candA || !candA.chiNhanh) return null;
+
+    const sameBranch = await prisma.candidate.findMany({
+      where: {
+        chiNhanh: candA.chiNhanh,
+        id: { not: candA.id },
+        trangThaiTraining: { in: ['NHAN_VIEN_CHINH_THUC', 'BAT_DAU', 'SAP_BAT_DAU'] },
+      },
+    });
+
+    if (!sameBranch.length) return null;
+
+    const shiftsOnDate = await prisma.shift.findMany({
+      where: {
+        candidateId: { in: sameBranch.map((c) => c.id) },
+        date,
+      },
+    });
+
+    const shiftMap = new Map(shiftsOnDate.map((s) => [s.candidateId, s.shifts]));
+
+    const availablePool = sameBranch.filter((c) => {
+      const s = shiftMap.get(c.id);
+      return !s || s === 'OFF';
+    });
+
+    if (!availablePool.length) {
+      const repId = nextId('REP');
+      const record = await prisma.shiftOffReplacement.create({
+        data: {
+          id: repId,
+          candidateIdA: candA.id,
+          candidateNameA: candA.tenUv,
+          chiNhanh: candA.chiNhanh,
+          date,
+          shiftCode,
+          status: 'EXHAUSTED',
+          fallbackPool: [],
+          rejectedEmpIds: [],
+        },
+      });
+
+      const notiBody = `⚠️ [CẢNH BÁO CHI NHÁNH ${candA.chiNhanh}] Ca ${shiftCode} ngày ${date} của NV ${candA.tenUv} không có nhân sự rảnh thay thế. HR cần can thiệp!`;
+      const noti = await prisma.notification.create({
+        data: {
+          id: nextId('NOT'),
+          role: 'HR',
+          title: `🚨 THIẾU NHÂN SỰ BÙ CA - CN ${candA.chiNhanh}`,
+          body: notiBody,
+          type: 'ERROR',
+        },
+      });
+
+      emit('notification:created', noti);
+      emit('shift_replacement:updated', record);
+      return record;
+    }
+
+    const empB = availablePool[0];
+    const fallbackList = availablePool.slice(1).map((c) => c.id);
+
+    const repId = nextId('REP');
+    const record = await prisma.shiftOffReplacement.create({
+      data: {
+        id: repId,
+        candidateIdA: candA.id,
+        candidateNameA: candA.tenUv,
+        chiNhanh: candA.chiNhanh,
+        date,
+        shiftCode,
+        replacementId: empB.id,
+        replacementName: empB.tenUv,
+        sdtB: empB.sdtZalo,
+        fallbackPool: fallbackList,
+        rejectedEmpIds: [],
+        status: 'PENDING_CONFIRM',
+        expiresAt: new Date(Date.now() + 4 * 3600 * 1000),
+      },
+    });
+
+    const notiBody = `🐮 [ĐỀ XUẤT TRỰC THAY CA] Bạn được đề xuất trực thay NV ${candA.tenUv} ca ${shiftCode} ngày ${date} tại CN ${candA.chiNhanh}. Vui lòng bấm Xác Nhận hoặc Từ Chối.`;
+    const noti = await prisma.notification.create({
+      data: {
+        id: nextId('NOT'),
+        userId: empB.id,
+        title: `⚡ YÊU CẦU TRỰC THAY CA - CN ${candA.chiNhanh}`,
+        body: notiBody,
+        type: 'INFO',
+      },
+    });
+
+    emit('notification:created', noti);
+    emit('shift_replacement:updated', record);
+
+    if (empB.sdtZalo) {
+      void zaloPersonalService.sendMessageByPhone(
+        empB.sdtZalo,
+        `🐮 [UMBO MILK] – YÊU CẦU XÁC NHẬN TRỰC THAY CA 📱\n\nChào ${empB.tenUv},\nBạn được AI tự động đề xuất trực thay NV ${candA.tenUv} ca ${shiftCode} ngày ${date} tại Chi nhánh ${candA.chiNhanh}.\nVui lòng đăng nhập Web App để ĐỒNG Ý hoặc TỪ CHỐI.`
+      ).catch(() => null);
+    }
+
+    return record;
+  }
+
+  // PHẢN HỒI YÊU CẦU TRỰC THAY CA (ĐỒNG Ý HẶC TỪ CHỐI -> AI TỰ ĐỘNG CHUYỂN SANG C HẶC BÁO CẢNH BÁO ĐỎ)
+  async respondReplacement(params: { replacementId: string; action: 'ACCEPT' | 'REJECT'; reason?: string; user: string }) {
+    const { replacementId, action, reason, user } = params;
+    const record = await prisma.shiftOffReplacement.findUnique({ where: { id: replacementId } });
+    if (!record) throw ApiError.notFound('REPLACEMENT_NOT_FOUND', 'Không tìm thấy yêu cầu trực thay ca.');
+
+    if (record.status !== 'PENDING_CONFIRM') {
+      throw ApiError.badRequest('INVALID_STATUS', `Đơn này hiện ở trạng thái ${record.status}, không thể thao tác.`);
+    }
+
+    if (action === 'ACCEPT') {
+      const updated = await prisma.shiftOffReplacement.update({
+        where: { id: replacementId },
+        data: { status: 'ACCEPTED' },
+      });
+
+      if (record.replacementId) {
+        await this.upsert({
+          candidateId: record.replacementId,
+          date: record.date,
+          shifts: record.shiftCode,
+          note: `AI_REPLACEMENT_ACCEPTED (Thay NV ${record.candidateNameA})`,
+          user,
+        });
+      }
+
+      emit('shift_replacement:updated', updated);
+
+      const candA = await prisma.candidate.findUnique({ where: { id: record.candidateIdA } });
+      if (candA?.sdtZalo) {
+        void zaloPersonalService.sendMessageByPhone(
+          candA.sdtZalo,
+          `🐮 [UMBO MILK] – THÔNG BÁO CA THAY THẾ ✅\n\nNV ${record.replacementName} đã XÁC NHẬN trực thay ca ${record.shiftCode} ngày ${record.date} cho bạn tại CN ${record.chiNhanh}.`
+        ).catch(() => null);
+      }
+
+      return updated;
+    } else {
+      const rejectedEmpIds = (record.rejectedEmpIds as string[]) || [];
+      if (record.replacementId) rejectedEmpIds.push(record.replacementId);
+
+      const fallbackPool = (record.fallbackPool as string[]) || [];
+
+      if (!fallbackPool.length) {
+        const updated = await prisma.shiftOffReplacement.update({
+          where: { id: replacementId },
+          data: {
+            status: 'EXHAUSTED',
+            rejectedEmpIds,
+            rejectReason: reason || 'Nhân viên từ chối nhận ca.',
+          },
+        });
+
+        const notiBody = `⚠️ [CẢNH BÁO CHI NHÁNH ${record.chiNhanh}] Ca ${record.shiftCode} ngày ${record.date} của NV ${record.candidateNameA} ĐÃ BỊ TẤT CẢ NV KHẢ DỤNG TỪ CHỐI (${record.replacementName} từ chối). Cần HR can thiệp!`;
+        const noti = await prisma.notification.create({
+          data: {
+            id: nextId('NOT'),
+            role: 'HR',
+            title: `🚨 TẤT CẢ NV TỪ CHỐI BÙ CA - CN ${record.chiNhanh}`,
+            body: notiBody,
+            type: 'ERROR',
+          },
+        });
+
+        emit('notification:created', noti);
+        emit('shift_replacement:updated', updated);
+        return updated;
+      }
+
+      const nextEmpId = fallbackPool[0];
+      const nextFallbackPool = fallbackPool.slice(1);
+      const empC = await prisma.candidate.findUnique({ where: { id: nextEmpId } });
+
+      const updated = await prisma.shiftOffReplacement.update({
+        where: { id: replacementId },
+        data: {
+          replacementId: nextEmpId,
+          replacementName: empC?.tenUv || 'Nhân viên C',
+          sdtB: empC?.sdtZalo || null,
+          fallbackPool: nextFallbackPool,
+          rejectedEmpIds,
+          status: 'PENDING_CONFIRM',
+          expiresAt: new Date(Date.now() + 4 * 3600 * 1000),
+        },
+      });
+
+      if (empC) {
+        const notiBody = `🐮 [ĐỀ XUẤT TRỰC THAY CA] Bạn được đề xuất trực thay NV ${record.candidateNameA} ca ${record.shiftCode} ngày ${record.date} tại CN ${record.chiNhanh}. Vui lòng bấm Xác Nhận hoặc Từ Chối.`;
+        const noti = await prisma.notification.create({
+          data: {
+            id: nextId('NOT'),
+            userId: empC.id,
+            title: `⚡ YÊU CẦU TRỰC THAY CA - CN ${record.chiNhanh}`,
+            body: notiBody,
+            type: 'INFO',
+          },
+        });
+        emit('notification:created', noti);
+
+        if (empC.sdtZalo) {
+          void zaloPersonalService.sendMessageByPhone(
+            empC.sdtZalo,
+            `🐮 [UMBO MILK] – YÊU CẦU XÁC NHẬN TRỰC THAY CA 📱\n\nChào ${empC.tenUv},\nBạn được AI tự động đề xuất trực thay NV ${record.candidateNameA} ca ${record.shiftCode} ngày ${record.date} tại Chi nhánh ${record.chiNhanh}.\nVui lòng đăng nhập Web App để ĐỒNG Ý hoặc TỪ CHỐI.`
+          ).catch(() => null);
+        }
+      }
+
+      emit('shift_replacement:updated', updated);
+      return updated;
+    }
+  }
+
+  // TRA CỨU DANH SÁCH YÊU CẦU TRỰC THAY CA FOR HR DASHBOARD / EMPLOYEE
+  async listOffReplacements(params: { status?: string; branch?: string; candidateId?: string }) {
+    const where: any = {};
+    if (params.status && params.status !== 'ALL') where.status = params.status;
+    if (params.branch) where.chiNhanh = params.branch;
+    if (params.candidateId) {
+      where.OR = [{ candidateIdA: params.candidateId }, { replacementId: params.candidateId }];
+    }
+
+    return prisma.shiftOffReplacement.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
   }
 }
 

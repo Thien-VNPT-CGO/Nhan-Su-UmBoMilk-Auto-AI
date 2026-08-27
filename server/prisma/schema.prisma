@@ -338,6 +338,33 @@ model BackupRecord {
   @@index([createdAt])
 }
 
+model ShiftOffReplacement {
+  id              String    @id // REP-YYYYMMDD-XXXX
+  candidateIdA    String    // Nhân viên xin OFF / được HR đổi OFF
+  candidateNameA  String
+  chiNhanh        String
+  date            String    // yyyy-MM-dd
+  shiftCode       String    // SANG | CHIEU | TOI
+
+  replacementId   String?   // Nhân viên B hiện đang được AI chỉ định thay thế
+  replacementName String?
+  sdtB            String?
+
+  fallbackPool    Json?     // string[] danh sách candidateId khả dĩ còn lại
+  rejectedEmpIds  Json?     // string[] danh sách candidateId đã từ chối
+
+  status          String    @default("PENDING_CONFIRM") // PENDING_CONFIRM | ACCEPTED | REJECTED | EXHAUSTED | CANCELLED
+  rejectReason    String?
+  expiresAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([candidateIdA])
+  @@index([replacementId])
+  @@index([chiNhanh, date])
+  @@index([status])
+}
+
 model ShiftSwapRequest {
   id               String    @id
   candidateIdA     String

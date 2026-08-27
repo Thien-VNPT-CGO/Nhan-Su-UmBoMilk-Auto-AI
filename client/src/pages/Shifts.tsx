@@ -126,27 +126,92 @@ export default function Shifts() {
     }
   };
 
+  // States Modal AI Xếp Lịch Tháng
+  const [showMonthlyModal, setShowMonthlyModal] = useState(false);
+  const [monthlyMonth, setMonthlyMonth] = useState(new Date().getMonth() + 1);
+  const [monthlyYear, setMonthlyYear] = useState(new Date().getFullYear());
+  const [monthlyMinDays, setMonthlyMinDays] = useState(12);
+  const [schedulingMonthly, setSchedulingMonthly] = useState(false);
+
+  // States Modal Ca Thay Thế (Phương án 1)
+  const [showReplacementsModal, setShowReplacementsModal] = useState(false);
+  const [replacements, setReplacements] = useState<any[]>([]);
+  const [loadingReplacements, setLoadingReplacements] = useState(false);
+
+  const loadReplacements = useCallback(async () => {
+    try {
+      setLoadingReplacements(true);
+      const res = await api.get<any[]>('/shifts/replacements');
+      const list = (res as any)?.data || res;
+      setReplacements(Array.isArray(list) ? list : []);
+    } catch {
+      // ignore
+    } finally {
+      setLoadingReplacements(false);
+    }
+  }, []);
+
+  const handleScheduleMonthlySubmit = async () => {
+    if (isViewer) {
+      toast('error', '🔒 Tài khoản VIEWER không có quyền xếp lịch tháng!');
+      return;
+    }
+    setSchedulingMonthly(true);
+    try {
+      const res = await api.post<any>('/shifts/auto-schedule-monthly', {
+        month: monthlyMonth,
+        year: monthlyYear,
+        minDaysPerEmp: monthlyMinDays,
+      });
+      const data = (res as any)?.data || res;
+      toast('success', `🎉 AI đã xếp lịch tự động tháng ${monthlyMonth}/${monthlyYear} cho ${data.count || 0} Nhân viên chính thức (Tổng ${data.totalAssigned || 0} lượt ca, tối thiểu ${monthlyMinDays} ngày/tháng)!`);
+      setShowMonthlyModal(false);
+      await loadData();
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Xếp lịch tháng thất bại.');
+    } finally {
+      setSchedulingMonthly(false);
+    }
+  };
+
+  const handleRespondReplacementAdmin = async (replacementId: string, action: 'ACCEPT' | 'REJECT') => {
+    try {
+      await api.post('/shifts/replacements/respond', { replacementId, action });
+      toast('success', action === 'ACCEPT' ? '✅ Đã chấp nhận đề xuất thay thế!' : '❌ Đã chuyển sang ứng viên thay thế tiếp theo!');
+      await loadReplacements();
+      await loadData();
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Thao tác thất bại.');
+    }
+  };
+
   useEffect(() => {
     loadData();
-  }, [loadData]);
+    loadReplacements();
+  }, [loadData, loadReplacements]);
 
   useEffect(() => {
     const socket = getSocket();
     if (!socket) return;
-    const debouncedReload = debounce(() => loadData(), 100);
+    const debouncedReload = debounce(() => {
+      loadData();
+      loadReplacements();
+    }, 100);
 
     const handler = () => debouncedReload();
     socket.on('shift:updated', handler);
     socket.on('attendance:updated', handler);
     socket.on('candidate:updated', handler);
     socket.on('training:updated', handler);
+    socket.on('shift_replacement:updated', handler);
     return () => {
       socket.off('shift:updated', handler);
       socket.off('attendance:updated', handler);
       socket.off('candidate:updated', handler);
       socket.off('training:updated', handler);
+      socket.off('shift_replacement:updated', handler);
     };
-  }, [loadData]);
+  }, [loadData, loadReplacements]);
 
   const activeRows = tab === 'training' ? trainingRows : employeeRows;
 
@@ -394,7 +459,32 @@ export default function Shifts() {
             title="Kích hoạt thuật toán AI tự động phân bổ lịch đảo ca xen kẽ chống trùng ca cùng ngày"
           >
             <Sparkles size={14} className="text-amber-300 animate-pulse" />
-            <span>⚡ AI Phân Bổ Tự Động</span>
+            <span>⚡ AI Phân Bổ Tuần</span>
+          </button>
+          <button
+            onClick={() => setShowMonthlyModal(true)}
+            className="text-xs font-black bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-3 py-2 rounded-xl shadow-sm flex items-center gap-1.5 transition-all cursor-pointer hover:scale-102"
+            title="Sắp lịch AI hàng tháng cho Nhân viên chính thức (Tối thiểu 12 ngày/tháng)"
+          >
+            <CalendarDays size={14} className="text-blue-200" />
+            <span>📅 AI Xếp Lịch Tháng</span>
+          </button>
+          <button
+            onClick={() => {
+              setShowReplacementsModal(true);
+              loadReplacements();
+            }}
+            className="text-xs font-black bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-3 py-2 rounded-xl shadow-sm flex items-center gap-1.5 transition-all cursor-pointer hover:scale-102 relative"
+            title="Xem danh sách yêu cầu trực thay ca 2 bước & cảnh báo thiếu nhân sự (Phương án 1)"
+          >
+            <RefreshCw size={14} className="text-purple-200" />
+            <span>📋 Ca Thay Thế (PA 1)</span>
+            {replacements.some((r) => r.status === 'EXHAUSTED' || r.status === 'PENDING_CONFIRM') && (
+              <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
+              </span>
+            )}
           </button>
           <button
             onClick={loadData}
@@ -1010,6 +1100,188 @@ export default function Shifts() {
           </div>
         </Modal>
       )}
+
+      {/* Modal AI Xếp Lịch Hàng Tháng cho Nhân viên Chính thức */}
+      <Modal
+        open={showMonthlyModal}
+        title="🤖 AI Xếp Lịch Tháng Cho Nhân Viên Chính Thức"
+        onClose={() => setShowMonthlyModal(false)}
+      >
+        <div className="space-y-4">
+          <div className="bg-blue-50 border border-blue-200 text-blue-800 p-3.5 rounded-xl text-xs flex items-start gap-2.5">
+            <Sparkles className="text-blue-600 shrink-0 mt-0.5" size={18} />
+            <div className="leading-relaxed">
+              <strong>Quy tắc AI xếp lịch tháng:</strong>
+              <ul className="list-disc ml-4 mt-1 space-y-0.5 text-[11px]">
+                <li>Thời gian: Từ ngày 01 đến ngày cuối tháng được chọn.</li>
+                <li>Tất cả Nhân viên Chính thức sẽ được phân bổ tối thiểu <strong>{monthlyMinDays} ngày / tháng</strong>.</li>
+                <li>Tự động ngẫu nhiên phân bổ công bằng các ca SÁNG, CHIỀU, TỐI theo từng chi nhánh.</li>
+                <li>Ràng buộc cứng: Không trùng ca trong cùng 1 ngày đối với 1 nhân viên.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Tháng chọn">
+              <select
+                value={monthlyMonth}
+                onChange={(e) => setMonthlyMonth(Number(e.target.value))}
+                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold"
+              >
+                {Array.from({ length: 12 }, (_, i) => (
+                  <option key={i + 1} value={i + 1}>
+                    Tháng {i + 1}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field label="Năm">
+              <select
+                value={monthlyYear}
+                onChange={(e) => setMonthlyYear(Number(e.target.value))}
+                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold"
+              >
+                {[2025, 2026, 2027, 2028, 2029, 2030].map((y) => (
+                  <option key={y} value={y}>
+                    Năm {y}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+
+          <Field label="Số ca / ngày làm tối thiểu 1 tháng (Mặc định 12 ngày)">
+            <input
+              type="number"
+              min={1}
+              max={31}
+              value={monthlyMinDays}
+              onChange={(e) => setMonthlyMinDays(Number(e.target.value))}
+              className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
+            />
+          </Field>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              onClick={() => setShowMonthlyModal(false)}
+              className="px-4 py-2 rounded-xl text-xs font-semibold border border-slate-200 hover:bg-slate-50 cursor-pointer"
+            >
+              Hủy
+            </button>
+            <button
+              onClick={handleScheduleMonthlySubmit}
+              disabled={schedulingMonthly || isViewer}
+              className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 cursor-pointer"
+            >
+              {schedulingMonthly ? <Spinner size={14} /> : '🤖 Tiến Hành AI Xếp Lịch Tháng'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal Quản Lý Ca Thay Thế 2 Bước (Phương án 1) */}
+      <Modal
+        open={showReplacementsModal}
+        title="📋 Quản Lý Yêu Cầu Trực Thay Ca (Phương Án 1)"
+        onClose={() => setShowReplacementsModal(false)}
+      >
+        <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+          <div className="bg-purple-50 border border-purple-200 text-purple-900 p-3 rounded-xl text-xs leading-relaxed">
+            <strong>💡 Quy trình 2 bước xác nhận & AI Escalation:</strong>
+            <p className="mt-0.5 text-[11px] text-purple-800">
+              Khi NV A báo OFF, ca thay thế của B được tạo ở trạng thái <code>PENDING_CONFIRM</code>. Nếu B bấm Từ Chối, AI sẽ tự động đề xuất NV C tiếp theo. Nếu hết người thay, hệ thống phát <strong>Cảnh Báo Đỏ</strong> cho HR!
+            </p>
+          </div>
+
+          {loadingReplacements ? (
+            <div className="p-6 text-center">
+              <Spinner size={24} className="mx-auto text-purple-600" />
+              <p className="text-xs text-slate-500 mt-2">Đang tải danh sách ca thay thế...</p>
+            </div>
+          ) : replacements.length === 0 ? (
+            <div className="p-6 text-center border border-dashed border-slate-200 rounded-xl text-xs text-slate-500">
+              Chưa có yêu cầu trực thay ca nào.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {replacements.map((r) => (
+                <div
+                  key={r.id}
+                  className={cn(
+                    'p-3.5 rounded-xl border text-xs space-y-2 transition-all',
+                    r.status === 'EXHAUSTED'
+                      ? 'bg-rose-50 border-rose-300 text-rose-950 shadow-xs'
+                      : r.status === 'PENDING_CONFIRM'
+                      ? 'bg-amber-50/70 border-amber-300 text-amber-950'
+                      : r.status === 'ACCEPTED'
+                      ? 'bg-emerald-50/70 border-emerald-300 text-emerald-950'
+                      : 'bg-slate-50 border-slate-200 text-slate-800'
+                  )}
+                >
+                  <div className="flex justify-between items-start gap-2 font-bold">
+                    <div>
+                      <span className="text-slate-900">{r.candidateNameA}</span> (OFF ngày {formatDate(r.date)} - Ca {r.shiftCode})
+                    </div>
+                    <Badge
+                      className={
+                        r.status === 'ACCEPTED'
+                          ? 'bg-emerald-100 text-emerald-800 font-extrabold'
+                          : r.status === 'EXHAUSTED'
+                          ? 'bg-rose-100 text-rose-800 font-extrabold'
+                          : 'bg-amber-100 text-amber-800 font-extrabold'
+                      }
+                    >
+                      {r.status === 'PENDING_CONFIRM' && '⏳ Chờ NV B xác nhận'}
+                      {r.status === 'ACCEPTED' && '✅ Đã chấp nhận'}
+                      {r.status === 'EXHAUSTED' && '🚨 CẢNH BÁO ĐỎ: Thiếu người'}
+                      {r.status === 'REJECTED' && '❌ Bị từ chối'}
+                    </Badge>
+                  </div>
+
+                  <div className="text-[11px] text-slate-600 space-y-0.5">
+                    <div>🏢 Chi nhánh: <strong>{r.chiNhanh}</strong></div>
+                    <div>
+                      👤 NV thay thế đề xuất: <strong>{r.replacementName || 'Chưa chọn'}</strong> ({r.sdtB || 'Chưa có SĐT'})
+                    </div>
+                    {r.status === 'EXHAUSTED' && (
+                      <div className="text-rose-700 font-extrabold mt-1">
+                        ⚠️ Tất cả nhân sự rảnh cùng chi nhánh đều đã từ chối hoặc bận. HR cần can thiệp chỉ định thủ công!
+                      </div>
+                    )}
+                  </div>
+
+                  {r.status === 'PENDING_CONFIRM' && (isAdmin || isManager) && (
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        onClick={() => handleRespondReplacementAdmin(r.id, 'ACCEPT')}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-lg text-[11px] cursor-pointer"
+                      >
+                        Duyệt Chấp Nhận Hộ
+                      </button>
+                      <button
+                        onClick={() => handleRespondReplacementAdmin(r.id, 'REJECT')}
+                        className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-3 py-1.5 rounded-lg text-[11px] cursor-pointer"
+                      >
+                        Chuyển NV Tiếp Theo
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex justify-end pt-2">
+            <button
+              onClick={() => setShowReplacementsModal(false)}
+              className="px-4 py-2 rounded-xl text-xs font-semibold border border-slate-200 hover:bg-slate-50 cursor-pointer"
+            >
+              Đóng
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

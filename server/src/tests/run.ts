@@ -322,6 +322,20 @@ async function main() {
   const trainingList = await api('/training', { session });
   ok('TH1/2: Nhân viên chính thức không còn trong danh sách Training', !(trainingList.json.data as unknown[]).some((r) => (r as { id: string }).id === cEmp));
 
+  // ==================== TÍNH NĂNG MỚI: AI XẾP LỊCH THÁNG & QUY TRÌNH 2 BƯỚC PHƯƠNG ÁN 1 ====================
+  console.log('\n[PA1] AI Auto-Schedule Monthly & 2-Step OFF Replacement Confirmation');
+  const monthlyRes = await api('/shifts/auto-schedule-monthly', {
+    method: 'POST',
+    session: adminSession,
+    body: { month: 9, year: 2026, minDaysPerEmp: 12 },
+  });
+  ok('AI_MONTHLY: Xếp lịch hàng tháng cho NV chính thức thành công', monthlyRes.status === 200 && monthlyRes.json.data?.success === true);
+
+  // Đổi ca NV chính thức sang OFF -> Kích hoạt đề xuất trực thay ca Phương án 1
+  await api(`/shifts/${encodeURIComponent(cEmp)}/${dateKey()}`, { method: 'PUT', session: adminSession, body: { shifts: ['OFF'] } });
+  const repList = await api('/shifts/replacements', { session });
+  ok('PA1: Tạo thành công bản ghi đề xuất trực thay ca 2 bước', repList.status === 200 && Array.isArray(repList.json.data));
+
   // ==================== AUDIT ====================
   console.log('\n[AUDIT]');
   const audits = await api(`/audit?entityId=${encodeURIComponent(c1)}&limit=10`, { session });

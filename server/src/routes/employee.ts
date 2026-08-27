@@ -202,6 +202,8 @@ router.post('/public/employee/shift-swap-request', async (req, res, next) => {
   }
 });
 
+import { shiftService } from '../services/ShiftService';
+
 // 3d. Lịch sử đơn đổi ca của nhân viên
 router.get('/public/employee/shift-swap-history/:candidateId', async (req, res, next) => {
   try {
@@ -217,6 +219,42 @@ router.get('/public/employee/shift-swap-history/:candidateId', async (req, res, 
       take: 50,
     });
     res.json({ success: true, data: history });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// 3e. Tra cứu yêu cầu trực thay ca chờ nhân viên xác nhận
+router.get('/public/employee/replacements/:candidateId', async (req, res, next) => {
+  try {
+    const candidateId = req.params.candidateId;
+    const list = await shiftService.listOffReplacements({ candidateId, status: 'PENDING_CONFIRM' });
+    res.json({ success: true, data: list });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// 3f. Nhân viên bấm ĐỒNG Ý hoặc TỪ CHỐI đề xuất trực thay ca
+router.post('/public/employee/replacements/respond', async (req, res, next) => {
+  try {
+    const schema = z.object({
+      replacementId: z.string().min(1, 'Thiếu Mã đề xuất'),
+      action: z.enum(['ACCEPT', 'REJECT']),
+      reason: z.string().optional(),
+      candidateId: z.string().optional(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      throw ApiError.badRequest('INVALID_INPUT', 'Dữ liệu phản hồi không hợp lệ.');
+    }
+    const updated = await shiftService.respondReplacement({
+      replacementId: parsed.data.replacementId,
+      action: parsed.data.action,
+      reason: parsed.data.reason,
+      user: parsed.data.candidateId || 'EMPLOYEE_SELF',
+    });
+    res.json({ success: true, data: updated });
   } catch (e) {
     next(e);
   }

@@ -84,4 +84,64 @@ router.post('/auto-stagger', requireWrite(), async (_req: AuthedRequest, res, ne
   }
 });
 
+// POST /api/shifts/auto-schedule-monthly (AI Tự động xếp lịch hàng tháng cho Nhân viên chính thức >= 12 ngày)
+router.post('/auto-schedule-monthly', requireWrite(), async (req: AuthedRequest, res, next) => {
+  try {
+    const schema = z.object({
+      month: z.number().int().min(1).max(12),
+      year: z.number().int().min(2025).max(2030),
+      minDaysPerEmp: z.number().int().min(1).max(31).optional().default(12),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) throw ApiError.badRequest('INVALID_INPUT', 'Thông tin tháng/năm không hợp lệ.');
+
+    const result = await shiftService.autoScheduleMonthly({
+      month: parsed.data.month,
+      year: parsed.data.year,
+      minDaysPerEmp: parsed.data.minDaysPerEmp,
+      user: req.user!.username,
+    });
+    res.json({ success: true, data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// GET /api/shifts/replacements (Danh sách đề xuất trực thay ca)
+router.get('/replacements', async (req: AuthedRequest, res, next) => {
+  try {
+    const status = req.query.status ? String(req.query.status) : undefined;
+    const branch = req.query.branch ? String(req.query.branch) : undefined;
+    const candidateId = req.query.candidateId ? String(req.query.candidateId) : undefined;
+
+    const list = await shiftService.listOffReplacements({ status, branch, candidateId });
+    res.json({ success: true, data: list });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// POST /api/shifts/replacements/respond (Phản hồi Xác Nhận hoặc Từ Chối đề xuất trực thay ca)
+router.post('/replacements/respond', async (req: AuthedRequest, res, next) => {
+  try {
+    const schema = z.object({
+      replacementId: z.string().min(1),
+      action: z.enum(['ACCEPT', 'REJECT']),
+      reason: z.string().optional(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) throw ApiError.badRequest('INVALID_INPUT', 'Dữ liệu phản hồi không hợp lệ.');
+
+    const updated = await shiftService.respondReplacement({
+      replacementId: parsed.data.replacementId,
+      action: parsed.data.action,
+      reason: parsed.data.reason,
+      user: req.user!.username,
+    });
+    res.json({ success: true, data: updated });
+  } catch (e) {
+    next(e);
+  }
+});
+
 export default router;

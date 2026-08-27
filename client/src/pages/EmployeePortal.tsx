@@ -230,6 +230,40 @@ export default function EmployeePortal() {
     }
   }, []);
 
+  const [pendingReplacements, setPendingReplacements] = useState<any[]>([]);
+
+  const loadPendingReplacements = useCallback(async () => {
+    if (!session?.candidate.id) return;
+    try {
+      const res = await api.get<any[]>(`/public/employee/replacements/${encodeURIComponent(session.candidate.id)}`);
+      const list = (res as any)?.data || res;
+      setPendingReplacements(Array.isArray(list) ? list : []);
+    } catch {
+      // ignore
+    }
+  }, [session?.candidate.id]);
+
+  const handleRespondReplacementEmp = async (replacementId: string, action: 'ACCEPT' | 'REJECT') => {
+    if (!session?.candidate.id) return;
+    try {
+      await api.post('/public/employee/replacements/respond', {
+        replacementId,
+        action,
+        candidateId: session.candidate.id,
+      });
+      alert(action === 'ACCEPT' ? '✅ Cảm ơn bạn! Bạn đã xác nhận trực thay ca thành công.' : '❌ Bạn đã từ chối nhận ca. AI sẽ tự động đề xuất nhân viên tiếp theo.');
+      await loadPendingReplacements();
+    } catch (e) {
+      alert(e instanceof ApiError ? e.message : 'Thao tác thất bại.');
+    }
+  };
+
+  useEffect(() => {
+    if (session?.candidate.id) {
+      loadPendingReplacements();
+    }
+  }, [session?.candidate.id, loadPendingReplacements]);
+
   // KÍCH HOẠT DUAL MECHANISM FORCE LOGOUT (Socket.io Realtime + Active Heartbeat/Focus Check)
   useEffect(() => {
     if (!session?.candidate.id) return;
@@ -255,13 +289,14 @@ export default function EmployeePortal() {
     // Kiểm tra ngay khi khởi chạy
     checkSession();
 
-    // Định kỳ 5 giây kiểm tra 1 lần (Heartbeat)
-    const interval = setInterval(checkSession, 5000);
+    // Định kỳ 15 giây kiểm tra 1 lần (Heartbeat)
+    const interval = setInterval(checkSession, 15000);
 
     // Kiểm tra ngay lập tức khi điện thoại mở lại màn hình / chuyển tab (Focus / Wakeup)
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
         checkSession();
+        loadPendingReplacements();
       }
     };
     document.addEventListener('visibilitychange', handleVisibility);
@@ -279,6 +314,7 @@ export default function EmployeePortal() {
 
     const handleRealtimeWebHRSync = () => {
       checkSession();
+      loadPendingReplacements();
       if (session?.candidate.id && myDate) {
         fetchMyShiftSchedule(session.candidate.id, myDate);
       }
@@ -291,6 +327,7 @@ export default function EmployeePortal() {
     socket.on('training:updated', handleRealtimeWebHRSync);
     socket.on('attendance:updated', handleRealtimeWebHRSync);
     socket.on('shift_swap:approved', handleRealtimeWebHRSync);
+    socket.on('shift_replacement:updated', handleRealtimeWebHRSync);
 
     return () => {
       clearInterval(interval);
@@ -303,8 +340,9 @@ export default function EmployeePortal() {
       socket.off('training:updated', handleRealtimeWebHRSync);
       socket.off('attendance:updated', handleRealtimeWebHRSync);
       socket.off('shift_swap:approved', handleRealtimeWebHRSync);
+      socket.off('shift_replacement:updated', handleRealtimeWebHRSync);
     };
-  }, [session?.candidate.id, myDate, fetchMyShiftSchedule]);
+  }, [session?.candidate.id, myDate, fetchMyShiftSchedule, loadPendingReplacements]);
 
   // Load Lương AI Realtime khi chuyển sang Tab PAYROLL
   useEffect(() => {
@@ -605,6 +643,39 @@ export default function EmployeePortal() {
             <LogOut size={16} />
           </button>
         </div>
+
+        {/* Banner Thông Báo Trực Thay Ca (Phương Án 1) */}
+        {pendingReplacements.length > 0 && (
+          <div className="space-y-3">
+            {pendingReplacements.map((rep) => (
+              <div key={rep.id} className="bg-amber-950/90 border-2 border-amber-500/80 rounded-3xl p-4 shadow-xl text-amber-100 space-y-2">
+                <div className="flex items-center gap-2 text-amber-300 font-extrabold text-xs">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping shrink-0" />
+                  <span>YÊU CẦU TRỰC THAY CA (PHƯƠNG ÁN 1)</span>
+                </div>
+                <p className="text-xs text-amber-100/90 leading-relaxed font-medium">
+                  Bạn được AI đề xuất trực thay cho <strong>{rep.candidateNameA}</strong> ca <strong>{rep.shiftCode}</strong> ngày <strong>{rep.date}</strong> tại Chi nhánh <strong>{rep.chiNhanh}</strong>.
+                </p>
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => handleRespondReplacementEmp(rep.id, 'ACCEPT')}
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-3 rounded-2xl text-xs shadow-md transition-all cursor-pointer text-center"
+                  >
+                    ✅ ĐỒNG Ý NHẬN CA
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRespondReplacementEmp(rep.id, 'REJECT')}
+                    className="flex-1 bg-rose-600 hover:bg-rose-500 text-white font-bold py-2 px-3 rounded-2xl text-xs shadow-md transition-all cursor-pointer text-center"
+                  >
+                    ❌ TỪ CHỐI
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Tab Selector Buttons */}
         <div className="grid grid-cols-4 gap-1.5 bg-slate-900/90 p-1.5 rounded-2xl border border-slate-800">
