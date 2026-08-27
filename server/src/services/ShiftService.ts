@@ -292,38 +292,13 @@ export class ShiftService {
       const normCandCa = normalizeShiftCode(candidate.caLam || '');
       const isOfficial = candidate.trangThaiTraining === 'NHAN_VIEN_CHINH_THUC';
 
-      if (validTarget === 'OFF' && isOfficial) {
-        // PHƯƠNG ÁN 1: Tạo đề xuất 2 bước cho NV B thay thế khi NV A báo OFF
+      if (validTarget === 'OFF') {
+        // TẠO ĐỀ XUẤT BÙ CA ĐA TẦNG (Chính thức bù cho Chính thức, Training bù cho Training)
         void this.createOffReplacementProposal({
           candidateIdA: candidate.id,
           date: input.date,
           shiftCode: normCandCa !== 'OFF' ? normCandCa : 'SANG',
         }).catch((e) => console.error('[ShiftService] createOffReplacementProposal error:', e));
-      } else if (!isOfficial) {
-        const sameBranchCandidates = await prisma.candidate.findMany({
-          where: {
-            chiNhanh: candidate.chiNhanh,
-            id: { not: candidate.id },
-            trangThaiTraining: { in: ['BAT_DAU', 'SAP_BAT_DAU'] },
-          },
-          select: { id: true, caLam: true },
-        });
-
-        const matchedCandidates = sameBranchCandidates.filter(
-          (c) => normalizeShiftCode(c.caLam || '') === normCandCa
-        );
-
-        // Chỉ chọn DUY NHẤT 1 nhân sự B trong chi nhánh để bù ca, không loop đè tất cả nhân sự!
-        if (matchedCandidates.length > 0) {
-          const bCand = matchedCandidates[0];
-          if (validTarget === 'OFF') {
-            await prisma.shift.upsert({
-              where: { candidateId_date: { candidateId: bCand.id, date: input.date } },
-              create: { id: nextId('SFT'), candidateId: bCand.id, date: input.date, shifts: normCandCa, note: 'AI_RECIPROCAL_SWAP' },
-              update: { shifts: normCandCa, note: 'AI_RECIPROCAL_SWAP' },
-            });
-          }
-        }
       }
     }
 
@@ -458,10 +433,17 @@ export class ShiftService {
     const candA = await prisma.candidate.findUnique({ where: { id: candidateIdA } });
     if (!candA || !candA.chiNhanh) return null;
 
+    const isOfficialA = candA.trangThaiTraining === 'NHAN_VIEN_CHINH_THUC';
+
+    // RÀNG BUỘC PHÂN TÁCH LỊCH TUYỆT ĐỐI:
+    // - Nhân viên Training CHỈ tìm người bù ca từ nhóm Nhân viên Training
+    // - Nhân viên Chính thức CHỈ tìm người bù ca từ nhóm Nhân viên Chính thức
     const allActiveCandidates = await prisma.candidate.findMany({
       where: {
         id: { not: candA.id },
-        trangThaiTraining: { in: ['NHAN_VIEN_CHINH_THUC', 'BAT_DAU', 'SAP_BAT_DAU'] },
+        trangThaiTraining: isOfficialA
+          ? 'NHAN_VIEN_CHINH_THUC'
+          : { in: ['BAT_DAU', 'SAP_BAT_DAU', 'CHUA_THAM_GIA'], notIn: ['NHAN_VIEN_CHINH_THUC', 'HOAN_THANH', 'LOAI', 'KHONG_DU_NGAY'] },
       },
     });
 

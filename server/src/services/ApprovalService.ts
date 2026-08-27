@@ -53,6 +53,16 @@ export class ApprovalService {
     const candB = await prisma.candidate.findUnique({ where: { id: input.candidateIdB } });
     if (!candB) throw ApiError.notFound('CANDIDATE_B_NOT_FOUND', 'Không tìm thấy ứng viên B.');
 
+    const isOfficialA = candA.trangThaiTraining === 'NHAN_VIEN_CHINH_THUC';
+    const isOfficialB = candB.trangThaiTraining === 'NHAN_VIEN_CHINH_THUC';
+
+    if (isOfficialA !== isOfficialB) {
+      throw ApiError.badRequest(
+        'CANNOT_SWAP_DIFFERENT_TYPES',
+        'Không thể xếp ca/hoán đổi ca giữa Nhân viên Training và Nhân viên Chính thức! 2 lịch làm việc này hoàn toàn tách biệt.'
+      );
+    }
+
     const reqId = nextId('SWAP');
 
     const created = await prisma.shiftSwapRequest.create({
