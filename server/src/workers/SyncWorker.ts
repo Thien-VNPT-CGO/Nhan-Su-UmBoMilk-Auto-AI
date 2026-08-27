@@ -77,7 +77,7 @@ export class SyncWorker {
     }, this.intervalMs);
     this.formTimer = setInterval(() => {
       void this.tickFormImport();
-    }, 15_000);
+    }, 3_000);
     this.dedupTimer = setInterval(() => {
       void this.tickAutoDedup();
     }, 5 * 60_000);

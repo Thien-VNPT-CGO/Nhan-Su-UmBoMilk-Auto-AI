@@ -377,6 +377,14 @@ async function main() {
   console.log('\n[OUTPUT TEST & EVALUATION] Phiếu Test Đầu Ra & Bảng Đánh Giá Cửa Hàng');
   const candidateIdForTest = await makeCandidate(session);
 
+  // Test Chức năng VIP Admin Test: +1 ca điểm danh & Đủ 7 ngày training (Yêu cầu tài khoản Admin)
+  const vipCandId = await makeCandidate(session);
+  const vipRes1 = await api(`/training/${vipCandId}/vip-add-1day`, { method: 'POST', session: adminSession });
+  ok('VIP_ADMIN: Tích +1 ca điểm danh thành công', vipRes1.status === 200 && vipRes1.json.data.soNgayDaTraining === 1);
+
+  const vipRes7 = await api(`/training/${vipCandId}/vip-simulate-7days`, { method: 'POST', session: adminSession });
+  ok('VIP_ADMIN: Tích đủ 7 ngày training lập tức cho Admin test thành công', vipRes7.status === 200 && vipRes7.json.data.soNgayDaTraining === 7 && vipRes7.json.data.trangThaiTraining === 'HOAN_THANH_7_NGAY');
+
   // Set candidate to completed training (7 days)
   await prisma.candidate.update({
     where: { id: candidateIdForTest },

@@ -174,17 +174,19 @@ export default function Candidates() {
       if (selected) {
         api.get<CandidateRow>(`/candidates/${selected.id}`).then(setSelected).catch(() => undefined);
       }
-    }, 600);
+    }, 100);
     const onAutoDedup = debounce((r: { removed?: number; groups?: number }) => {
       loadDups();
       void load();
       if (r.removed && r.removed > 0) {
         toast('success', `AI đã tự loại ${r.removed} hồ sơ trùng SĐT và đồng bộ xóa về Google Sheet.`);
       }
-    }, 600);
-    const events = ['candidate:new', 'candidate:updated', 'candidate:deleted', 'candidate:scored', 'candidate:decision', 'training:updated'];
-    // KHÔNG lắng nghe 'sync:success'/'candidate:sync': mỗi job đồng bộ phát 1 event,
-    // xử lý hàng loạt (import 50 hồ sơ) = 50+ event -> refetch toàn bộ danh sách liên tục -> web ì.
+    }, 100);
+    const events = [
+      'candidate:new', 'candidate:updated', 'candidate:deleted',
+      'candidate:scored', 'candidate:decision', 'training:updated',
+      'form:imported', 'sync:success', 'candidate:sync',
+    ];
     events.forEach((ev) => socket.on(ev, refresh));
     socket.on('dedup:auto', onAutoDedup);
     return () => {

@@ -118,6 +118,14 @@ export async function importFormResponses(): Promise<FormImportResult> {
         }
       }
     }
+
+    if (result.imported > 0) {
+      const { emit } = await import('../sockets');
+      emit('candidate:new', { imported: result.imported });
+      emit('form:imported', { imported: result.imported });
+      emit('candidate:updated', {});
+    }
+
     lastRunAt = new Date();
     lastError = null;
     fullScanDone = true;

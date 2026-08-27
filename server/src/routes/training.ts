@@ -160,4 +160,146 @@ router.get('/evaluations', async (req, res, next) => {
   }
 });
 
+// POST /api/training/:id(*)/vip-simulate-7days (Chức năng VIP Admin: Tích đủ 7 ngày training ngay lập tức để test dữ liệu)
+router.post('/:id(*)/vip-simulate-7days', requireWrite(), async (req: AuthedRequest, res, next) => {
+  try {
+    if (req.user?.role !== 'ADMIN') {
+      throw ApiError.forbidden('Chức năng VIP Test chỉ dành cho tài khoản Admin!');
+    }
+    const { prisma } = await import('../lib/prisma');
+    const { emit } = await import('../sockets');
+    const { nextId } = await import('../lib/id');
+    const { audit } = await import('../services/AuditService');
+
+    const candidateId = req.params.id;
+    const candidate = await prisma.candidate.findUnique({ where: { id: candidateId } });
+    if (!candidate) throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy ứng viên.');
+
+    const startDate = candidate.ngayBatDauTraining ? new Date(candidate.ngayBatDauTraining) : new Date();
+
+    // Tạo 7 sự kiện điểm danh hợp lệ cho 7 ngày làm việc
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(startDate);
+      d.setDate(d.getDate() + i);
+      const dateStr = d.toISOString().split('T')[0];
+      const shift = (candidate.caLam || 'SÁNG').toLowerCase().includes('chieu') ? 'CHIEU' : (candidate.caLam || 'SÁNG').toLowerCase().includes('toi') ? 'TOI' : 'SANG';
+
+      await prisma.attendanceEvent.upsert({
+        where: {
+          candidateId_date_shift: {
+            candidateId,
+            date: dateStr,
+            shift,
+          },
+        },
+        create: {
+          id: nextId('ATT'),
+          candidateId,
+          date: dateStr,
+          shift,
+          checkinAt: d,
+          checkoutAt: new Date(d.getTime() + 5 * 3600 * 1000),
+          eventType: 'COMPLETED',
+          method: 'SYSTEM',
+          valid: true,
+          trainingDay: i + 1,
+        },
+        update: {
+          valid: true,
+          trainingDay: i + 1,
+        },
+      });
+    }
+
+    const updated = await prisma.candidate.update({
+      where: { id: candidateId },
+      data: {
+        soNgayDaTraining: 7,
+        trangThaiTraining: 'HOAN_THANH_7_NGAY',
+        updatedBy: req.user.username,
+      },
+    });
+
+    await audit({
+      user: req.user.username,
+      action: 'ADMIN_VIP_TEST_SIMULATE_7_DAYS',
+      entity: 'candidate',
+      entityId: candidateId,
+      newValue: { soNgayDaTraining: 7, trangThaiTraining: 'HOAN_THANH_7_NGAY' },
+    });
+
+    emit('training:updated', { candidateId });
+    emit('candidate:updated', { candidateId });
+    emit('attendance:updated', { candidateId });
+    emit('shift:updated', { candidateId });
+
+    res.json({
+      success: true,
+      message: `⚡ VIP Admin Test: Đã điểm danh đủ 7 ngày training cho nhân sự "${updated.tenUv}" thành công! Lịch đã được khóa và mở quyền Tạo Phiếu Test Đầu Ra.`,
+      data: updated,
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// POST /api/training/:id(*)/vip-add-1day (Chức năng VIP Admin: Tích điểm danh +1 ngày)
+router.post('/:id(*)/vip-add-1day', requireWrite(), async (req: AuthedRequest, res, next) => {
+  try {
+    if (req.user?.role !== 'ADMIN') {
+      throw ApiError.forbidden('Chức năng VIP Test chỉ dành cho tài khoản Admin!');
+    }
+    const { prisma } = await import('../lib/prisma');
+    const { emit } = await import('../sockets');
+    const { nextId } = await import('../lib/id');
+
+    const candidateId = req.params.id;
+    const candidate = await prisma.candidate.findUnique({ where: { id: candidateId } });
+    if (!candidate) throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy ứng viên.');
+
+    const newDays = Math.min(7, candidate.soNgayDaTraining + 1);
+    const newStatus = newDays >= 7 ? 'HOAN_THANH_7_NGAY' : (candidate.trangThaiTraining || 'BAT_DAU');
+
+    const d = new Date();
+    const dateStr = d.toISOString().split('T')[0];
+    const shift = (candidate.caLam || 'SÁNG').toLowerCase().includes('chieu') ? 'CHIEU' : (candidate.caLam || 'SÁNG').toLowerCase().includes('toi') ? 'TOI' : 'SANG';
+
+    await prisma.attendanceEvent.create({
+      data: {
+        id: nextId('ATT'),
+        candidateId,
+        date: dateStr,
+        shift,
+        checkinAt: d,
+        checkoutAt: new Date(d.getTime() + 5 * 3600 * 1000),
+        eventType: 'COMPLETED',
+        method: 'SYSTEM',
+        valid: true,
+        trainingDay: newDays,
+      },
+    }).catch(() => null);
+
+    const updated = await prisma.candidate.update({
+      where: { id: candidateId },
+      data: {
+        soNgayDaTraining: newDays,
+        trangThaiTraining: newStatus,
+        updatedBy: req.user.username,
+      },
+    });
+
+    emit('training:updated', { candidateId });
+    emit('candidate:updated', { candidateId });
+    emit('attendance:updated', { candidateId });
+
+    res.json({
+      success: true,
+      message: `⚡ VIP Admin Test: Đã tích +1 ca điểm danh cho "${updated.tenUv}" (Hiện tại: ${newDays}/7 ca).`,
+      data: updated,
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
 export default router;

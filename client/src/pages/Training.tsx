@@ -224,6 +224,26 @@ export default function Training() {
     }
   };
 
+  const handleVipAdd1Day = async (r: TrainingRow) => {
+    try {
+      const res = await api.post<{ message: string }>(`/training/${r.id}/vip-add-1day`, {});
+      toast('success', res.message || '⚡ VIP Admin: Đã tích +1 ngày điểm danh!');
+      void load();
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Thao tác thất bại.');
+    }
+  };
+
+  const handleVipSimulate7Days = async (r: TrainingRow) => {
+    try {
+      const res = await api.post<{ message: string }>(`/training/${r.id}/vip-simulate-7days`, {});
+      toast('success', res.message || '⚡ VIP Admin: Đã tích đủ 7 ngày training!');
+      void load();
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Thao tác thất bại.');
+    }
+  };
+
   const openEditModal = (r: TrainingRow) => {
     setEdit(r);
     setNewBranch(r.chiNhanh ?? '');
@@ -922,6 +942,28 @@ export default function Training() {
                           {r.trangThaiTraining === 'DAU_CHINH_THUC' && (
                             <div className="bg-emerald-600 text-white text-[10px] font-black px-2.5 py-1 rounded-xl shadow border border-emerald-500 animate-pulse text-center">
                               🎉 ĐẬU CHÍNH THỨC (AI Auto 30p nâng NV Chính Thức)
+                            </div>
+                          )}
+
+                          {/* VIP ADMIN TEST CONTROL PANEL */}
+                          {isAdmin && (
+                            <div className="mt-1 flex items-center justify-center gap-1 bg-purple-50 border border-purple-200 rounded-xl p-1 w-full">
+                              <button
+                                type="button"
+                                onClick={() => handleVipAdd1Day(r)}
+                                className="text-[10px] font-black bg-amber-500 hover:bg-amber-600 text-white px-2 py-1 rounded-lg shadow-2xs transition-all hover:scale-102 cursor-pointer flex items-center gap-1"
+                                title="[VIP ADMIN TEST] Tích nhanh +1 ca điểm danh"
+                              >
+                                ⚡ VIP +1 Ca
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleVipSimulate7Days(r)}
+                                className="text-[10px] font-black bg-purple-600 hover:bg-purple-700 text-white px-2 py-1 rounded-lg shadow-2xs transition-all hover:scale-102 cursor-pointer flex items-center gap-1"
+                                title="[VIP ADMIN TEST] Tích đủ 7 ngày training ngay lập tức để test dữ liệu luồng Đánh Giá"
+                              >
+                                🚀 VIP Đủ 7 Ngày
+                              </button>
                             </div>
                           )}
                         </div>
