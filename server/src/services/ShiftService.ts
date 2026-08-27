@@ -402,18 +402,21 @@ export class ShiftService {
         const groupCount = empGroup.length;
         if (!groupCount) continue;
 
-        for (let empIdx = 0; empIdx < groupCount; empIdx++) {
-          const cand = empGroup[empIdx];
+        // Tính số lượng nhân sự trực mỗi ngày cho nhóm ca này
+        // VD: Với 2 nhân viên ca SÁNG (Vy và Ngọc), numSlotsPerDay = 1 -> Ngày 1 Vy đi làm Ngọc nghỉ, Ngày 2 Ngọc đi làm Vy nghỉ
+        const numSlotsPerDay = Math.max(1, Math.ceil((groupCount * minDaysPerEmp) / daysInMonth));
 
-          // Phân bổ ngày OFF & ngày làm đan xen cho nhóm nhân viên cùng ca cùng chi nhánh
-          // Đảm bảo số ngày đi làm của từng NV >= minDaysPerEmp (mặc định 12 - 22 ngày/tháng)
-          // RÀNG BUỘC TUYỆT ĐỐI: Ngày đi làm CHỈ nhận ca đúng với caLam đăng ký (prefShiftCode), tuyệt đối không gán ca khác!
-          for (let dayIdx = 0; dayIdx < daysInMonth; dayIdx++) {
-            const dStr = allDates[dayIdx];
+        for (let dayIdx = 0; dayIdx < daysInMonth; dayIdx++) {
+          const dStr = allDates[dayIdx];
 
-            // Đăng ký OFF đan xen theo chỉ số nhân viên trong nhóm ca
-            const isOffDay = groupCount > 1 ? ((empIdx + dayIdx) % 4 === 0) : (dayIdx % 5 === 0);
-            const shiftVal = isOffDay ? 'OFF' : prefShiftCode;
+          for (let empIdx = 0; empIdx < groupCount; empIdx++) {
+            const cand = empGroup[empIdx];
+
+            // Công thức xoay vòng đan xen chuẩn:
+            // Đảm bảo trong cùng 1 ngày, các nhân viên cùng nhóm ca ở chi nhánh KHÔNG bị xếp trùng ca với nhau
+            const slotPos = ((empIdx - dayIdx) % groupCount + groupCount) % groupCount;
+            const isWorking = slotPos < numSlotsPerDay;
+            const shiftVal = isWorking ? prefShiftCode : 'OFF';
 
             await prisma.shift.upsert({
               where: { candidateId_date: { candidateId: cand.id, date: dStr } },
