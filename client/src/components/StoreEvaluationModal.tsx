@@ -66,6 +66,7 @@ export default function StoreEvaluationModal({
   // Bảng lưu ghi chú câu trả lời
   const [questionNotes, setQuestionNotes] = useState<Record<string, string>>({});
   const [evaluatorNotes, setEvaluatorNotes] = useState('');
+  const [forceTerminate, setForceTerminate] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const handleScoreChange = (qId: string, scoreVal: number) => {
@@ -117,6 +118,7 @@ export default function StoreEvaluationModal({
         scoreOperation: scoreOperationsTotal,
         lowScoreQuestions: lowScoreQuestionsList,
         evaluatorNotes: evaluatorNotes.trim(),
+        forceTerminate: totalScoreAvg <= 7 && forceTerminate,
       });
 
       toast('success', res.message || '✅ Đã lưu Phiếu Đánh Giá Nhân Viên Cửa Hàng!');
@@ -326,6 +328,22 @@ export default function StoreEvaluationModal({
             placeholder="Nhập nhận xét đánh giá tổng quan thái độ, tác phong, điểm cần cải thiện..."
           />
         </div>
+
+        {/* CHECKBOX CHO HR KHI RỚT HOẶC MUỐN LOẠI HẲN (KÍCH HOẠT ĐẾM NGƯỢC 30S LOGOUT ON APP) */}
+        {!isPass && (
+          <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 flex items-start gap-2.5">
+            <input
+              type="checkbox"
+              id="forceTerminateCb"
+              checked={forceTerminate}
+              onChange={(e) => setForceTerminate(e.target.checked)}
+              className="mt-0.5 w-4 h-4 text-rose-600 rounded focus:ring-rose-500 cursor-pointer"
+            />
+            <label htmlFor="forceTerminateCb" className="text-xs text-rose-900 font-bold cursor-pointer leading-snug">
+              ☑ Xác nhận LOẠI HẲN nhân sự này & Gửi thông báo kết thúc đợt thử việc (Hệ thống AI sẽ tự động xuất hiện popup đếm ngược 30s và Logout tài khoản nhân viên ra khỏi thiết bị).
+            </label>
+          </div>
+        )}
 
         <div className="pt-1">
           <button

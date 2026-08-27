@@ -177,6 +177,32 @@ interface LeaveTicketItem {
   // States cho Lương AI
   const [payroll, setPayroll] = useState<PayrollData | null>(null);
 
+  // States cho Modal Đếm Ngược 30s Auto Logout khi HR Đánh giá (Đậu / Rớt)
+  const [evalModal, setEvalModal] = useState<{
+    open: boolean;
+    status: 'PASSED' | 'FAILED';
+    message: string;
+    totalScore: number;
+  } | null>(null);
+  const [logoutCountdown, setLogoutCountdown] = useState<number>(30);
+
+  // Timer đếm ngược 30s Auto Logout
+  useEffect(() => {
+    if (!evalModal?.open) return;
+    if (logoutCountdown <= 0) {
+      localStorage.removeItem('umbomilk_emp_session');
+      setSession(null);
+      setEvalModal(null);
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setLogoutCountdown((prev) => prev - 1);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [evalModal?.open, logoutCountdown]);
+
   // States cho Đổi ca làm
   const [colleagues, setColleagues] = useState<ColleagueItem[]>([]);
   const [selectedColleagueId, setSelectedColleagueId] = useState('');
@@ -364,8 +390,33 @@ interface LeaveTicketItem {
       }
     };
 
+    const handleEvaluationCompleted = (data: {
+      candidateId: string;
+      evaluationStatus: string;
+      totalScore: number;
+      forceLogout?: boolean;
+      message?: string;
+    }) => {
+      if (data && data.candidateId === session.candidate.id) {
+        if (data.forceLogout) {
+          setEvalModal({
+            open: true,
+            status: data.evaluationStatus === 'PASSED_OFFICIAL' ? 'PASSED' : 'FAILED',
+            message: data.message || (data.evaluationStatus === 'PASSED_OFFICIAL'
+              ? '🎉 Chúc mừng bạn đã HOÀN THÀNH XUẤT SẮC bài đánh giá cửa hàng!'
+              : '❌ Bộ phận HR đã gửi thông báo kết thúc đợt thử việc.'),
+            totalScore: data.totalScore,
+          });
+          setLogoutCountdown(30);
+        } else {
+          handleRealtimeWebHRSync();
+        }
+      }
+    };
+
     socket.on('device_key:force_logout', handleForceLogout);
     socket.on('device_reset:approved', handleForceLogout);
+    socket.on('evaluation:completed', handleEvaluationCompleted);
     socket.on('candidate:updated', handleRealtimeWebHRSync);
     socket.on('shift:updated', handleRealtimeWebHRSync);
     socket.on('training:updated', handleRealtimeWebHRSync);
@@ -380,6 +431,7 @@ interface LeaveTicketItem {
       window.removeEventListener('focus', handleVisibility);
       socket.off('device_key:force_logout', handleForceLogout);
       socket.off('device_reset:approved', handleForceLogout);
+      socket.off('evaluation:completed', handleEvaluationCompleted);
       socket.off('candidate:updated', handleRealtimeWebHRSync);
       socket.off('shift:updated', handleRealtimeWebHRSync);
       socket.off('training:updated', handleRealtimeWebHRSync);
@@ -694,6 +746,19 @@ interface LeaveTicketItem {
             </button>
           </div>
         </div>
+
+        {/* Banner Khóa Chức Năng Khi Đã Hoàn Thành 7 Ngày Training (Chờ HR Đánh Giá Cửa Hàng) */}
+        {session.candidate.trangThaiTraining === 'HOAN_THANH_7_NGAY' && (
+          <div className="bg-gradient-to-r from-purple-900/90 to-indigo-900/90 border-2 border-purple-500/80 p-4 rounded-3xl shadow-xl text-purple-100 space-y-2 animate-in fade-in duration-300">
+            <div className="flex items-center gap-2 font-black text-xs text-amber-300 uppercase tracking-wide">
+              <Shield size={16} className="text-amber-400 shrink-0" />
+              <span>🎉 HOÀN THÀNH XUẤT SẮC 7 NGÀY ĐÀO TẠO</span>
+            </div>
+            <p className="text-xs leading-relaxed font-medium text-slate-200">
+              Chúc mừng bạn đã tích đủ 7 ngày thử việc! Các chức năng trên App đang tạm thời được bảo lưu để chờ Bộ phận HR gửi kết quả đánh giá cửa hàng.
+            </p>
+          </div>
+        )}
 
         {/* Banner Thông Báo Trực Thay Ca (Phương Án 1 - Bù ca Đa Tầng + Realtime Expiration 1-Click) */}
         {pendingReplacements.length > 0 && (
@@ -1217,6 +1282,44 @@ interface LeaveTicketItem {
           </div>
         )}
       </div>
+
+      {/* MODAL POPUP ĐẾM NGƯỢC 30 GIÂY AUTO LOGOUT TỪ HR EVALUATION */}
+      {evalModal?.open && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className={cn(
+            'w-full max-w-md bg-slate-900 rounded-3xl p-6 shadow-2xl text-center space-y-4 border-2 animate-in zoom-in-95 duration-300',
+            evalModal.status === 'PASSED' ? 'border-emerald-500 text-emerald-100' : 'border-rose-500 text-rose-100'
+          )}>
+            <div className={cn(
+              'mx-auto w-16 h-16 rounded-full flex items-center justify-center shadow-lg',
+              evalModal.status === 'PASSED' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50' : 'bg-rose-500/20 text-rose-400 border border-rose-500/50'
+            )}>
+              {evalModal.status === 'PASSED' ? <Milk size={36} /> : <AlertTriangle size={36} />}
+            </div>
+
+            <h3 className="text-xl font-black uppercase tracking-wide text-white">
+              {evalModal.status === 'PASSED' ? '🎉 THÔNG BÁO ĐẬU CHÍNH THỨC' : '📋 THÔNG BÁO KẾT NỐI THỬ VIỆC'}
+            </h3>
+
+            <p className="text-xs font-medium leading-relaxed opacity-90 px-2">
+              {evalModal.message}
+            </p>
+
+            <div className="bg-slate-950/80 p-4 rounded-2xl space-y-1.5 border border-slate-800">
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">THỜI GIAN TỰ ĐỘNG ĐĂNG XUẤT THIẾT BỊ</div>
+              <div className={cn(
+                'text-4xl font-mono font-black animate-pulse',
+                evalModal.status === 'PASSED' ? 'text-emerald-400' : 'text-rose-400'
+              )}>
+                {logoutCountdown}s
+              </div>
+              <p className="text-[10px] text-slate-500">
+                Hệ thống AI sẽ tự động logout tài khoản sau khi bộ đếm về 0 giây.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

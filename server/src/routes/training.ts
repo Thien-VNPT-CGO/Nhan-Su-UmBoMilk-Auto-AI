@@ -141,6 +141,7 @@ router.post('/evaluate', requireWrite(), async (req: AuthedRequest, res, next) =
       scoreOperation: Number(req.body.scoreOperation || 0),
       lowScoreQuestions: Array.isArray(req.body.lowScoreQuestions) ? req.body.lowScoreQuestions : [],
       evaluatorNotes: req.body.evaluatorNotes,
+      forceTerminate: Boolean(req.body.forceTerminate),
       user: req.user!.username,
     });
     res.json({ success: true, message: '✅ Đã hoàn tất đánh giá và chấm điểm nhân viên!', data: evaluation });

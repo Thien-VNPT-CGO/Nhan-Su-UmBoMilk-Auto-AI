@@ -13,6 +13,7 @@ export interface SubmitEvaluationInput {
   scoreOperation: number; // 0 - 10
   lowScoreQuestions?: string[]; // Ghi chú các câu < 1 điểm
   evaluatorNotes?: string;
+  forceTerminate?: boolean; // HR tick chọn loại hẳn & đăng xuất 30s
   user: string;
 }
 
@@ -58,11 +59,11 @@ export class EvaluationService {
       action: 'SUBMIT_STORE_EVALUATION',
       entity: 'store_evaluation',
       entityId: evaluation.id,
-      newValue: JSON.stringify({ totalScore, evaluationStatus, attemptNumber }),
+      newValue: JSON.stringify({ totalScore, evaluationStatus, attemptNumber, forceTerminate: Boolean(input.forceTerminate) }),
     });
 
-    // 1. TRƯỜNG HỢP 5 <= TỔNG ĐIỂM <= 7 (RỚT PHẢI TEST LẦN 2)
-    if (evaluationStatus === 'RETEST_REQUIRED') {
+    // 1. TRƯỜNG HỢP 5 <= TỔNG ĐIỂM <= 7 VÀ KHÔNG CHỌN LOẠI HẲN (RỚT PHẢI TEST LẦN 2)
+    if (evaluationStatus === 'RETEST_REQUIRED' && !input.forceTerminate) {
       const lowQuestionsStr = Array.isArray(input.lowScoreQuestions) && input.lowScoreQuestions.length > 0
         ? ` (Các câu điểm < 1 cần hỏi lại: ${input.lowScoreQuestions.join(', ')})`
         : '';
@@ -77,12 +78,47 @@ export class EvaluationService {
         },
       });
 
-      emit('evaluation:completed', { candidateId: candidate.id, evaluationStatus, totalScore });
+      emit('evaluation:completed', {
+        candidateId: candidate.id,
+        evaluationStatus,
+        totalScore,
+        forceLogout: false,
+        message: 'Bạn chưa đạt điểm ở Lần 1. Vui lòng ôn tập chờ HR đặt lịch Test lần 2.',
+      });
       emit('training:updated', { candidateId: candidate.id });
       emit('candidate:updated', { candidateId: candidate.id });
     }
 
-    // 2. TRƯỜNG HỢP TỔNG ĐIỂM > 7 (ĐẬU CHÍNH THỨC)
+    // 2. TRƯỜNG HỢP RỚT VÀ HR TICK [x] XÁC NHẬN LOẠI HẲN & CHO ĐĂNG XUẤT 30S
+    if ((evaluationStatus === 'FAILED' || input.forceTerminate) && evaluationStatus !== 'PASSED_OFFICIAL') {
+      await prisma.candidate.update({
+        where: { id: candidate.id },
+        data: {
+          trangThaiTraining: 'LOAI',
+          aiNote: `[KẾT THÚC THỬ VIỆC] - Đánh giá ${totalScore.toFixed(1)}đ. HR xác nhận không đạt yêu cầu thử việc.`,
+          updatedBy: input.user,
+        },
+      });
+
+      emit('evaluation:completed', {
+        candidateId: candidate.id,
+        evaluationStatus: 'FAILED',
+        totalScore,
+        forceLogout: true,
+        message: '❌ HR đã gửi thông báo kết thúc đợt thử việc.',
+      });
+      emit('training:updated', { candidateId: candidate.id });
+      emit('candidate:updated', { candidateId: candidate.id });
+
+      if (candidate.sdtZalo) {
+        void zaloPersonalService.sendMessageByPhone(
+          candidate.sdtZalo,
+          `🐮 [UMBO MILK] – THÔNG BÁO KẾT QUẢ ĐÁNH GIÁ 📋\n\nRất tiếc ${candidate.tenUv}!\nKết quả đánh giá cửa hàng của bạn đạt ${totalScore.toFixed(1)}/10đ và chưa đáp ứng tiêu chuẩn thử việc.\nCảm ơn bạn đã đồng hành cùng UmBo Milk trong thời gian qua.`
+        ).catch(() => null);
+      }
+    }
+
+    // 3. TRƯỜNG HỢP TỔNG ĐIỂM > 7 (ĐẬU CHÍNH THỨC) -> KÍCH HOẠT DỮ LIỆU ĐẬU + TRIGGER 30S AUTO LOGOUT ON APP
     if (evaluationStatus === 'PASSED_OFFICIAL') {
       await prisma.candidate.update({
         where: { id: candidate.id },
@@ -93,7 +129,13 @@ export class EvaluationService {
         },
       });
 
-      emit('evaluation:completed', { candidateId: candidate.id, evaluationStatus, totalScore });
+      emit('evaluation:completed', {
+        candidateId: candidate.id,
+        evaluationStatus,
+        totalScore,
+        forceLogout: true,
+        message: '🎉 Chúc mừng bạn đã HOÀN THÀNH XUẤT SẮC bài đánh giá cửa hàng! Tài khoản sẽ tự động đăng xuất sau 30 giây để hoàn tất thủ tục.',
+      });
       emit('training:updated', { candidateId: candidate.id });
       emit('candidate:updated', { candidateId: candidate.id });
 
