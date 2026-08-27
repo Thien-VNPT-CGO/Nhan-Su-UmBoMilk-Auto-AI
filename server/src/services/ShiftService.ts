@@ -452,32 +452,32 @@ export class ShiftService {
     return { success: true, count: officialCandidates.length, totalAssigned, month, year };
   }
 
-  // TÍNH NĂNG 2: PHƯƠNG ÁN 1 - QUY TRÌNH XÁC NHẬN 2 BƯỚC VÀ AI FALLBACK POOL
+  // TÍNH NĂNG 2: PHƯƠNG ÁN 1 - QUY TRÌNH XÁC NHẬN 2 BƯỚC ĐA TẦNG VÀ AI FALLBACK POOL
   async createOffReplacementProposal(params: { candidateIdA: string; date: string; shiftCode: string }) {
     const { candidateIdA, date, shiftCode } = params;
     const candA = await prisma.candidate.findUnique({ where: { id: candidateIdA } });
     if (!candA || !candA.chiNhanh) return null;
 
-    const sameBranch = await prisma.candidate.findMany({
+    const allActiveCandidates = await prisma.candidate.findMany({
       where: {
-        chiNhanh: candA.chiNhanh,
         id: { not: candA.id },
         trangThaiTraining: { in: ['NHAN_VIEN_CHINH_THUC', 'BAT_DAU', 'SAP_BAT_DAU'] },
       },
     });
 
-    if (!sameBranch.length) return null;
+    if (!allActiveCandidates.length) return null;
 
     const shiftsOnDate = await prisma.shift.findMany({
       where: {
-        candidateId: { in: sameBranch.map((c) => c.id) },
+        candidateId: { in: allActiveCandidates.map((c) => c.id) },
         date,
       },
     });
 
     const shiftMap = new Map(shiftsOnDate.map((s) => [s.candidateId, s.shifts]));
 
-    const availablePool = sameBranch.filter((c) => {
+    // Lọc các nhân viên RẢNH (OFF hoặc chưa có lịch) ngày hôm đó
+    const availablePool = allActiveCandidates.filter((c) => {
       const s = shiftMap.get(c.id);
       return !s || s === 'OFF';
     });
@@ -514,8 +514,27 @@ export class ShiftService {
       return record;
     }
 
-    const empB = availablePool[0];
-    const fallbackList = availablePool.slice(1).map((c) => c.id);
+    // ƯU TIÊN ĐA TẦNG:
+    // Tầng 1: Cùng chi nhánh + Cùng ca làm
+    // Tầng 2: Cùng chi nhánh + Khác ca làm
+    // Tầng 3: Khác chi nhánh + Cùng ca làm
+    // Tầng 4: Khác chi nhánh + Khác ca làm
+    const normShiftCodeA = normalizeShiftCode(shiftCode);
+    const sortedPool = [...availablePool].sort((a, b) => {
+      const isSameBranchA = a.chiNhanh?.trim() === candA.chiNhanh?.trim() ? 1 : 0;
+      const isSameBranchB = b.chiNhanh?.trim() === candA.chiNhanh?.trim() ? 1 : 0;
+
+      const isSameShiftA = normalizeShiftCode(a.caLam || '') === normShiftCodeA ? 1 : 0;
+      const isSameShiftB = normalizeShiftCode(b.caLam || '') === normShiftCodeA ? 1 : 0;
+
+      const scoreA = isSameBranchA * 10 + isSameShiftA * 5;
+      const scoreB = isSameBranchB * 10 + isSameShiftB * 5;
+
+      return scoreB - scoreA;
+    });
+
+    const empB = sortedPool[0];
+    const fallbackList = sortedPool.slice(1).map((c) => c.id);
 
     const repId = nextId('REP');
     const record = await prisma.shiftOffReplacement.create({
@@ -560,7 +579,7 @@ export class ShiftService {
     return record;
   }
 
-  // PHẢN HỒI YÊU CẦU TRỰC THAY CA (ĐỒNG Ý HẶC TỪ CHỐI -> AI TỰ ĐỘNG CHUYỂN SANG C HẶC BÁO CẢNH BÁO ĐỎ)
+  // PHẢN HỒI YÊU CẦU TRỰC THAY CA (ĐỒNG Ý HẶC TỪ CHỐI -> REALTIME EXPIRATION THÔNG BÁO HẾT HẠN TỚI CÁC NHÂN VIÊN KHÁC)
   async respondReplacement(params: { replacementId: string; action: 'ACCEPT' | 'REJECT'; reason?: string; user: string }) {
     const { replacementId, action, reason, user } = params;
     const record = await prisma.shiftOffReplacement.findUnique({ where: { id: replacementId } });
@@ -587,6 +606,14 @@ export class ShiftService {
       }
 
       emit('shift_replacement:updated', updated);
+      // BẮN SOCKET REALTIME THÔNG BÁO HẾT HẠN CA TRỰC TỚI CÁC NHÂN VIÊN KHÁC 1-CLICK FIRST-COME FIRST-SERVED:
+      emit('shift_replacement:expired', {
+        replacementId: record.id,
+        acceptedByName: record.replacementName || 'Đồng nghiệp',
+        shiftCode: record.shiftCode,
+        date: record.date,
+        chiNhanh: record.chiNhanh,
+      });
 
       const candA = await prisma.candidate.findUnique({ where: { id: record.candidateIdA } });
       if (candA?.sdtZalo) {

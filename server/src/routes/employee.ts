@@ -202,7 +202,7 @@ router.post('/public/employee/shift-swap-request', async (req, res, next) => {
   }
 });
 
-import { shiftService } from '../services/ShiftService';
+import { shiftService, normalizeShiftCode } from '../services/ShiftService';
 
 // 3d. Lịch sử đơn đổi ca của nhân viên
 router.get('/public/employee/shift-swap-history/:candidateId', async (req, res, next) => {
@@ -255,6 +255,66 @@ router.post('/public/employee/replacements/respond', async (req, res, next) => {
       user: parsed.data.candidateId || 'EMPLOYEE_SELF',
     });
     res.json({ success: true, data: updated });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// 3g. Nhân viên gửi Phiếu Xin Nghỉ Phép (RÀNG BUỘC CỨNG: Bắt buộc gửi trước 48 GIỜ)
+router.post('/public/employee/leave-request', async (req, res, next) => {
+  try {
+    const schema = z.object({
+      candidateId: z.string().min(1, 'Thiếu Mã nhân viên'),
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Ngày nghỉ không đúng định dạng YYYY-MM-DD'),
+      reason: z.string().min(1, 'Vui lòng nhập lý do xin nghỉ phép'),
+    });
+
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      throw ApiError.badRequest('INVALID_INPUT', 'Thông tin xin nghỉ phép không hợp lệ.');
+    }
+
+    const { candidateId, date, reason } = parsed.data;
+
+    // RÀNG BUỘC CỨNG 48H: Giờ bắt đầu ca được tính từ 07:00 AM của ngày nghỉ
+    const targetStart = new Date(`${date}T07:00:00+07:00`);
+    const now = new Date();
+    const diffHours = (targetStart.getTime() - now.getTime()) / (1000 * 3600);
+
+    if (diffHours < 48) {
+      throw ApiError.badRequest(
+        'LEAVE_REQUEST_48H_VIOLATION',
+        '❌ RÀNG BUỘC 48H: Phiếu xin nghỉ phép phải được gửi trước ít nhất 48 giờ (2 ngày) so với thời điểm ca làm việc bắt đầu!'
+      );
+    }
+
+    const cand = await prisma.candidate.findUnique({ where: { id: candidateId } });
+    if (!cand) throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy thông tin nhân viên.');
+
+    const normCa = normalizeShiftCode(cand.caLam || '');
+    const shiftCode = normCa && normCa !== 'OFF' ? normCa : 'SANG';
+
+    // Cập nhật ca ngày hôm đó sang OFF
+    await shiftService.upsert({
+      candidateId,
+      date,
+      shifts: 'OFF',
+      note: `XIN_NGHI_PHEP_48H: ${reason}`,
+      user: candidateId,
+    });
+
+    // Kích hoạt luồng AI bù ca đa tầng
+    const proposal = await shiftService.createOffReplacementProposal({
+      candidateIdA: candidateId,
+      date,
+      shiftCode,
+    });
+
+    res.json({
+      success: true,
+      message: '✅ Gửi phiếu xin nghỉ phép thành công. Đã kích hoạt luồng AI tìm nhân sự bù ca.',
+      data: proposal,
+    });
   } catch (e) {
     next(e);
   }
