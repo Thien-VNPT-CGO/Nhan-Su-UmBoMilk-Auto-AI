@@ -371,6 +371,26 @@ export default function AppLayout() {
             <span className="hidden xs:inline">{t('header.sheet')}</span>
           </button>
 
+          {/* Theme Switcher (Dark/Light Mode) */}
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300 hover:text-brand-600 dark:hover:text-brand-400 p-2 sm:px-3 sm:py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 transition-colors text-xs font-semibold shrink-0"
+            title={theme === 'dark' ? 'Chuyển sang giao diện Sáng' : 'Chuyển sang giao diện Tối'}
+          >
+            {theme === 'dark' ? (
+              <>
+                <Sun size={16} className="text-amber-400 fill-amber-400/20" />
+                <span className="hidden sm:inline">Giao diện Sáng</span>
+              </>
+            ) : (
+              <>
+                <Moon size={16} className="text-indigo-600 fill-indigo-600/10" />
+                <span className="hidden sm:inline">Giao diện Tối</span>
+              </>
+            )}
+          </button>
+
           {/* Notifications */}
           <div className="relative" ref={notif.boxRef}>
             <button

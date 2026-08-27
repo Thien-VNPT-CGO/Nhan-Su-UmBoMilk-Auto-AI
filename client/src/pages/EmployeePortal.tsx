@@ -16,7 +16,10 @@ import {
   Send,
   AlertTriangle,
   History,
+  Sun,
+  Moon,
 } from 'lucide-react';
+import { useTheme } from '../utils/theme';
 import { api, ApiError } from '../api/client';
 import { Spinner, Badge } from '../components/ui';
 import { getSocket } from '../api/socket';
@@ -123,6 +126,7 @@ function extractCandidateIdFromWindow(): string | null {
 }
 
 export default function EmployeePortal() {
+  const { theme, toggleTheme } = useTheme();
   const [candidateIdInput, setCandidateIdInput] = useState('');
   const [keyInput, setKeyInput] = useState('');
   const [session, setSession] = useState<EmployeeSession | null>(null);
@@ -634,14 +638,24 @@ export default function EmployeePortal() {
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="bg-slate-800 hover:bg-rose-950/60 text-slate-300 hover:text-rose-400 p-2.5 rounded-2xl border border-slate-700 transition-colors cursor-pointer"
-            title="Đăng xuất"
-          >
-            <LogOut size={16} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="bg-slate-800/80 hover:bg-slate-700 text-slate-300 p-2.5 rounded-2xl border border-slate-700 transition-colors cursor-pointer"
+              title={theme === 'dark' ? 'Chuyển sang giao diện Sáng' : 'Chuyển sang giao diện Tối'}
+            >
+              {theme === 'dark' ? <Sun size={16} className="text-amber-400" /> : <Moon size={16} className="text-indigo-400" />}
+            </button>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="bg-slate-800 hover:bg-rose-950/60 text-slate-300 hover:text-rose-400 p-2.5 rounded-2xl border border-slate-700 transition-colors cursor-pointer"
+              title="Đăng xuất"
+            >
+              <LogOut size={16} />
+            </button>
+          </div>
         </div>
 
         {/* Banner Thông Báo Trực Thay Ca (Phương Án 1) */}
