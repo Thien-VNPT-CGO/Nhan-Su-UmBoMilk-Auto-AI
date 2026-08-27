@@ -322,7 +322,7 @@ export class SyncWorker {
     }
   }
 
-  /** Tự nhập ứng viên mới từ sheet phản hồi Google Form (không cần Apps Script). */
+  /** Tự nhập ứng viên mới từ sheet phản hồi Google Form & Đồng bộ 2-Chiều Nhân viên chính thức. */
   private async tickFormImport(): Promise<void> {
     if (!this.running || this.importingForm) return;
     this.importingForm = true;
@@ -333,10 +333,64 @@ export class SyncWorker {
       } else if (result.imported > 0) {
         console.log(`[SyncWorker] form import: +${result.imported} mới, ${result.duplicates} trùng`);
       }
+      await this.pullOfficialEmployeesFromSheet();
     } catch (e) {
       console.warn('[SyncWorker] form import:', e instanceof Error ? e.message : String(e));
     } finally {
       this.importingForm = false;
+    }
+  }
+
+  /** Đọc thay đổi 2-Chiều từ Google Sheet tab NHAN_VIEN_CHINH_THUC về Web HR. */
+  private async pullOfficialEmployeesFromSheet(): Promise<void> {
+    const sheet = getGoogleSheetService();
+    if (!sheet.configured) return;
+    try {
+      const rows = await sheet.readRows(sheet.sheetNames.nhanVienChinhThuc);
+      if (!rows || rows.length <= 1) return;
+      const headers = rows[0].map((h) => String(h).trim());
+      const idIdx = headers.indexOf('CANDIDATE_ID');
+      const branchIdx = headers.indexOf('CHI_NHANH');
+      const shiftIdx = headers.indexOf('CA_LAM');
+      const nameIdx = headers.indexOf('TEN_NV');
+
+      if (idIdx === -1) return;
+
+      let updatedAny = false;
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        const candidateId = (row[idIdx] ?? '').trim();
+        if (!candidateId) continue;
+
+        const candidate = await prisma.candidate.findUnique({ where: { id: candidateId } });
+        if (!candidate || candidate.trangThaiTraining !== 'NHAN_VIEN_CHINH_THUC') continue;
+
+        const sheetBranch = branchIdx !== -1 ? (row[branchIdx] ?? '').trim() : '';
+        const sheetShift = shiftIdx !== -1 ? (row[shiftIdx] ?? '').trim() : '';
+        const sheetName = nameIdx !== -1 ? (row[nameIdx] ?? '').trim() : '';
+
+        let patch: Record<string, unknown> = {};
+        if (sheetBranch && sheetBranch !== candidate.chiNhanh) patch.chiNhanh = sheetBranch;
+        if (sheetShift && sheetShift !== candidate.caLam) patch.caLam = sheetShift;
+        if (sheetName && sheetName !== candidate.tenUv) patch.tenUv = sheetName;
+
+        if (Object.keys(patch).length > 0) {
+          const newVersion = candidate.dataVersion + 1;
+          await prisma.candidate.update({
+            where: { id: candidateId },
+            data: { ...patch, dataVersion: newVersion, updatedBy: 'GOOGLE_SHEET_SYNC' },
+          });
+          updatedAny = true;
+          console.log(`[SyncWorker] 2-Way Sync Sheet -> Web HR (${candidateId}):`, patch);
+        }
+      }
+
+      if (updatedAny) {
+        emit('official_employees:updated', {});
+        emit('shift:updated', {});
+      }
+    } catch (e) {
+      console.warn('[SyncWorker] pullOfficialEmployeesFromSheet error:', e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -586,6 +640,15 @@ export class SyncWorker {
         }
         case 'conflict-resolve': {
           await sheet.syncCandidate(candidate ?? (await prisma.candidate.findUnique({ where: { id: job.entityId } }))!);
+          break;
+        }
+        case 'official_employee': {
+          if (job.operation === 'DELETE') {
+            await sheet.deleteCandidateRows(job.entityId);
+          } else {
+            if (!candidate) throw new Error(`Candidate ${job.entityId} không tồn tại`);
+            await sheet.syncOfficialEmployee(candidate);
+          }
           break;
         }
         default:

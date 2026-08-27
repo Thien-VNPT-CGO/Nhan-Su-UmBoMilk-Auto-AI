@@ -325,6 +325,15 @@ officialEmployeesRouter.delete('/*', requireAuth, requireRole('ADMIN', 'MANAGER'
       prisma.candidate.delete({ where: { id: empId } }),
     ]);
 
+    const { syncQueue } = await import('../services/SyncQueueService');
+    await syncQueue.enqueue({
+      entity: 'official_employee',
+      entityId: empId,
+      operation: 'DELETE',
+      version: existing.dataVersion + 1,
+      idempotencyKey: `official_employee:${empId}:delete:v${existing.dataVersion + 1}`,
+    });
+
     await audit({
       user: req.user?.username || 'SYSTEM',
       action: 'DELETE_OFFICIAL_EMPLOYEE',
