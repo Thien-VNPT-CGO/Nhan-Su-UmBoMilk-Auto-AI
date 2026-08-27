@@ -85,7 +85,7 @@ export default function Approvals() {
   const isAdmin = user?.role === 'ADMIN';
   const isViewer = user?.role === 'VIEWER';
 
-  const [mainTab, setMainTab] = useState<'LEAVE_REQUEST' | 'DEVICE_RESET' | 'KEY_GEN' | 'SWAP'>('LEAVE_REQUEST');
+  const [mainTab, setMainTab] = useState<'LEAVE_REQUEST' | 'DEVICE_RESET' | 'KEY_GEN'>('LEAVE_REQUEST');
 
   // Phiếu xin nghỉ phép states
   const [leaveTickets, setLeaveTickets] = useState<LeaveRequestTicketItem[]>([]);
@@ -500,26 +500,11 @@ export default function Approvals() {
             <h1 className="text-xl font-black text-slate-900 tracking-tight">TRUNG TÂM PHÊ DUYỆT NHÂN VIÊN</h1>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Quản lý phê duyệt hoán đổi ca làm, Reset thiết bị Realtime & Cấp Key kích hoạt nhân sự.
+            Quản lý duyệt phiếu nghỉ phép 48h, Reset thiết bị Realtime & Cấp Key kích hoạt nhân sự.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          {mainTab === 'SWAP' && (
-            <button
-              type="button"
-              disabled={isViewer}
-              onClick={() => setCreateModalOpen(true)}
-              className={cn(
-                'btn-primary text-xs flex items-center gap-1.5 shadow-md shadow-pink-600/20 cursor-pointer',
-                isViewer && 'opacity-50 cursor-not-allowed'
-              )}
-            >
-              <Plus size={16} />
-              <span>Tạo đơn hoán đổi ca</span>
-            </button>
-          )}
-
           {mainTab === 'DEVICE_RESET' && (
             <button
               type="button"
@@ -565,20 +550,6 @@ export default function Approvals() {
         >
           <Smartphone size={16} />
           <span>📱 Phê Duyệt Reset Thiết Bị ({resetTickets.filter((t) => t.status !== 'APPROVED').length})</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setMainTab('SWAP')}
-          className={cn(
-            'py-3 px-5 border-b-2 flex items-center gap-2 transition-colors cursor-pointer',
-            mainTab === 'SWAP'
-              ? 'border-pink-600 text-pink-600 font-extrabold'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          )}
-        >
-          <ArrowRightLeft size={16} />
-          <span>🔄 Phê Duyệt Đổi Ca</span>
         </button>
 
         {isAdmin && (
@@ -728,79 +699,6 @@ export default function Approvals() {
                   </div>
                 );
               })}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* TAB 2: PHÊ DUYỆT ĐỔI CA */}
-      {mainTab === 'SWAP' && (
-        <div className="space-y-4">
-          {/* Requests Grid / Table */}
-          {loading ? (
-            <div className="p-12 text-center bg-white rounded-2xl border border-slate-200">
-              <Spinner size={24} className="mx-auto text-pink-600 mb-2" />
-              <p className="text-xs text-slate-500">Đang tải danh sách đơn phê duyệt...</p>
-            </div>
-          ) : filteredRequests.length === 0 ? (
-            <div className="p-12 text-center bg-white rounded-2xl border border-slate-200">
-              <FileText size={32} className="mx-auto text-slate-300 mb-2" />
-              <h3 className="text-sm font-bold text-slate-700">Chưa có đơn hoán đổi ca nào</h3>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filteredRequests.map((req) => (
-                <div key={req.id} className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-mono font-bold text-slate-400">Mã đơn: {req.id}</span>
-                    <Badge className={req.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800' : req.status === 'REJECTED' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'}>
-                      {req.status === 'APPROVED' ? 'Đã Phê Duyệt' : req.status === 'REJECTED' ? 'Đã Từ Chối' : '⏳ Chờ QL Duyệt'}
-                    </Badge>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-3 rounded-xl border border-slate-100">
-                    <div className="space-y-1">
-                      <span className="text-[10px] font-bold text-pink-600 block">NV A (Người gửi):</span>
-                      <strong className="block text-slate-900">{req.candidateNameA}</strong>
-                      <span className="text-slate-500 text-[11px] block">{req.dateA} ({req.caLamA})</span>
-                    </div>
-
-                    <div className="space-y-1 border-l border-slate-200 pl-2">
-                      <span className="text-[10px] font-bold text-purple-600 block">NV B (Người đổi):</span>
-                      <strong className="block text-slate-900">{req.candidateNameB}</strong>
-                      <span className="text-slate-500 text-[11px] block">{req.dateB} ({req.caLamB})</span>
-                    </div>
-                  </div>
-
-                  <div className="text-xs text-slate-600 italic">
-                    Lý do đổi ca: "{req.reason}"
-                  </div>
-
-                  {req.status === 'PENDING_MANAGER' && (
-                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setRejectTarget(req);
-                          setRejectReasonInput('');
-                        }}
-                        className="px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
-                      >
-                        ❌ Từ chối
-                      </button>
-                      <button
-                        type="button"
-                        disabled={approvingId === req.id}
-                        onClick={() => handleApprove(req.id)}
-                        className="btn-primary text-xs py-1.5 px-4 flex items-center gap-1 cursor-pointer"
-                      >
-                        {approvingId === req.id ? <Spinner size={13} /> : <CheckCircle2 size={14} />}
-                        <span>✅ PHÊ DUYỆT</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
             </div>
           )}
         </div>
@@ -1057,195 +955,7 @@ export default function Approvals() {
         </Modal>
       )}
 
-      {/* MODAL TẠO ĐƠN ĐỔI CA */}
-      {createModalOpen && (
-        <Modal
-          open={createModalOpen}
-          onClose={() => setCreateModalOpen(false)}
-          title="TẠO ĐƠN HOÁN ĐỔI CA LÀM VIỆC"
-        >
-          <div className="space-y-4 font-sans text-slate-800 dark:text-slate-100">
-            {/* NV A */}
-            <div className="space-y-3 p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700/80">
-              <label className="text-xs font-extrabold text-slate-700 dark:text-slate-200 block uppercase">
-                👤 Nhân viên A (Người xin đổi ca)
-              </label>
-              <select
-                className="input text-xs font-semibold"
-                value={form.candidateIdA}
-                onChange={(e) => {
-                  const sel = candidates.find((c) => c.id === e.target.value);
-                  setForm({
-                    ...form,
-                    candidateIdA: e.target.value,
-                    caLamA: sel?.caLam ? (sel.caLam.toLowerCase().includes('chieu') ? 'CA_CHIEU' : sel.caLam.toLowerCase().includes('toi') ? 'CA_TOI' : 'CA_SANG') : 'CA_SANG',
-                  });
-                }}
-              >
-                <option value="">— Chọn Nhân viên A —</option>
-                {candidates.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.tenUv} · {c.chiNhanh || 'Chi nhánh'} · Ca gốc: {c.caLam || 'Chưa chốt'}
-                  </option>
-                ))}
-              </select>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <div>
-                  <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block mb-1">Ngày làm gốc:</label>
-                  <input
-                    type="date"
-                    className="input text-xs font-mono font-bold"
-                    value={form.dateA}
-                    onChange={(e) => setForm({ ...form, dateA: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block mb-1">Ca gốc:</label>
-                  <select
-                    className="input text-xs font-bold"
-                    value={form.caLamA}
-                    onChange={(e) => setForm({ ...form, caLamA: e.target.value })}
-                  >
-                    <option value="CA_SANG">Ca Sáng (07:00 - 12:00)</option>
-                    <option value="CA_CHIEU">Ca Chiều (12:00 - 18:00)</option>
-                    <option value="CA_TOI">Ca Tối (18:00 - 23:00)</option>
-                    <option value="OFF">Nghỉ OFF</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            {/* NV B */}
-            <div className="space-y-3 p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700/80">
-              <label className="text-xs font-extrabold text-slate-700 dark:text-slate-200 block uppercase">
-                🔄 Nhân viên B (Người hoán đổi ca cùng)
-              </label>
-              <select
-                className="input text-xs font-semibold"
-                value={form.candidateIdB}
-                onChange={(e) => {
-                  const sel = candidates.find((c) => c.id === e.target.value);
-                  setForm({
-                    ...form,
-                    candidateIdB: e.target.value,
-                    caLamB: sel?.caLam ? (sel.caLam.toLowerCase().includes('chieu') ? 'CA_CHIEU' : sel.caLam.toLowerCase().includes('toi') ? 'CA_TOI' : 'CA_SANG') : 'CA_SANG',
-                  });
-                }}
-              >
-                <option value="">— Chọn Nhân viên B —</option>
-                {candidates.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.tenUv} · {c.chiNhanh || 'Chi nhánh'} · Ca gốc: {c.caLam || 'Chưa chốt'}
-                  </option>
-                ))}
-              </select>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <div>
-                  <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block mb-1">Ngày đổi ca:</label>
-                  <input
-                    type="date"
-                    className="input text-xs font-mono font-bold"
-                    value={form.dateB}
-                    onChange={(e) => setForm({ ...form, dateB: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block mb-1">Ca đổi mới:</label>
-                  <select
-                    className="input text-xs font-bold"
-                    value={form.caLamB}
-                    onChange={(e) => setForm({ ...form, caLamB: e.target.value })}
-                  >
-                    <option value="CA_SANG">Ca Sáng (07:00 - 12:00)</option>
-                    <option value="CA_CHIEU">Ca Chiều (12:00 - 18:00)</option>
-                    <option value="CA_TOI">Ca Tối (18:00 - 23:00)</option>
-                    <option value="OFF">Nghỉ OFF</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Lý do xin đổi ca *</label>
-              <textarea
-                rows={2}
-                className="input text-xs"
-                value={form.reason}
-                onChange={(e) => setForm({ ...form, reason: e.target.value })}
-                placeholder="Nhập lý do hoán đổi ca chính đáng (ví dụ: trùng lịch học, bận việc cá nhân...)"
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setCreateModalOpen(false)}
-                className="btn-secondary text-xs"
-              >
-                Hủy
-              </button>
-              <button
-                type="button"
-                disabled={creating}
-                onClick={handleCreateSubmit}
-                className="btn-primary text-xs flex items-center gap-1.5"
-              >
-                {creating ? <Spinner size={14} /> : <Send size={14} />}
-                <span>Gửi Đơn Xin Đổi Ca</span>
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* MODAL TỪ CHỐI ĐƠN */}
-      {rejectTarget && (
-        <Modal
-          open={!!rejectTarget}
-          onClose={() => setRejectTarget(null)}
-          title="TỪ CHỐI ĐƠN XIN ĐỔI CA"
-        >
-          <div className="space-y-4 font-sans text-slate-800">
-            <div className="bg-rose-50 border border-rose-200 text-rose-800 p-3 rounded-xl text-xs space-y-1">
-              <div>Đơn đổi ca của: <strong>{rejectTarget.candidateNameA}</strong> và <strong>{rejectTarget.candidateNameB}</strong></div>
-              <div>Hệ thống sẽ gửi tin nhắn Zalo kèm lý do từ chối về cho ứng viên.</div>
-            </div>
-
-            <div>
-              <label className="text-xs font-bold text-slate-700 block mb-1">Lý do từ chối *</label>
-              <textarea
-                rows={3}
-                className="input text-xs"
-                value={rejectReasonInput}
-                onChange={(e) => setRejectReasonInput(e.target.value)}
-                placeholder="Nhập lý do từ chối (ví dụ: Ca chiều thiếu nhân lực chủ chốt, không đủ người vận hành...)"
-                autoFocus
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setRejectTarget(null)}
-                className="btn-secondary text-xs"
-              >
-                Hủy bỏ
-              </button>
-              <button
-                type="button"
-                disabled={rejecting}
-                onClick={handleRejectConfirm}
-                className="btn-danger text-xs flex items-center gap-1.5"
-              >
-                {rejecting ? <Spinner size={14} /> : <XCircle size={15} />}
-                <span>Xác nhận Từ Chối</span>
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
 
       {/* MODAL TỪ CHỐI PHIẾU XIN NGHỈ PHÉP (48H) */}
       {leaveRejectModalOpen && selectedLeaveTicket && (
