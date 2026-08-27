@@ -4,6 +4,7 @@ import { GraduationCap, CalendarDays, Calendar, Send, RefreshCw, Briefcase, Vide
 import { api, ApiError } from '../api/client';
 import { Badge, Skeleton, EmptyState, Modal, Field, ConfirmDialog } from '../components/ui';
 import InterviewScoreModal from '../components/InterviewScoreModal';
+import StoreEvaluationModal from '../components/StoreEvaluationModal';
 import { useToast } from '../stores/Toast';
 import { useAuth } from '../stores/auth';
 import { getSocket } from '../api/socket';
@@ -1167,118 +1168,19 @@ export default function Training() {
         </form>
       </Modal>
 
-      {/* MODAL ⭐ BẢNG ĐÁNH GIÁ NHÂN VIÊN CỬA HÀNG (Thang điểm 10, Auto 30p chính thức / Retest lần 2) */}
-      <Modal open={!!evaluationModalRow} onClose={() => setEvaluationModalRow(null)} title={`⭐ Bảng Đánh Giá Nhân Viên Cửa Hàng – ${evaluationModalRow?.tenUv ?? ''}`}>
-        <form onSubmit={handleSubmitEvaluation} className="space-y-4">
-          <div className="bg-gradient-to-br from-slate-50 to-blue-50/50 border border-blue-100 rounded-xl p-3 text-xs space-y-1.5">
-            <div className="font-extrabold text-slate-800 flex items-center justify-between">
-              <span>👤 NV Training: <span className="text-blue-700">{evaluationModalRow?.tenUv}</span></span>
-              <span className="text-slate-500 font-mono">Mã: {evaluationModalRow?.id}</span>
-            </div>
-            {evaluationModalRow?.aiNote && (
-              <div className="text-purple-700 bg-purple-50 p-2 rounded-lg border border-purple-200 text-[11px] font-medium">
-                📝 <b>Ghi chú câu hỏi nợ từ đợt phỏng vấn trước:</b> {evaluationModalRow.aiNote}
-              </div>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-xl border border-slate-200">
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700 block">
-                🧠 KIẾN THỨC & ỨNG XỬ (Thang 10)
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="range"
-                  min="0"
-                  max="10"
-                  step="0.5"
-                  className="w-full accent-blue-600 cursor-pointer"
-                  value={scoreKnowledge}
-                  onChange={(e) => setScoreKnowledge(parseFloat(e.target.value))}
-                />
-                <span className="font-mono text-sm font-black text-blue-700 bg-white px-2 py-0.5 rounded border border-blue-200 min-w-[35px] text-center">
-                  {scoreKnowledge}
-                </span>
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700 block">
-                ⚙️ VẬN HÀNH (Thang 10)
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="range"
-                  min="0"
-                  max="10"
-                  step="0.5"
-                  className="w-full accent-indigo-600 cursor-pointer"
-                  value={scoreOperation}
-                  onChange={(e) => setScoreOperation(parseFloat(e.target.value))}
-                />
-                <span className="font-mono text-sm font-black text-indigo-700 bg-white px-2 py-0.5 rounded border border-indigo-200 min-w-[35px] text-center">
-                  {scoreOperation}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Dòng tính Điểm Trung Bình Realtime & Dự kiến Kết Quả */}
-          {(() => {
-            const avg = (scoreKnowledge + scoreOperation) / 2;
-            const isPass = avg > 7;
-            const isRetest = avg >= 5 && avg <= 7;
-            return (
-              <div className={cn(
-                'p-3 rounded-xl border flex items-center justify-between transition-all',
-                isPass ? 'bg-emerald-50 border-emerald-300 text-emerald-900' : isRetest ? 'bg-amber-50 border-amber-300 text-amber-900' : 'bg-rose-50 border-rose-300 text-rose-900'
-              )}>
-                <div>
-                  <div className="text-xs uppercase font-extrabold tracking-wider opacity-80">ĐIỂM TỔNG TÍNH DỰ KIẾN</div>
-                  <div className="text-2xl font-black font-mono tracking-tight">{avg.toFixed(1)} <span className="text-xs font-normal opacity-70">/ 10 điểm</span></div>
-                </div>
-                <div className="text-right">
-                  <span className={cn('inline-block px-3 py-1 rounded-xl text-xs font-black shadow-xs', isPass ? 'bg-emerald-600 text-white' : isRetest ? 'bg-amber-600 text-white' : 'bg-rose-600 text-white')}>
-                    {isPass ? '🎉 ĐẬU CHÍNH THỨC (Auto 30p nâng NV)' : isRetest ? '🔄 TEST ĐẦU RA LẦN 2' : '❌ CHƯA ĐẠT'}
-                  </span>
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* Ghi chú các câu có điểm < 1 (Nếu điểm 5..7 AI tự động note lại cho HR hỏi lần 2) */}
-          <Field label="Ghi chú các câu/tiêu chí có điểm < 1 (Mỗi dòng 1 câu - AI sẽ note lại cho lần phỏng vấn 2)">
-            <textarea
-              className="input text-xs min-h-[60px]"
-              value={lowScoreNotes}
-              onChange={(e) => setLowScoreNotes(e.target.value)}
-              placeholder="Ví dụ: Quy trình nạp tiền mặt bị sai bước 2..."
-            />
-          </Field>
-
-          <Field label="Nhận xét chi tiết từ HR / Store Manager">
-            <input
-              type="text"
-              className="input text-xs"
-              value={evaluatorNotes}
-              onChange={(e) => setEvaluatorNotes(e.target.value)}
-              placeholder="Nhập ghi chú thêm..."
-            />
-          </Field>
-
-          <div className="pt-2">
-            <button
-              type="submit"
-              disabled={evalSubmitting}
-              className="btn-primary w-full !py-2.5 font-extrabold text-sm flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 shadow-md cursor-pointer"
-            >
-              <Award size={16} />
-              <span>{evalSubmitting ? '⏳ Đang lưu đánh giá...' : '✅ HOÀN TẤT CHẤM ĐIỂM & ĐÁNH GIÁ'}</span>
-            </button>
-          </div>
-        </form>
-      </Modal>
+      {/* MODAL ⭐ BẢNG ĐÁNH GIÁ NHÂN VIÊN CỬA HÀNG (Mẫu chuẩn PDF Công Ty UNIQUE&NICHE) */}
+      {evaluationModalRow && (
+        <StoreEvaluationModal
+          open={!!evaluationModalRow}
+          onClose={() => setEvaluationModalRow(null)}
+          candidateId={evaluationModalRow.id}
+          candidateName={evaluationModalRow.tenUv}
+          chiNhanh={evaluationModalRow.chiNhanh}
+          caLam={evaluationModalRow.caLam}
+          aiNote={evaluationModalRow.aiNote}
+          onSuccess={() => void load()}
+        />
+      )}
     </div>
   );
 }
