@@ -107,6 +107,8 @@ model Candidate {
   employeeKeys     EmployeeKey[]
   deviceResetTickets DeviceResetTicket[]
   leaveRequestTickets LeaveRequestTicket[]
+  outputTestTickets OutputTestTicket[]
+  storeEvaluations  StoreEvaluation[]
 
   @@index([chiNhanh])
   @@index([sdtZalo])
@@ -453,4 +455,45 @@ model LeaveRequestTicket {
   @@index([candidateId])
   @@index([status])
   @@index([chiNhanh, date])
+}
+
+model OutputTestTicket {
+  id            String    @id // TST-YYYYMMDD-XXXX
+  candidateId   String
+  candidate     Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  candidateName String
+  chiNhanh      String
+  testDate      String    // YYYY-MM-DD
+  fromTime      String    // HH:mm
+  toTime        String    // HH:mm
+  meetLink      String
+  content       String
+  attemptNumber Int       @default(1) // 1 hoặc 2
+  status        String    @default("PENDING_AI_APPROVAL") // PENDING_AI_APPROVAL | APPROVED | REJECTED
+  approvedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([candidateId])
+  @@index([status])
+}
+
+model StoreEvaluation {
+  id                String    @id // EVL-YYYYMMDD-XXXX
+  candidateId       String
+  candidate         Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  testTicketId      String?
+  attemptNumber     Int       @default(1)
+  scoreKnowledge    Float     // Thang 10: KIẾN THỨC & ỨNG XỬ
+  scoreOperation    Float     // Thang 10: VẬN HÀNH
+  totalScore        Float     // (scoreKnowledge + scoreOperation) / 2
+  lowScoreQuestions Json?     // string[] ghi chú các câu/mục < 1 điểm
+  evaluationStatus  String    // PASSED_OFFICIAL (>7) | RETEST_REQUIRED (5..7) | FAILED (<5)
+  evaluatorUser     String
+  evaluatorNotes    String?
+  promotedAt        DateTime? // Thời điểm AI tự động nâng thành NV Chính Thức (sau 30p)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([candidateId])
 }

@@ -100,4 +100,64 @@ router.patch('/:id(*)', requireWrite(), async (req: AuthedRequest, res, next) =>
   }
 });
 
+// POST /api/training/output-test (Tạo phiếu Yêu cầu Test đầu ra - Khóa 1h30m, AI tự duyệt 15-30s)
+router.post('/output-test', requireWrite(), async (req: AuthedRequest, res, next) => {
+  try {
+    const { outputTestService } = await import('../services/OutputTestService');
+    const ticket = await outputTestService.createTicket({
+      candidateId: req.body.candidateId,
+      testDate: req.body.testDate,
+      fromTime: req.body.fromTime,
+      toTime: req.body.toTime,
+      meetLink: req.body.meetLink,
+      content: req.body.content,
+      user: req.user!.username,
+    });
+    res.json({ success: true, message: '✅ Đã gửi phiếu yêu cầu Test đầu ra thành công! AI đang tự động duyệt (15-30 giây).', data: ticket });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// GET /api/training/output-test (Xem danh sách phiếu Test đầu ra)
+router.get('/output-test', async (req, res, next) => {
+  try {
+    const { outputTestService } = await import('../services/OutputTestService');
+    const list = await outputTestService.listTickets(req.query.candidateId as string);
+    res.json({ success: true, data: list });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// POST /api/training/evaluate (Bảng đánh giá nhân viên cửa hàng & Chấm điểm Output Test)
+router.post('/evaluate', requireWrite(), async (req: AuthedRequest, res, next) => {
+  try {
+    const { evaluationService } = await import('../services/EvaluationService');
+    const evaluation = await evaluationService.submitEvaluation({
+      candidateId: req.body.candidateId,
+      testTicketId: req.body.testTicketId,
+      scoreKnowledge: Number(req.body.scoreKnowledge || 0),
+      scoreOperation: Number(req.body.scoreOperation || 0),
+      lowScoreQuestions: Array.isArray(req.body.lowScoreQuestions) ? req.body.lowScoreQuestions : [],
+      evaluatorNotes: req.body.evaluatorNotes,
+      user: req.user!.username,
+    });
+    res.json({ success: true, message: '✅ Đã hoàn tất đánh giá và chấm điểm nhân viên!', data: evaluation });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// GET /api/training/evaluations (Xem danh sách Đánh giá cửa hàng)
+router.get('/evaluations', async (req, res, next) => {
+  try {
+    const { evaluationService } = await import('../services/EvaluationService');
+    const list = await evaluationService.listEvaluations(req.query.candidateId as string);
+    res.json({ success: true, data: list });
+  } catch (e) {
+    next(e);
+  }
+});
+
 export default router;

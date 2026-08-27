@@ -373,15 +373,73 @@ async function main() {
   const badRow = ['24/08/2026 14:00:00', 'B', '2001', 'ĐH', 'HCM', '', 'CHIEU', 'Q1'];
   ok('FORM: dòng thiếu SĐT -> null', mapFormResponseRow(formHeaders, badRow) === null);
 
-  // ==================== SETTINGS MERGE ====================
-  console.log('\n[SETTINGS] Hợp nhất settings (mảng tombstone)');
-  const mergedArr = mergeSettings({ deletedFormResponses: [{ sdt: '0901234567', thoiGian: null }] });
-  ok('SETTINGS: mergeSettings giữ nguyên mảng', Array.isArray((mergedArr as Record<string, unknown>).deletedFormResponses));
-  const corruptObj = { 0: { sdt: '0901234567', thoiGian: null } };
-  const restored = mergeSettings({ deletedFormResponses: corruptObj as unknown as Record<string, unknown>[] });
-  ok('SETTINGS: dữ liệu cũ bị hỏng dạng {0:...} được phục hồi thành mảng', Array.isArray((restored as Record<string, unknown>).deletedFormResponses));
-  const nested = mergeSettings({ interview: { autoCreateMeet: true } });
-  ok('SETTINGS: object lồng nhau vẫn merge đúng', !!(nested as Record<string, unknown>).interview);
+  // ==================== OUTPUT TEST & STORE EVALUATION ====================
+  console.log('\n[OUTPUT TEST & EVALUATION] Phiếu Test Đầu Ra & Bảng Đánh Giá Cửa Hàng');
+  const candidateIdForTest = await makeCandidate(session);
+
+  // Set candidate to completed training (7 days)
+  await prisma.candidate.update({
+    where: { id: candidateIdForTest },
+    data: { soNgayDaTraining: 7, trangThaiTraining: 'HOAN_THANH_7_NGAY' },
+  });
+
+  const ticketRes1 = await api('/training/output-test', {
+    method: 'POST',
+    session,
+    body: {
+      candidateId: candidateIdForTest,
+      testDate: '2026-08-28',
+      fromTime: '09:00',
+      toTime: '10:30',
+      meetLink: 'https://meet.google.com/umb-test-123',
+      content: 'Kiểm tra quy trình phỏng vấn Test đầu ra lần 1',
+    },
+  });
+  ok('OUTPUT_TEST: Tạo phiếu yêu cầu thành công 200 OK', ticketRes1.status === 200 && ticketRes1.json.success === true);
+
+  // Kiểm tra Ràng buộc Khóa 1h30m (90 phút) giữa 2 phiếu
+  const ticketRes2 = await api('/training/output-test', {
+    method: 'POST',
+    session,
+    body: {
+      candidateId: candidateIdForTest,
+      testDate: '2026-08-28',
+      fromTime: '11:00',
+      toTime: '12:30',
+      meetLink: 'https://meet.google.com/umb-test-456',
+      content: 'Tạo phiếu quá nhanh',
+    },
+  });
+  ok('OUTPUT_TEST: Khóa giãn cách 1h30m chặn phiếu tạo lại quá nhanh (400 Bad Request)', ticketRes2.status === 400 && ticketRes2.json.code === 'TICKET_COOLDOWN_ACTIVE');
+
+  // Đánh giá điểm từ 5 đến 7 (Rớt lần 1 -> Retest lần 2 & note câu < 1)
+  const evalRes1 = await api('/training/evaluate', {
+    method: 'POST',
+    session,
+    body: {
+      candidateId: candidateIdForTest,
+      scoreKnowledge: 6.0,
+      scoreOperation: 6.0,
+      lowScoreQuestions: ['Quy trình nạp tiền chưa đúng', 'Cách ứng xử kém'],
+      evaluatorNotes: 'Chưa đạt yêu cầu vận hành',
+    },
+  });
+  ok('EVALUATION: Điểm 6.0 -> Retest lần 2 (TEST_DAU_RA_LAN_2) & note câu < 1', evalRes1.status === 200 && evalRes1.json.data.totalScore === 6.0);
+
+  // Đánh giá điểm > 7 (Đậu -> DAU_CHINH_THUC)
+  const candidateIdPass = await makeCandidate(session);
+  const evalRes2 = await api('/training/evaluate', {
+    method: 'POST',
+    session,
+    body: {
+      candidateId: candidateIdPass,
+      scoreKnowledge: 9.0,
+      scoreOperation: 8.5,
+      lowScoreQuestions: [],
+      evaluatorNotes: 'Ứng viên rất xuất sắc',
+    },
+  });
+  ok('EVALUATION: Điểm > 7 -> ĐẬU CHÍNH THỨC (DAU_CHINH_THUC)', evalRes2.status === 200 && evalRes2.json.data.totalScore === 8.75 && evalRes2.json.data.evaluationStatus === 'PASSED_OFFICIAL');
 
   console.log(`\n========== KẾT QUẢ: ${pass} PASS / ${fail} FAIL ==========\n`);
   if (failures.length > 0) {

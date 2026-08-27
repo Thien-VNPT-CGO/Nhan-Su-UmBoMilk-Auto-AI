@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GraduationCap, CalendarDays, Calendar, Send, RefreshCw, Briefcase, Video, CheckCircle2, XCircle, FileCheck, FileText, MessageCircle } from 'lucide-react';
+import { GraduationCap, CalendarDays, Calendar, Send, RefreshCw, Briefcase, Video, CheckCircle2, XCircle, FileCheck, FileText, MessageCircle, Award } from 'lucide-react';
 import { api, ApiError } from '../api/client';
 import { Badge, Skeleton, EmptyState, Modal, Field, ConfirmDialog } from '../components/ui';
 import InterviewScoreModal from '../components/InterviewScoreModal';
@@ -28,6 +28,7 @@ interface TrainingRow {
   interviewStatus: string | null;
   hrDecision: string | null;
   hrReason?: string | null;
+  aiNote?: string | null;
   dataVersion: number;
 }
 
@@ -53,7 +54,9 @@ const INTERVIEW_STATUS_LABEL: Record<string, { label: string; cls: string }> = {
 };
 
 const STATUS_OPTIONS = [
-  'CHUA_THAM_GIA', 'SAP_BAT_DAU', 'BAT_DAU', 'HOAN_THANH', 'KHONG_DU_NGAY', 'LOAI', 'NHAN_VIEN_CHINH_THUC',
+  'CHUA_THAM_GIA', 'SAP_BAT_DAU', 'BAT_DAU', 'HOAN_THANH', 'HOAN_THANH_7_NGAY',
+  'TEST_DAU_RA_LAN_1', 'TEST_DAU_RA_LAN_2', 'DANH_GIA_CUA_HANG', 'DAU_CHINH_THUC',
+  'NHAN_VIEN_CHINH_THUC', 'KHONG_DU_NGAY', 'LOAI',
 ];
 
 const FILTERS = [
@@ -83,6 +86,24 @@ export default function Training() {
   const [ivPhongVanAt, setIvPhongVanAt] = useState('');
   const [ivGgMeetLink, setIvGgMeetLink] = useState('');
   const [ivResend, setIvResend] = useState(true);
+
+  // States cho Phiếu Yêu Cầu Test Đầu Ra (Khóa 1h30m, AI duyệt 15-30s)
+  const [outputTestModalRow, setOutputTestModalRow] = useState<TrainingRow | null>(null);
+  const tomorrowStr = new Date(Date.now() + 86400 * 1000).toISOString().split('T')[0];
+  const [testDate, setTestDate] = useState(tomorrowStr);
+  const [fromTime, setFromTime] = useState('09:00');
+  const [toTime, setToTime] = useState('10:30');
+  const [meetLink, setMeetLink] = useState('https://meet.google.com/umb-milk-test');
+  const [testContent, setTestContent] = useState('Kiểm tra phỏng vấn Test Đầu Ra Nhân Viên Training');
+  const [ticketSubmitting, setTicketSubmitting] = useState(false);
+
+  // States cho Bảng Đánh Giá Nhân Viên Cửa Hàng (Chấm điểm & note câu < 1)
+  const [evaluationModalRow, setEvaluationModalRow] = useState<TrainingRow | null>(null);
+  const [scoreKnowledge, setScoreKnowledge] = useState<number>(8);
+  const [scoreOperation, setScoreOperation] = useState<number>(8);
+  const [lowScoreNotes, setLowScoreNotes] = useState<string>('');
+  const [evaluatorNotes, setEvaluatorNotes] = useState<string>('');
+  const [evalSubmitting, setEvalSubmitting] = useState(false);
 
   const BRANCH_OPTIONS = [
     'CN1: 130 Vạn Kiếp, Phường 3, Quận Bình Thạnh',
@@ -129,14 +150,78 @@ export default function Training() {
     socket.on('candidate:new', refreshData);
     socket.on('candidate:updated', refreshData);
     socket.on('candidate:decision', refreshData);
+    socket.on('output_test:created', refreshData);
+    socket.on('output_test:approved', refreshData);
+    socket.on('evaluation:completed', refreshData);
+    socket.on('candidate:promoted', refreshData);
 
     return () => {
       socket.off('training:updated', refreshData);
       socket.off('candidate:new', refreshData);
       socket.off('candidate:updated', refreshData);
       socket.off('candidate:decision', refreshData);
+      socket.off('output_test:created', refreshData);
+      socket.off('output_test:approved', refreshData);
+      socket.off('evaluation:completed', refreshData);
+      socket.off('candidate:promoted', refreshData);
     };
   }, [load]);
+
+  const handleCreateOutputTestSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!outputTestModalRow || !testDate || !fromTime || !toTime || !meetLink || !testContent) return;
+
+    setTicketSubmitting(true);
+    try {
+      const res = await api.post<{ message: string }>('/training/output-test', {
+        candidateId: outputTestModalRow.id,
+        testDate,
+        fromTime,
+        toTime,
+        meetLink: meetLink.trim(),
+        content: testContent.trim(),
+      });
+
+      toast('success', res.message || '✅ Đã gửi phiếu yêu cầu Test đầu ra thành công!');
+      setOutputTestModalRow(null);
+      void load();
+    } catch (err) {
+      toast('error', err instanceof ApiError ? err.message : 'Gửi phiếu thất bại.');
+    } finally {
+      setTicketSubmitting(false);
+    }
+  };
+
+  const handleSubmitEvaluation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!evaluationModalRow) return;
+
+    setEvalSubmitting(true);
+    try {
+      const lowScoreArr = lowScoreNotes
+        .split('\n')
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+      const res = await api.post<{ message: string }>('/training/evaluate', {
+        candidateId: evaluationModalRow.id,
+        scoreKnowledge,
+        scoreOperation,
+        lowScoreQuestions: lowScoreArr,
+        evaluatorNotes: evaluatorNotes.trim(),
+      });
+
+      toast('success', res.message || '✅ Đã hoàn tất đánh giá nhân viên cửa hàng!');
+      setEvaluationModalRow(null);
+      setLowScoreNotes('');
+      setEvaluatorNotes('');
+      void load();
+    } catch (err) {
+      toast('error', err instanceof ApiError ? err.message : 'Đánh giá thất bại.');
+    } finally {
+      setEvalSubmitting(false);
+    }
+  };
 
   const openEditModal = (r: TrainingRow) => {
     setEdit(r);
@@ -799,6 +884,45 @@ export default function Training() {
                               <span>💬 Mở App Zalo gửi Lịch Training</span>
                             </button>
                           )}
+
+                          {/* Nút 📋 TẠO PHIẾU YÊU CẦU TEST ĐẦU RA (khi đủ 7 ngày training) */}
+                          {(r.trangThaiTraining === 'HOAN_THANH' || r.trangThaiTraining === 'HOAN_THANH_7_NGAY' || r.soNgayDaTraining >= 7) && (
+                            <button
+                              type="button"
+                              onClick={() => setOutputTestModalRow(r)}
+                              className="bg-gradient-to-r from-teal-600 to-indigo-600 hover:from-teal-500 hover:to-indigo-500 text-white !py-1.5 !px-3 text-[11px] font-extrabold shadow-md rounded-xl flex items-center gap-1.5 hover:scale-102 transition-all cursor-pointer whitespace-nowrap"
+                              title="Tạo phiếu yêu cầu đặt lịch phỏng vấn Test Đầu Ra (Khóa 1h30m giữa các phiếu, AI tự động duyệt 15-30s)"
+                            >
+                              <FileText size={13} />
+                              <span>📋 Tạo Phiếu Test Đầu Ra</span>
+                            </button>
+                          )}
+
+                          {/* Nút ⭐ BẢNG ĐÁNH GIÁ CỬA HÀNG (khi ở luồng Test Đầu Ra) */}
+                          {['TEST_DAU_RA_LAN_1', 'TEST_DAU_RA_LAN_2', 'DANH_GIA_CUA_HANG'].includes(r.trangThaiTraining ?? '') && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEvaluationModalRow(r);
+                                setScoreKnowledge(8);
+                                setScoreOperation(8);
+                                setLowScoreNotes('');
+                                setEvaluatorNotes('');
+                              }}
+                              className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white !py-1.5 !px-3 text-[11px] font-extrabold shadow-md rounded-xl flex items-center gap-1.5 hover:scale-102 transition-all cursor-pointer whitespace-nowrap animate-pulse"
+                              title="Mở Bảng Đánh Giá Nhân Viên Cửa Hàng & Chấm điểm Output Test"
+                            >
+                              <Award size={13} />
+                              <span>⭐ Đánh Giá Cửa Hàng</span>
+                            </button>
+                          )}
+
+                          {/* Badge 🎉 ĐẬU CHÍNH THỨC (AI tự động chuyển NV Chính thức sau 30 phút) */}
+                          {r.trangThaiTraining === 'DAU_CHINH_THUC' && (
+                            <div className="bg-emerald-600 text-white text-[10px] font-black px-2.5 py-1 rounded-xl shadow border border-emerald-500 animate-pulse text-center">
+                              🎉 ĐẬU CHÍNH THỨC (AI Auto 30p nâng NV Chính Thức)
+                            </div>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -991,6 +1115,170 @@ export default function Training() {
           onSuccess={handleScoreSuccess}
         />
       )}
+
+      {/* MODAL 📋 TẠO PHIẾU YÊU CẦU TEST ĐẦU RA (Khóa 1h30m, AI duyệt 15-30s) */}
+      <Modal open={!!outputTestModalRow} onClose={() => setOutputTestModalRow(null)} title={`📋 Tạo Phiếu Yêu Cầu Test Đầu Ra – ${outputTestModalRow?.tenUv ?? ''}`}>
+        <form onSubmit={handleCreateOutputTestSubmit} className="space-y-4">
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs space-y-1">
+            <div className="font-bold text-slate-800 flex items-center justify-between">
+              <span>👤 Ứng viên: <span className="text-brand-600">{outputTestModalRow?.tenUv}</span></span>
+              <span className="text-slate-500 font-mono">Mã: {outputTestModalRow?.id}</span>
+            </div>
+            <div className="text-slate-600">
+              🏬 Chi nhánh: <b>{outputTestModalRow?.chiNhanh || 'Chưa chọn'}</b> | Ca làm: <b>{outputTestModalRow?.caLam || 'Chưa chọn'}</b>
+            </div>
+            <div className="text-indigo-600 font-semibold italic pt-1">
+              ⚡ Ràng buộc AI: Mỗi phiếu yêu cầu của HR cách nhau 1h30 phút. AI sẽ duyệt tự động trong 15-30 giây!
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Ngày phỏng vấn Test">
+              <input type="date" className="input text-xs font-bold" value={testDate} onChange={(e) => setTestDate(e.target.value)} required />
+            </Field>
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="Từ mấy giờ">
+                <input type="time" className="input text-xs font-bold" value={fromTime} onChange={(e) => setFromTime(e.target.value)} required />
+              </Field>
+              <Field label="Đến mấy giờ">
+                <input type="time" className="input text-xs font-bold" value={toTime} onChange={(e) => setToTime(e.target.value)} required />
+              </Field>
+            </div>
+          </div>
+
+          <Field label="Link Google Meet">
+            <input type="url" className="input text-xs font-mono" value={meetLink} onChange={(e) => setMeetLink(e.target.value)} placeholder="https://meet.google.com/xxx-xxxx-xxx" required />
+          </Field>
+
+          <Field label="Nội dung phỏng vấn & Ghi chú">
+            <textarea className="input text-xs min-h-[70px]" value={testContent} onChange={(e) => setTestContent(e.target.value)} placeholder="Nhập nội dung phỏng vấn Test đầu ra..." required />
+          </Field>
+
+          <div className="pt-2">
+            <button
+              type="submit"
+              disabled={ticketSubmitting}
+              className="btn-primary w-full !py-2.5 font-extrabold text-sm flex items-center justify-center gap-2 bg-gradient-to-r from-teal-600 to-indigo-600 hover:from-teal-500 hover:to-indigo-500 shadow-md cursor-pointer"
+            >
+              <FileText size={16} />
+              <span>{ticketSubmitting ? '⏳ Đang gửi phiếu...' : '🚀 GỬI PHIẾU YÊU CẦU TEST ĐẦU RA'}</span>
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* MODAL ⭐ BẢNG ĐÁNH GIÁ NHÂN VIÊN CỬA HÀNG (Thang điểm 10, Auto 30p chính thức / Retest lần 2) */}
+      <Modal open={!!evaluationModalRow} onClose={() => setEvaluationModalRow(null)} title={`⭐ Bảng Đánh Giá Nhân Viên Cửa Hàng – ${evaluationModalRow?.tenUv ?? ''}`}>
+        <form onSubmit={handleSubmitEvaluation} className="space-y-4">
+          <div className="bg-gradient-to-br from-slate-50 to-blue-50/50 border border-blue-100 rounded-xl p-3 text-xs space-y-1.5">
+            <div className="font-extrabold text-slate-800 flex items-center justify-between">
+              <span>👤 NV Training: <span className="text-blue-700">{evaluationModalRow?.tenUv}</span></span>
+              <span className="text-slate-500 font-mono">Mã: {evaluationModalRow?.id}</span>
+            </div>
+            {evaluationModalRow?.aiNote && (
+              <div className="text-purple-700 bg-purple-50 p-2 rounded-lg border border-purple-200 text-[11px] font-medium">
+                📝 <b>Ghi chú câu hỏi nợ từ đợt phỏng vấn trước:</b> {evaluationModalRow.aiNote}
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-xl border border-slate-200">
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-700 block">
+                🧠 KIẾN THỨC & ỨNG XỬ (Thang 10)
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="range"
+                  min="0"
+                  max="10"
+                  step="0.5"
+                  className="w-full accent-blue-600 cursor-pointer"
+                  value={scoreKnowledge}
+                  onChange={(e) => setScoreKnowledge(parseFloat(e.target.value))}
+                />
+                <span className="font-mono text-sm font-black text-blue-700 bg-white px-2 py-0.5 rounded border border-blue-200 min-w-[35px] text-center">
+                  {scoreKnowledge}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-700 block">
+                ⚙️ VẬN HÀNH (Thang 10)
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="range"
+                  min="0"
+                  max="10"
+                  step="0.5"
+                  className="w-full accent-indigo-600 cursor-pointer"
+                  value={scoreOperation}
+                  onChange={(e) => setScoreOperation(parseFloat(e.target.value))}
+                />
+                <span className="font-mono text-sm font-black text-indigo-700 bg-white px-2 py-0.5 rounded border border-indigo-200 min-w-[35px] text-center">
+                  {scoreOperation}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Dòng tính Điểm Trung Bình Realtime & Dự kiến Kết Quả */}
+          {(() => {
+            const avg = (scoreKnowledge + scoreOperation) / 2;
+            const isPass = avg > 7;
+            const isRetest = avg >= 5 && avg <= 7;
+            return (
+              <div className={cn(
+                'p-3 rounded-xl border flex items-center justify-between transition-all',
+                isPass ? 'bg-emerald-50 border-emerald-300 text-emerald-900' : isRetest ? 'bg-amber-50 border-amber-300 text-amber-900' : 'bg-rose-50 border-rose-300 text-rose-900'
+              )}>
+                <div>
+                  <div className="text-xs uppercase font-extrabold tracking-wider opacity-80">ĐIỂM TỔNG TÍNH DỰ KIẾN</div>
+                  <div className="text-2xl font-black font-mono tracking-tight">{avg.toFixed(1)} <span className="text-xs font-normal opacity-70">/ 10 điểm</span></div>
+                </div>
+                <div className="text-right">
+                  <span className={cn('inline-block px-3 py-1 rounded-xl text-xs font-black shadow-xs', isPass ? 'bg-emerald-600 text-white' : isRetest ? 'bg-amber-600 text-white' : 'bg-rose-600 text-white')}>
+                    {isPass ? '🎉 ĐẬU CHÍNH THỨC (Auto 30p nâng NV)' : isRetest ? '🔄 TEST ĐẦU RA LẦN 2' : '❌ CHƯA ĐẠT'}
+                  </span>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Ghi chú các câu có điểm < 1 (Nếu điểm 5..7 AI tự động note lại cho HR hỏi lần 2) */}
+          <Field label="Ghi chú các câu/tiêu chí có điểm < 1 (Mỗi dòng 1 câu - AI sẽ note lại cho lần phỏng vấn 2)">
+            <textarea
+              className="input text-xs min-h-[60px]"
+              value={lowScoreNotes}
+              onChange={(e) => setLowScoreNotes(e.target.value)}
+              placeholder="Ví dụ: Quy trình nạp tiền mặt bị sai bước 2..."
+            />
+          </Field>
+
+          <Field label="Nhận xét chi tiết từ HR / Store Manager">
+            <input
+              type="text"
+              className="input text-xs"
+              value={evaluatorNotes}
+              onChange={(e) => setEvaluatorNotes(e.target.value)}
+              placeholder="Nhập ghi chú thêm..."
+            />
+          </Field>
+
+          <div className="pt-2">
+            <button
+              type="submit"
+              disabled={evalSubmitting}
+              className="btn-primary w-full !py-2.5 font-extrabold text-sm flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 shadow-md cursor-pointer"
+            >
+              <Award size={16} />
+              <span>{evalSubmitting ? '⏳ Đang lưu đánh giá...' : '✅ HOÀN TẤT CHẤM ĐIỂM & ĐÁNH GIÁ'}</span>
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
