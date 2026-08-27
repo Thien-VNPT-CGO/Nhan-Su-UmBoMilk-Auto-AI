@@ -212,7 +212,12 @@ export class AuthService {
         }
       }
     }
-    res.clearCookie(COOKIE_NAME, { path: '/' });
+    const isProduction = env.nodeEnv === 'production';
+    res.clearCookie(COOKIE_NAME, {
+      path: '/',
+      sameSite: isProduction ? 'none' : 'lax',
+      secure: isProduction,
+    });
   }
 
   async me(req: Request): Promise<{ user: ReturnType<typeof toSafeUser> } | null> {
@@ -242,10 +247,11 @@ export class AuthService {
         userAgent: req.headers['user-agent']?.slice(0, 255) ?? null,
       },
     });
+    const isProduction = env.nodeEnv === 'production';
     res.cookie(COOKIE_NAME, sessionId, {
       httpOnly: true,
-      sameSite: 'lax',
-      secure: env.nodeEnv === 'production',
+      sameSite: isProduction ? 'none' : 'lax',
+      secure: isProduction,
       maxAge: env.sessionTtlDays * 24 * 60 * 60 * 1000,
       path: '/',
     });
