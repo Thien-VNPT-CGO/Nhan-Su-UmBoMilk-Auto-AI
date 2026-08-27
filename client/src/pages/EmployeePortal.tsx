@@ -265,33 +265,47 @@ interface LeaveTicketItem {
 
   const [isAutoFilledId, setIsAutoFilledId] = useState(false);
 
-  // Tự động nhận và gán cứng MÃ NHÂN VIÊN từ URL params (?id=UBM_...) hoặc Regex quét URL
-  useEffect(() => {
-    const extractedId = extractCandidateIdFromWindow();
-    if (extractedId) {
-      setCandidateIdInput(extractedId);
-      setIsAutoFilledId(true);
-      localStorage.setItem('umbomilk_last_candidate_id', extractedId);
-    } else {
-      const savedId = localStorage.getItem('umbomilk_last_candidate_id');
-      if (savedId) {
-        setCandidateIdInput(savedId);
-        setIsAutoFilledId(true);
-      }
+  const performAutoLogin = useCallback(async (cId: string) => {
+    if (!cId) return;
+    setLoading(true);
+    setLoginError(null);
+    const deviceId = getDeviceId();
+    try {
+      const data = await api.post<EmployeeSession>('/public/employee/auto-login', {
+        candidateId: cId,
+        deviceId,
+      });
+      setSession(data);
+      localStorage.setItem('umbomilk_emp_session', JSON.stringify(data));
+      localStorage.setItem('umbomilk_last_candidate_id', data.candidate.id);
+    } catch (err) {
+      setLoginError(err instanceof ApiError ? err.message : 'Không thể tự động đăng nhập. Vui lòng nhập Mã NV hoặc SĐT.');
+    } finally {
+      setLoading(false);
     }
   }, []);
 
-  // Restore saved session
+  // Tự động nhận và gán cứng MÃ NHÂN VIÊN từ URL params (?id=UBM_...) hoặc Regex quét URL
   useEffect(() => {
     const saved = localStorage.getItem('umbomilk_emp_session');
     if (saved) {
       try {
         setSession(JSON.parse(saved));
+        return;
       } catch {
         localStorage.removeItem('umbomilk_emp_session');
       }
     }
-  }, []);
+
+    const extractedId = extractCandidateIdFromWindow();
+    const savedId = localStorage.getItem('umbomilk_last_candidate_id');
+    const targetId = extractedId || savedId;
+    if (targetId) {
+      setCandidateIdInput(targetId);
+      setIsAutoFilledId(true);
+      performAutoLogin(targetId);
+    }
+  }, [performAutoLogin]);
 
   const [pendingReplacements, setPendingReplacements] = useState<any[]>([]);
 
@@ -544,32 +558,14 @@ interface LeaveTicketItem {
     }
   }, [activeTab, session?.candidate.id]);
 
-  // Xử lý Đăng nhập 1 lần & Kích hoạt Key
+  // Xử lý Đăng nhập 1-Click tự động
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!candidateIdInput.trim() || !keyInput.trim()) {
-      setLoginError('Vui lòng nhập đầy đủ Mã Nhân Viên và Key Kích Hoạt.');
+    if (!candidateIdInput.trim()) {
+      setLoginError('Vui lòng nhập Mã Nhân Viên hoặc SĐT Zalo.');
       return;
     }
-    setLoading(true);
-    setLoginError(null);
-
-    const deviceId = getDeviceId();
-
-    api.post<EmployeeSession>('/public/employee/activate-login', {
-      candidateId: candidateIdInput.trim(),
-      key: keyInput.trim(),
-      deviceId,
-    })
-      .then((data) => {
-        setSession(data);
-        localStorage.setItem('umbomilk_emp_session', JSON.stringify(data));
-        setLoading(false);
-      })
-      .catch((err) => {
-        setLoginError(err instanceof ApiError ? err.message : 'Đăng nhập không thành công.');
-        setLoading(false);
-      });
+    performAutoLogin(candidateIdInput.trim());
   };
 
   // Đăng xuất
@@ -623,7 +619,7 @@ interface LeaveTicketItem {
           <form onSubmit={handleLoginSubmit} className="bg-slate-900/90 backdrop-blur-xl p-6 rounded-3xl border border-slate-800 shadow-2xl space-y-4">
             <div className="flex items-center gap-2 text-xs font-bold text-slate-300 pb-2 border-b border-slate-800">
               <Lock size={16} className="text-pink-400" />
-              <span>ĐĂNG NHẬP & KÍCH HOẠT 1 THIẾT BỊ DUY NHẤT</span>
+              <span>ĐĂNG NHẬP 1-CLICK TỰ ĐỘNG KHÔNG CẦN KEY</span>
             </div>
 
             {loginError && (
@@ -633,14 +629,14 @@ interface LeaveTicketItem {
               </div>
             )}
 
-            {/* Input Mã Nhân Viên */}
+            {/* Input Mã Nhân Viên / SĐT */}
             <div className="space-y-1">
               <div className="flex items-center justify-between">
                 <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                  MÃ NHÂN VIÊN (CỐ ĐỊNH TỰ ĐỘNG)
+                  MÃ NHÂN VIÊN HOẶC SỐ ĐIỆN THOẠI
                 </label>
                 <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-500/50 px-2 py-0.5 rounded-full flex items-center gap-1">
-                  🔒 CỐ ĐỊNH VỚI WEB HR
+                  ⚡ 1-CLICK AUTO
                 </span>
               </div>
               <div className="relative">
@@ -648,41 +644,22 @@ interface LeaveTicketItem {
                   type="text"
                   value={candidateIdInput}
                   onChange={(e) => setCandidateIdInput(e.target.value)}
-                  readOnly={true}
-                  placeholder="Ví dụ: UBM_25/08/2026_NV0008"
-                  className="w-full border rounded-2xl px-4 py-3 text-xs text-emerald-300 bg-emerald-950/20 border-emerald-500/80 ring-2 ring-emerald-500/30 outline-none font-mono font-bold transition-all cursor-not-allowed"
+                  placeholder="Nhập SĐT Zalo hoặc Mã NV (VD: 0987654321)..."
+                  className="w-full bg-slate-800/90 border border-slate-700 focus:border-pink-500 focus:ring-1 focus:ring-pink-500/50 rounded-2xl px-4 py-3 text-xs text-white placeholder:text-slate-500 outline-none font-mono font-bold tracking-wider"
                   required
                 />
-                <User size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-400" />
+                <User size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-pink-400" />
               </div>
-              <p className="text-[10px] text-emerald-400/90 font-medium pt-0.5 flex items-center gap-1">
-                <Lock size={11} className="shrink-0" />
-                <span>Mã NV của bạn đã được gán cố định tự động theo đúng hồ sơ Web HR. Vui lòng nhập Key Kích Hoạt bên dưới.</span>
+              <p className="text-[10px] text-slate-400 font-medium pt-0.5 flex items-center gap-1">
+                <span>Nhân viên chỉ cần nhấn link gửi từ Zalo hoặc nhập SĐT để vào Web App ngay mà không cần nhớ mật khẩu hay Key rườm rà.</span>
               </p>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                KEY KÍCH HOẠT (ADMIN CẤP)
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={keyInput}
-                  onChange={(e) => setKeyInput(e.target.value)}
-                  placeholder="Ví dụ: TRN-8812-4412 hoặc EMP-9912-1102"
-                  className="w-full bg-slate-800/90 border border-slate-700 focus:border-pink-500 rounded-2xl px-4 py-3 text-xs text-white placeholder:text-slate-500 outline-none font-mono font-bold tracking-wider"
-                  required
-                />
-                <Key size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500" />
-              </div>
             </div>
 
             {/* Note về Device Lock */}
             <div className="bg-amber-950/40 border border-amber-500/40 p-3 rounded-2xl text-[11px] text-amber-200 flex items-start gap-2">
               <Shield size={16} className="shrink-0 mt-0.5 text-amber-400" />
               <span>
-                <strong>BẢO MẬT 1 THIẾT BỊ:</strong> Khi đăng nhập thành công, tài khoản sẽ gán cứng với điện thoại này. Không thể đăng nhập giùm trên máy khác.
+                <strong>BẢO MẬT 1 THIẾT BỊ:</strong> Khi truy cập lần đầu, Web App tự động ghi nhớ điện thoại này để bảo mật thông tin cá nhân.
               </span>
             </div>
 
@@ -694,12 +671,12 @@ interface LeaveTicketItem {
               {loading ? (
                 <>
                   <Spinner size={18} className="text-white" />
-                  <span>ĐANG ĐĂNG NHẬP & KÍCH HOẠT...</span>
+                  <span>ĐANG MỞ WEB APP...</span>
                 </>
               ) : (
                 <>
                   <CheckCircle2 size={18} />
-                  <span>KÍCH HOẠT THIẾT BỊ & ĐĂNG NHẬP</span>
+                  <span>🚀 TRUY CẬP WEB APP NGAY</span>
                 </>
               )}
             </button>

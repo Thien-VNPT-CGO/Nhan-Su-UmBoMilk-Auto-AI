@@ -58,6 +58,72 @@ export class EmployeeAuthService {
     return keyRecord;
   }
 
+  /** Đăng nhập tự động không cần gõ Key khi truy cập từ Link Web App (1-Click Seamless Login) */
+  async autoLogin(input: { candidateId: string; deviceId: string }) {
+    let candidate = await prisma.candidate.findUnique({
+      where: { id: input.candidateId },
+    });
+
+    if (!candidate) {
+      // Thử tìm theo SĐT nếu nhân viên nhập SĐT
+      candidate = await prisma.candidate.findFirst({
+        where: { sdtZalo: input.candidateId.trim() },
+      });
+    }
+
+    if (!candidate) {
+      throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy thông tin Mã nhân viên hoặc SĐT trong hệ thống.');
+    }
+
+    let keyRecord = await prisma.employeeKey.findFirst({
+      where: { candidateId: candidate.id, status: 'ACTIVE' },
+    });
+
+    if (!keyRecord) {
+      const isOfficial = candidate.trangThaiTraining === 'NHAN_VIEN_CHINH_THUC';
+      const type = isOfficial ? 'OFFICIAL' : 'TRAINING';
+      const prefix = isOfficial ? 'EMP' : 'TRN';
+      const key = `${prefix}-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+      keyRecord = await prisma.employeeKey.create({
+        data: {
+          id: nextId('KEY'),
+          key,
+          candidateId: candidate.id,
+          type,
+          status: 'ACTIVE',
+          deviceId: input.deviceId,
+          activatedAt: new Date(),
+        },
+      });
+    } else if (!keyRecord.deviceId) {
+      await prisma.employeeKey.update({
+        where: { id: keyRecord.id },
+        data: { deviceId: input.deviceId, activatedAt: new Date() },
+      });
+      keyRecord.deviceId = input.deviceId;
+    }
+
+    return {
+      candidate: {
+        id: candidate.id,
+        tenUv: candidate.tenUv,
+        sdtZalo: candidate.sdtZalo,
+        chiNhanh: candidate.chiNhanh,
+        caLam: candidate.caLam,
+        trangThaiTraining: candidate.trangThaiTraining,
+        soNgayDaTraining: candidate.soNgayDaTraining,
+      },
+      keyInfo: {
+        key: keyRecord.key,
+        type: keyRecord.type,
+        status: keyRecord.status,
+        deviceId: keyRecord.deviceId,
+        activatedAt: keyRecord.activatedAt,
+      },
+    };
+  }
+
   /** Đăng nhập & Kích hoạt thiết bị (Device Binding) */
   async activateAndLogin(input: { candidateId: string; key: string; deviceId: string }) {
     const candidate = await prisma.candidate.findUnique({

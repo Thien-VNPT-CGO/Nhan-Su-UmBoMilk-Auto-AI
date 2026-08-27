@@ -33,6 +33,24 @@ router.post('/public/employee/activate-login', async (req, res, next) => {
   }
 });
 
+// 1b. Đăng nhập Tự động 1-Click không cần gõ Key (Seamless Public Auto Login)
+router.post('/public/employee/auto-login', async (req, res, next) => {
+  try {
+    const schema = z.object({
+      candidateId: z.string().min(1, 'Thiếu Mã nhân viên hoặc SĐT'),
+      deviceId: z.string().min(1, 'Thiếu Device ID'),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      throw ApiError.badRequest('INVALID_INPUT', 'Thông tin tự động đăng nhập không hợp lệ.');
+    }
+    const result = await employeeAuthService.autoLogin(parsed.data);
+    res.json({ success: true, data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
 // 2. Lấy Bảng Lương & Phụ cấp AI Realtime cho Nhân viên
 router.get('/public/employee/payroll-ai/:candidateId', async (req, res, next) => {
   try {
