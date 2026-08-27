@@ -354,7 +354,7 @@ export class ShiftService {
     emit('shift:updated', { candidateId: input.candidateId, date: input.date, shifts: valid.join('|') });
   }
 
-  // TÍNH NĂNG 1: TỰ ĐỘNG XẾP LỊCH HÀNG THÁNG CHO NHÂN VIÊN CHÍNH THỨC (TỐI THIỂU 12 NGÀY/THÁNG - CHỐNG TRÙNG CA TUYỆT ĐỐI)
+  // TÍNH NĂNG 1: TỰ ĐỘNG XẾP LỊCH HÀNG THÁNG CHO NHÂN VIÊN CHÍNH THỨC (RÀNG BUỘC TUYỆT ĐỐI THEO CHI NHÁNH & CA LÀM ĐĂNG KÝ, >= 12 NGÀY/THÁNG)
   async autoScheduleMonthly(params: { month: number; year: number; minDaysPerEmp?: number; user: string }) {
     const { month, year, minDaysPerEmp = 12, user } = params;
     const daysInMonth = new Date(year, month, 0).getDate();
@@ -372,6 +372,7 @@ export class ShiftService {
       return { success: false, message: 'Không có nhân viên chính thức nào để xếp lịch.' };
     }
 
+    // 1. Nhóm nhân viên theo CHI NHÁNH
     const byBranch = new Map<string, typeof officialCandidates>();
     officialCandidates.forEach((c) => {
       const br = c.chiNhanh?.trim() || 'KHAC';
@@ -386,41 +387,52 @@ export class ShiftService {
 
     let totalAssigned = 0;
 
-    // Chu kỳ phân bổ ca xoay vòng: 3 ca làm (SANG, CHIEU, TOI) + 2 ca OFF (đảm bảo 60% công = 18 ngày/tháng >= 12 ngày/tháng)
-    const SHIFT_PATTERN = ['SANG', 'CHIEU', 'TOI', 'OFF', 'OFF'] as const;
-
     for (const [, candList] of byBranch.entries()) {
-      const candCount = candList.length;
-      if (!candCount) continue;
+      // 2. Nhóm nhân viên trong cùng chi nhánh theo CA LÀM VIỆC ĐĂNG KÝ (SANG / CHIEU / TOI)
+      const byShiftPref = new Map<string, typeof candList>();
+      candList.forEach((cand) => {
+        const normCode = normalizeShiftCode(cand.caLam || '');
+        const prefCode = (normCode && normCode !== 'OFF' && SHIFT_OPTIONS.includes(normCode as never)) ? normCode : 'SANG';
+        if (!byShiftPref.has(prefCode)) byShiftPref.set(prefCode, []);
+        byShiftPref.get(prefCode)!.push(cand);
+      });
 
-      for (let dayIdx = 0; dayIdx < daysInMonth; dayIdx++) {
-        const dStr = allDates[dayIdx];
+      // Với từng nhóm ca làm trong chi nhánh (VD: nhóm Ca SÁNG tại CN3, nhóm Ca CHIỀU tại CN3...)
+      for (const [prefShiftCode, empGroup] of byShiftPref.entries()) {
+        const groupCount = empGroup.length;
+        if (!groupCount) continue;
 
-        for (let empIdx = 0; empIdx < candCount; empIdx++) {
-          const cand = candList[empIdx];
+        for (let empIdx = 0; empIdx < groupCount; empIdx++) {
+          const cand = empGroup[empIdx];
 
-          // Phân bổ ngẫu nhiên dựa trên chu kỳ xoay vòng 5 nấc:
-          // Mỗi nhân viên ở chi nhánh có ca rải đều SANG -> CHIEU -> TOI -> OFF -> OFF
-          // Đảm bảo không nhân viên nào trong cùng chi nhánh bị xếp trùng ca cùng 1 ngày
-          const shiftVal = SHIFT_PATTERN[(empIdx + dayIdx) % SHIFT_PATTERN.length];
+          // Phân bổ ngày OFF & ngày làm đan xen cho nhóm nhân viên cùng ca cùng chi nhánh
+          // Đảm bảo số ngày đi làm của từng NV >= minDaysPerEmp (mặc định 12 - 22 ngày/tháng)
+          // RÀNG BUỘC TUYỆT ĐỐI: Ngày đi làm CHỈ nhận ca đúng với caLam đăng ký (prefShiftCode), tuyệt đối không gán ca khác!
+          for (let dayIdx = 0; dayIdx < daysInMonth; dayIdx++) {
+            const dStr = allDates[dayIdx];
 
-          await prisma.shift.upsert({
-            where: { candidateId_date: { candidateId: cand.id, date: dStr } },
-            create: {
-              id: nextId('SHF'),
-              candidateId: cand.id,
-              date: dStr,
-              shifts: shiftVal,
-              note: 'AI_MONTHLY_SCHEDULED',
-              updatedBy: user,
-            },
-            update: {
-              shifts: shiftVal,
-              note: 'AI_MONTHLY_SCHEDULED',
-              updatedBy: user,
-            },
-          });
-          totalAssigned++;
+            // Đăng ký OFF đan xen theo chỉ số nhân viên trong nhóm ca
+            const isOffDay = groupCount > 1 ? ((empIdx + dayIdx) % 4 === 0) : (dayIdx % 5 === 0);
+            const shiftVal = isOffDay ? 'OFF' : prefShiftCode;
+
+            await prisma.shift.upsert({
+              where: { candidateId_date: { candidateId: cand.id, date: dStr } },
+              create: {
+                id: nextId('SHF'),
+                candidateId: cand.id,
+                date: dStr,
+                shifts: shiftVal,
+                note: 'AI_MONTHLY_SCHEDULED',
+                updatedBy: user,
+              },
+              update: {
+                shifts: shiftVal,
+                note: 'AI_MONTHLY_SCHEDULED',
+                updatedBy: user,
+              },
+            });
+            totalAssigned++;
+          }
         }
       }
     }
