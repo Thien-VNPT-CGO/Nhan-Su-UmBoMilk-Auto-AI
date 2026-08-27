@@ -25,7 +25,18 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
   };
-  const res = await fetch(`${BASE}${path}`, { ...options, headers, credentials: 'include' });
+
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}${path}`, { ...options, headers, credentials: 'include' });
+  } catch {
+    throw new ApiError(
+      503,
+      'SERVER_UNREACHABLE',
+      '⚠️ Không thể kết nối tới Server Backend (Server Render bị tạm khóa do hết băng thông hoặc gián đoạn kết nối). Vui lòng kiểm tra lại dịch vụ Backend.'
+    );
+  }
+
   let body: unknown = null;
   try {
     body = await res.json();
@@ -34,7 +45,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
   if (!res.ok) {
     const b = body as { code?: string; message?: string } | null;
-    throw new ApiError(res.status, b?.code ?? 'ERROR', b?.message ?? 'Lỗi hệ thống.');
+    throw new ApiError(res.status, b?.code ?? 'ERROR', b?.message ?? `Lỗi kết nối Server (${res.status}).`);
   }
   const b = body as { success: boolean; data: T };
   return b.data;
