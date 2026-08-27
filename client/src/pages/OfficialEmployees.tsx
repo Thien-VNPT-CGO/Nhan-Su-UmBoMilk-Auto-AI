@@ -626,13 +626,27 @@ export function OfficialEmployees() {
             <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
               Chi nhánh làm việc chính thức:
             </label>
-            <input
-              type="text"
+            <select
               value={editBranch}
               onChange={(e) => setEditBranch(e.target.value)}
-              className="input-field text-xs"
-              placeholder="VD: CN1: 130 Vạn Kiếp, Phường 3, Quận Bình Thạnh"
-            />
+              className="input-field text-xs font-medium"
+            >
+              <option value="">-- Chọn chi nhánh chính thức --</option>
+              {Array.from(
+                new Set([
+                  'CN1: 130 Vạn Kiếp, Phường 3, Quận Bình Thạnh',
+                  'CN2: 261 Tô Hiến Thành, Phường 12, Quận 10',
+                  'CN3: 120 Hoàng Diệu 2, Phường Linh Chiểu, TP. Thủ Đức',
+                  'CN4: 111 Tôn Đản, Phường 15, Quận 4',
+                  ...branches,
+                  ...(editBranch ? [editBranch] : []),
+                ].filter(Boolean))
+              ).map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="space-y-1.5">
