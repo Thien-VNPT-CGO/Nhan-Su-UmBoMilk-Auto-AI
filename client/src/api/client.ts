@@ -1,4 +1,14 @@
-const BASE = '/api';
+const getApiBase = () => {
+  const metaEnv = (import.meta as unknown as { env?: { VITE_API_URL?: string; VITE_API_BASE_URL?: string } }).env;
+  const customUrl = metaEnv?.VITE_API_URL || metaEnv?.VITE_API_BASE_URL;
+  if (customUrl) {
+    const trimmed = customUrl.replace(/\/+$/, '');
+    return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
+  }
+  return '/api';
+};
+
+const BASE = getApiBase();
 
 export class ApiError extends Error {
   code: string;
