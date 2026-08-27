@@ -109,6 +109,56 @@ export default function Shifts() {
     }
   }, [dates, toast]);
 
+  const [windowsStatus, setWindowsStatus] = useState<{
+    isEmployeeWindow: boolean;
+    isHrWindow: boolean;
+    employeeWindowMessage: string;
+    hrWindowMessage: string;
+    nextWeekMonday: string;
+    nextWeekSunday: string;
+  } | null>(null);
+
+  const loadWindowsStatus = useCallback(async () => {
+    try {
+      const res = await api.get<{
+        isEmployeeWindow: boolean;
+        isHrWindow: boolean;
+        employeeWindowMessage: string;
+        hrWindowMessage: string;
+        nextWeekMonday: string;
+        nextWeekSunday: string;
+      }>('/shifts/windows-status');
+      setWindowsStatus(res);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    loadWindowsStatus();
+  }, [loadWindowsStatus]);
+
+  const handleAutoScheduleWeekly = async () => {
+    if (isViewer) {
+      toast('error', '🔒 Tài khoản VIEWER không có quyền kích hoạt phân bổ ca!');
+      return;
+    }
+    if (!windowsStatus?.isHrWindow && !isAdmin) {
+      toast('error', windowsStatus?.hrWindowMessage || '🔒 Nút AI Xếp Lịch Tuần CHỈ MỞ sau 15h00 Thứ 7!');
+      return;
+    }
+    try {
+      setLoading(true);
+      await api.post('/shifts/auto-schedule-weekly', { forceWindow: isAdmin });
+      toast('success', '⚡ AI đã tự động bảo lưu lịch OFF của nhân viên và phân bổ lịch làm việc tuần sau (T2 - CN) thành công!');
+      await loadData();
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Phân bổ thất bại.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleAutoSchedule = async () => {
     if (isViewer) {
       toast('error', '🔒 Tài khoản VIEWER không có quyền kích hoạt phân bổ ca!');
@@ -454,12 +504,21 @@ export default function Shifts() {
             Hôm nay
           </button>
           <button
-            onClick={handleAutoSchedule}
-            className="text-xs font-black bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-3 py-2 rounded-xl shadow-sm flex items-center gap-1.5 transition-all cursor-pointer hover:scale-102"
-            title="Kích hoạt thuật toán AI tự động phân bổ lịch đảo ca xen kẽ chống trùng ca cùng ngày"
+            onClick={handleAutoScheduleWeekly}
+            disabled={!windowsStatus?.isHrWindow && !isAdmin}
+            className={cn(
+              'text-xs font-black px-3 py-2 rounded-xl shadow-sm flex items-center gap-1.5 transition-all cursor-pointer',
+              windowsStatus?.isHrWindow || isAdmin
+                ? 'bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 text-white hover:scale-102'
+                : 'bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-300'
+            )}
+            title={windowsStatus?.hrWindowMessage || 'Nút AI Xếp Lịch Tuần mở sau 15h00 Thứ 7'}
           >
-            <Sparkles size={14} className="text-amber-300 animate-pulse" />
-            <span>⚡ AI Phân Bổ Tuần</span>
+            <Sparkles size={14} className={windowsStatus?.isHrWindow || isAdmin ? 'text-amber-300 animate-pulse' : 'text-slate-400'} />
+            <span>🤖 AI Xếp Lịch Tuần</span>
+            {!windowsStatus?.isHrWindow && !isAdmin && (
+              <Badge className="bg-slate-800 text-white text-[10px] py-0 px-1.5 ml-1">Mở sau 15h T7</Badge>
+            )}
           </button>
           <button
             onClick={() => setShowMonthlyModal(true)}

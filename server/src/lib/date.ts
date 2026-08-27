@@ -111,3 +111,70 @@ export function addDays(date: Date, days: number): Date {
   d.setDate(d.getDate() + days);
   return d;
 }
+
+export function getScheduleTimeWindows(now: Date = new Date()): {
+  isEmployeeWindow: boolean;
+  isHrWindow: boolean;
+  employeeWindowMessage: string;
+  hrWindowMessage: string;
+  nextWeekMonday: string;
+  nextWeekSunday: string;
+} {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: TZ,
+    weekday: 'short',
+    hour: 'numeric',
+    minute: 'numeric',
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+
+  const getPart = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
+  const weekdayStr = getPart('weekday');
+  const hour = parseInt(getPart('hour'), 10) || 0;
+  const minute = parseInt(getPart('minute'), 10) || 0;
+  const timeNum = hour * 100 + minute;
+
+  const dayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const dayOfWeek = dayMap[weekdayStr] ?? 0;
+
+  // Khung 1: Nhân viên đăng ký OFF (Thứ 6 12:00 -> Thứ 7 15:00)
+  const isEmployeeWindow =
+    (dayOfWeek === 5 && timeNum >= 1200) ||
+    (dayOfWeek === 6 && timeNum <= 1500);
+
+  // Khung 2: HR AI Xếp Lịch Tuần (Sau 15:00 Thứ 7 -> hết Chủ Nhật 23:59)
+  const isHrWindow =
+    (dayOfWeek === 6 && timeNum > 1500) ||
+    (dayOfWeek === 0);
+
+  const employeeWindowMessage = isEmployeeWindow
+    ? '✅ Khung giờ đăng ký OFF tuần sau đang MỞ (Mở từ 12h00 T6 đến 15h00 T7)'
+    : '🔒 Khung giờ đăng ký OFF tuần sau CHỈ MỞ từ 12h00 Thứ 6 đến 15h00 Thứ 7 hàng tuần';
+
+  const hrWindowMessage = isHrWindow
+    ? '✅ Nút AI Xếp Lịch Tuần đang MỞ (Sau 15h00 T7 đến hết Chủ Nhật)'
+    : '🔒 Nút AI Xếp Lịch Tuần CHỈ MỞ sau 15h00 Thứ 7 (khi nhân viên đã hoàn tất đăng ký OFF)';
+
+  const todayStr = dateKey(now);
+  const [y, m, d] = todayStr.split('-').map(Number);
+  const tzDate = new Date(y, m - 1, d);
+
+  const daysToNextMonday = dayOfWeek === 0 ? 1 : 8 - dayOfWeek;
+  const nextMondayDate = new Date(tzDate);
+  nextMondayDate.setDate(nextMondayDate.getDate() + daysToNextMonday);
+
+  const nextSundayDate = new Date(nextMondayDate);
+  nextSundayDate.setDate(nextSundayDate.getDate() + 6);
+
+  return {
+    isEmployeeWindow,
+    isHrWindow,
+    employeeWindowMessage,
+    hrWindowMessage,
+    nextWeekMonday: dateKey(nextMondayDate),
+    nextWeekSunday: dateKey(nextSundayDate),
+  };
+}

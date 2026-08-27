@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { requireAuth, requireWrite, AuthedRequest } from '../middleware/auth';
 import { shiftService } from '../services/ShiftService';
 import { ApiError } from '../lib/errors';
-import { normalizeDateKey } from '../lib/date';
+import { normalizeDateKey, getScheduleTimeWindows } from '../lib/date';
 import { prisma } from '../lib/prisma';
 
 const router = Router();
@@ -137,6 +137,50 @@ router.post('/replacements/respond', async (req: AuthedRequest, res, next) => {
       user: req.user!.username,
     });
     res.json({ success: true, data: updated });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// GET /api/shifts/windows-status (Trạng thái 2 khung giờ)
+router.get('/windows-status', async (_req, res, next) => {
+  try {
+    const windows = getScheduleTimeWindows();
+    res.json({ success: true, data: windows });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// POST /api/shifts/auto-schedule-weekly (AI Xếp Lịch Tuần HR sau 15h Thứ 7)
+router.post('/auto-schedule-weekly', requireWrite(), async (req: AuthedRequest, res, next) => {
+  try {
+    const { weekStartDate, forceWindow } = req.body ?? {};
+    const result = await shiftService.autoScheduleWeekly({
+      weekStartDate,
+      user: req.user!.username,
+      forceWindow: !!forceWindow,
+    });
+    res.json({ success: true, data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// POST /api/shifts/employee-leave-request (Nhân viên xin OFF tuần sau từ 12h T6 - 15h T7)
+router.post('/employee-leave-request', async (req: AuthedRequest, res, next) => {
+  try {
+    const schema = z.object({
+      candidateId: z.string().min(1),
+      date: z.string().min(1),
+      caLam: z.string().optional(),
+      forceWindow: z.boolean().optional(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) throw ApiError.badRequest('INVALID_INPUT', 'Dữ liệu xin OFF không hợp lệ.');
+
+    const result = await shiftService.registerEmployeeLeaveRequest(parsed.data);
+    res.json({ success: true, data: result });
   } catch (e) {
     next(e);
   }

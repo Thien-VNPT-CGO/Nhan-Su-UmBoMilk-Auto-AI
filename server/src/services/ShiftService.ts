@@ -4,7 +4,7 @@ import { audit } from './AuditService';
 import { syncQueue } from './SyncQueueService';
 import { emit } from '../sockets';
 import { nextId } from '../lib/id';
-import { dateKey, formatDateTime } from '../lib/date';
+import { dateKey, formatDateTime, getScheduleTimeWindows } from '../lib/date';
 import { zaloPersonalService } from './ZaloPersonalService';
 
 export const SHIFT_OPTIONS = ['SANG', 'CHIEU', 'TOI', 'OFF'] as const;
@@ -427,6 +427,233 @@ export class ShiftService {
 
     emit('shift:updated', { date: from, month, year });
     return { success: true, count: officialCandidates.length, totalAssigned, month, year };
+  }
+
+  // KHUNG GIỜ 1: ĐĂNG KÝ OFF TUẦN SAU CHO NHÂN VIÊN CHÍNH THỨC (MỞ 12H T6 - 15H T7, FIRST-COME FIRST-SERVED CHỐNG TRÙNG CÙNG CHI NHÁNH CÙNG CA)
+  async registerEmployeeLeaveRequest(input: {
+    candidateId: string;
+    date: string;
+    caLam?: string;
+    forceWindow?: boolean;
+  }) {
+    const windows = getScheduleTimeWindows();
+    if (!windows.isEmployeeWindow && !input.forceWindow) {
+      throw ApiError.badRequest(
+        'OFF_WINDOW_CLOSED',
+        '🔒 Khung giờ đăng ký OFF tuần sau CHỈ MỞ từ 12h00 Thứ 6 đến 15h00 Thứ 7 hàng tuần.'
+      );
+    }
+
+    const candidate = await prisma.candidate.findUnique({ where: { id: input.candidateId } });
+    if (!candidate) {
+      throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy thông tin nhân viên.');
+    }
+
+    const branch = candidate.chiNhanh?.trim() || 'Chi nhánh';
+    const candNormShift = normalizeShiftCode(candidate.caLam || '');
+    const requestedNormShift = input.caLam ? normalizeShiftCode(input.caLam) : candNormShift;
+    const targetShift = (requestedNormShift && requestedNormShift !== 'OFF') ? requestedNormShift : 'SANG';
+
+    // RÀNG BUỘC FIRST-COME FIRST-SERVED:
+    // Kiểm tra trong ngày input.date, tại CÙNG CHI NHÁNH và CÙNG CA LÀM VIỆC ĐĂNG KÝ đã có nhân viên khác xin OFF chưa
+    const existingShiftsSameDate = await prisma.shift.findMany({
+      where: {
+        date: input.date,
+        shifts: { contains: 'OFF' },
+        candidateId: { not: candidate.id },
+      },
+      include: { candidate: true },
+    });
+
+    const conflictShift = existingShiftsSameDate.find((s) => {
+      const otherCand = s.candidate;
+      if (!otherCand) return false;
+      const sameBranch = (otherCand.chiNhanh?.trim() || 'Chi nhánh') === branch;
+      const otherNormShift = normalizeShiftCode(otherCand.caLam || '');
+      return sameBranch && (otherNormShift === targetShift || targetShift === 'SANG');
+    });
+
+    if (conflictShift) {
+      const conflictName = conflictShift.candidate?.tenUv || 'Đồng nghiệp';
+      throw ApiError.badRequest(
+        'OFF_CONFLICT',
+        `❌ Đăng ký OFF không thành công! Ca ${targetShift} tại chi nhánh ${branch} ngày ${input.date} đã có nhân viên (${conflictName}) đăng ký OFF trước đó.`
+      );
+    }
+
+    const existing = await prisma.shift.findUnique({
+      where: { candidateId_date: { candidateId: candidate.id, date: input.date } },
+    });
+    const newVersion = (existing?.dataVersion ?? 0) + 1;
+
+    await prisma.shift.upsert({
+      where: { candidateId_date: { candidateId: candidate.id, date: input.date } },
+      create: {
+        id: nextId('SHF'),
+        candidateId: candidate.id,
+        date: input.date,
+        shifts: 'OFF',
+        note: 'EMPLOYEE_REGISTERED_OFF',
+        updatedBy: candidate.tenUv,
+        dataVersion: newVersion,
+      },
+      update: {
+        shifts: 'OFF',
+        note: 'EMPLOYEE_REGISTERED_OFF',
+        updatedBy: candidate.tenUv,
+        dataVersion: newVersion,
+      },
+    });
+
+    await audit({
+      user: candidate.tenUv,
+      action: 'EMPLOYEE_REGISTER_OFF',
+      entity: 'shift',
+      entityId: `${candidate.id}:${input.date}`,
+      newValue: 'OFF',
+    });
+
+    await syncQueue.enqueue({
+      entity: 'shift',
+      entityId: `${candidate.id}:${input.date}`,
+      candidateId: candidate.id,
+      operation: 'UPSERT',
+      newValue: {
+        candidateId: candidate.id,
+        date: input.date,
+        shifts: 'OFF',
+        note: 'EMPLOYEE_REGISTERED_OFF',
+      },
+      version: newVersion,
+      idempotencyKey: `candidate:${candidate.id}:shift:${input.date}`,
+    });
+
+    emit('shift:updated', { candidateId: candidate.id, date: input.date, shifts: 'OFF' });
+    return { success: true, candidateId: candidate.id, date: input.date, shifts: 'OFF' };
+  }
+
+  // KHUNG GIỜ 2: AI XẾP LỊCH TUẦN CHO HR (MỞ SAU 15H THỨ 7, BẢO LƯU LỊCH OFF ĐÃ ĐĂNG KÝ, >= 12 NGÀY/THÁNG)
+  async autoScheduleWeekly(params: { weekStartDate?: string; user: string; forceWindow?: boolean }) {
+    const { weekStartDate, user, forceWindow } = params;
+    const windows = getScheduleTimeWindows();
+
+    if (!windows.isHrWindow && !forceWindow) {
+      throw ApiError.badRequest(
+        'HR_WINDOW_CLOSED',
+        '🔒 Nút AI Xếp Lịch Tuần CHỈ MỞ sau 15h00 Thứ 7 (khi nhân viên đã hoàn tất đăng ký OFF).'
+      );
+    }
+
+    const mondayStr = weekStartDate || windows.nextWeekMonday;
+    const [y, m, d] = mondayStr.split('-').map(Number);
+    const mondayDate = new Date(y, m - 1, d);
+
+    const weekDates: string[] = [];
+    for (let i = 0; i < 7; i++) {
+      const day = new Date(mondayDate);
+      day.setDate(day.getDate() + i);
+      weekDates.push(dateKey(day));
+    }
+
+    const officialCandidates = await prisma.candidate.findMany({
+      where: { trangThaiTraining: 'NHAN_VIEN_CHINH_THUC' },
+      orderBy: { tenUv: 'asc' },
+    });
+
+    if (!officialCandidates.length) {
+      return { success: false, message: 'Không có nhân viên chính thức nào để xếp lịch.' };
+    }
+
+    // Nhóm nhân viên theo Chi Nhánh
+    const byBranch = new Map<string, typeof officialCandidates>();
+    officialCandidates.forEach((c) => {
+      const br = c.chiNhanh?.trim() || 'KHAC';
+      if (!byBranch.has(br)) byBranch.set(br, []);
+      byBranch.get(br)!.push(c);
+    });
+
+    let totalAssigned = 0;
+
+    for (const [, candList] of byBranch.entries()) {
+      // Nhóm theo ca làm ưa thích
+      const byShiftPref = new Map<string, typeof candList>();
+      candList.forEach((cand) => {
+        const normCode = normalizeShiftCode(cand.caLam || '');
+        const prefCode = (normCode && normCode !== 'OFF' && SHIFT_OPTIONS.includes(normCode as never)) ? normCode : 'SANG';
+        if (!byShiftPref.has(prefCode)) byShiftPref.set(prefCode, []);
+        byShiftPref.get(prefCode)!.push(cand);
+      });
+
+      for (const [prefShiftCode, empGroup] of byShiftPref.entries()) {
+        const groupCount = empGroup.length;
+        if (!groupCount) continue;
+
+        for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
+          const dStr = weekDates[dayIdx];
+
+          for (let empIdx = 0; empIdx < groupCount; empIdx++) {
+            const cand = empGroup[empIdx];
+
+            // TÔN TRỌNG LỊCH OFF ĐÃ CÓ: Nếu nhân viên đã tự đăng ký OFF trên Web App -> GIỮ NGUYÊN OFF
+            const existingShift = await prisma.shift.findUnique({
+              where: { candidateId_date: { candidateId: cand.id, date: dStr } },
+            });
+
+            if (existingShift?.shifts?.includes('OFF')) {
+              continue; // Giữ nguyên ca OFF nhân viên đã xin
+            }
+
+            // Xếp ca làm việc đan xen chuẩn cho các ngày còn lại
+            const slotPos = ((empIdx - dayIdx) % groupCount + groupCount) % groupCount;
+            const isWorking = slotPos < Math.max(1, Math.ceil(groupCount * 0.6));
+            const shiftVal = isWorking ? prefShiftCode : 'OFF';
+
+            const newVersion = (existingShift?.dataVersion ?? 0) + 1;
+            await prisma.shift.upsert({
+              where: { candidateId_date: { candidateId: cand.id, date: dStr } },
+              create: {
+                id: nextId('SHF'),
+                candidateId: cand.id,
+                date: dStr,
+                shifts: shiftVal,
+                note: 'AI_WEEKLY_SCHEDULED',
+                updatedBy: user,
+                dataVersion: newVersion,
+              },
+              update: {
+                shifts: shiftVal,
+                note: 'AI_WEEKLY_SCHEDULED',
+                updatedBy: user,
+                dataVersion: newVersion,
+              },
+            });
+
+            await syncQueue.enqueue({
+              entity: 'shift',
+              entityId: `${cand.id}:${dStr}`,
+              candidateId: cand.id,
+              operation: 'UPSERT',
+              newValue: { candidateId: cand.id, date: dStr, shifts: shiftVal, note: 'AI_WEEKLY_SCHEDULED' },
+              version: newVersion,
+              idempotencyKey: `candidate:${cand.id}:shift:${dStr}`,
+            });
+
+            totalAssigned++;
+          }
+        }
+      }
+    }
+
+    await audit({
+      user,
+      action: 'AUTO_SCHEDULE_WEEKLY',
+      entity: 'shift',
+      entityId: mondayStr,
+      newValue: JSON.stringify({ weekStartDate: mondayStr, totalAssigned }),
+    });
+
+    emit('shift:updated', { date: mondayStr, weekStartDate: mondayStr });
+    return { success: true, count: officialCandidates.length, totalAssigned, weekStartDate: mondayStr };
   }
 
   // TÍNH NĂNG 2: PHƯƠNG ÁN 1 - QUY TRÌNH XÁC NHẬN 2 BƯỚC ĐA TẦNG VÀ AI FALLBACK POOL

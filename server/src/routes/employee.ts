@@ -278,7 +278,26 @@ router.post('/public/employee/leave-request', async (req, res, next) => {
 
     const { candidateId, date, reason } = parsed.data;
 
-    // RÀNG BUỘC CỨNG 48H: Giờ bắt đầu ca được tính từ 07:00 AM của ngày nghỉ
+    const cand = await prisma.candidate.findUnique({ where: { id: candidateId } });
+    if (!cand) throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy thông tin nhân viên.');
+
+    if (cand.trangThaiTraining === 'NHAN_VIEN_CHINH_THUC') {
+      // Đối với Nhân viên chính thức: Đăng ký OFF tuần sau (Khung 12h T6 - 15h T7) & First-Come First-Served
+      const offResult = await shiftService.registerEmployeeLeaveRequest({
+        candidateId,
+        date,
+        caLam: cand.caLam,
+      });
+
+      res.json({
+        success: true,
+        message: '✅ Đăng ký OFF tuần sau thành công! Lịch OFF đã được hệ thống AI tự động ghi nhận và cập nhật Realtime vào bảng lịch.',
+        data: offResult,
+      });
+      return;
+    }
+
+    // RÀNG BUỘC CỨNG 48H: Cho nhân viên đang trong giai đoạn Training
     const targetStart = new Date(`${date}T07:00:00+07:00`);
     const now = new Date();
     const diffHours = (targetStart.getTime() - now.getTime()) / (1000 * 3600);
@@ -289,9 +308,6 @@ router.post('/public/employee/leave-request', async (req, res, next) => {
         '❌ RÀNG BUỘC 48H: Phiếu xin nghỉ phép phải được gửi trước ít nhất 48 giờ (2 ngày) so với thời điểm ca làm việc bắt đầu!'
       );
     }
-
-    const cand = await prisma.candidate.findUnique({ where: { id: candidateId } });
-    if (!cand) throw ApiError.notFound('CANDIDATE_NOT_FOUND', 'Không tìm thấy thông tin nhân viên.');
 
     const normCa = normalizeShiftCode(cand.caLam || '');
     const shiftCode = normCa && normCa !== 'OFF' ? normCa : 'SANG';

@@ -915,7 +915,15 @@ interface LeaveTicketItem {
             </div>
 
             <p className="text-[11px] text-slate-300 leading-relaxed font-medium">
-              Nhân viên tạo phiếu nghỉ phép trước ít nhất <strong>48 giờ (2 ngày)</strong>. AI sẽ tự động duyệt và chuyển ca làm việc sang luồng đề xuất bù ca cho đồng nghiệp rảnh.
+              {session?.candidate?.trangThaiTraining === 'NHAN_VIEN_CHINH_THUC' ? (
+                <span>
+                  ⏰ <strong>Khung giờ mở đăng ký OFF tuần sau:</strong> Từ <strong>12h00 Thứ 6 đến 15h00 Thứ 7</strong>. Ca OFF đăng ký thành công sẽ được AI tự động ghi nhận Realtime vào lịch làm việc (người đăng ký trước được ưu tiên).
+                </span>
+              ) : (
+                <span>
+                  Nhân viên tạo phiếu nghỉ phép trước ít nhất <strong>48 giờ (2 ngày)</strong>. AI sẽ tự động duyệt và chuyển ca làm việc sang luồng đề xuất bù ca cho đồng nghiệp rảnh.
+                </span>
+              )}
             </p>
 
             {leaveSuccessMsg && (
