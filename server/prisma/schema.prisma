@@ -106,6 +106,7 @@ model Candidate {
   quizAttempts     QuizAttempt[]
   employeeKeys     EmployeeKey[]
   deviceResetTickets DeviceResetTicket[]
+  leaveRequestTickets LeaveRequestTicket[]
 
   @@index([chiNhanh])
   @@index([sdtZalo])
@@ -431,4 +432,25 @@ model DeviceResetTicket {
 
   @@index([candidateId])
   @@index([status])
+}
+
+model LeaveRequestTicket {
+  id            String    @id // LVR-YYYYMMDD-XXXX
+  candidateId   String
+  candidate     Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  candidateName String
+  chiNhanh      String
+  date          String    // YYYY-MM-DD
+  shiftCode     String    // SANG | CHIEU | TOI
+  reason        String
+  status        String    @default("PENDING_HR_APPROVAL") // PENDING_HR_APPROVAL | APPROVED | REJECTED
+  hrUser        String?
+  hrReason      String?
+  approvedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([candidateId])
+  @@index([status])
+  @@index([chiNhanh, date])
 }

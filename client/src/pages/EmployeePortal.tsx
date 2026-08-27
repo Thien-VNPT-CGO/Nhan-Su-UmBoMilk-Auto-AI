@@ -143,13 +143,29 @@ export default function EmployeePortal() {
   const [resetSuccessMsg, setResetSuccessMsg] = useState<string | null>(null);
   const [resetErrorMsg, setResetErrorMsg] = useState<string | null>(null);
 
-  // States cho Xin Nghỉ Phép (Quy tắc 48h)
+interface LeaveTicketItem {
+  id: string;
+  candidateId: string;
+  candidateName: string;
+  chiNhanh: string;
+  date: string;
+  shiftCode: string;
+  reason: string;
+  status: 'PENDING_HR_APPROVAL' | 'APPROVED' | 'REJECTED';
+  hrUser?: string | null;
+  hrReason?: string | null;
+  createdAt: string;
+}
+
+  // States cho Xin Nghỉ Phép (Quy tắc 48h Chờ HR Duyệt)
   const tomorrowStr = new Date(Date.now() + 3 * 86400 * 1000).toISOString().split('T')[0];
   const [leaveDate, setLeaveDate] = useState(tomorrowStr);
   const [leaveReason, setLeaveReason] = useState('');
   const [leaveSubmitting, setLeaveSubmitting] = useState(false);
   const [leaveSuccessMsg, setLeaveSuccessMsg] = useState<string | null>(null);
   const [leaveErrorMsg, setLeaveErrorMsg] = useState<string | null>(null);
+  const [leaveTickets, setLeaveTickets] = useState<LeaveTicketItem[]>([]);
+  const [loadingLeaveTickets, setLoadingLeaveTickets] = useState(false);
 
   // States cho Lịch Làm Việc Realtime 1:1
   const [monthlyShifts, setMonthlyShifts] = useState<Array<{ date: string; shifts: string; note?: string }>>([]);
@@ -399,7 +415,48 @@ export default function EmployeePortal() {
     }
   }, [activeTab, session?.candidate.id, loadMonthlyShifts]);
 
-  // Tạo phiếu Xin Nghỉ Phép (Quy tắc 48h Cứng)
+  // Load Lịch Sử Phiếu Xin Nghỉ Phép của Nhân viên
+  const loadLeaveTickets = useCallback(async () => {
+    if (!session?.candidate.id) return;
+    setLoadingLeaveTickets(true);
+    try {
+      const res = await api.get<LeaveTicketItem[]>(`/public/employee/leave-requests/${encodeURIComponent(session.candidate.id)}`);
+      const list = Array.isArray(res) ? res : Array.isArray((res as any)?.data) ? (res as any).data : [];
+      setLeaveTickets(list);
+    } catch {
+      // ignore
+    } finally {
+      setLoadingLeaveTickets(false);
+    }
+  }, [session?.candidate.id]);
+
+  useEffect(() => {
+    if (session?.candidate.id && activeTab === 'LEAVE_48H') {
+      loadLeaveTickets();
+    }
+  }, [activeTab, session?.candidate.id, loadLeaveTickets]);
+
+  // Đăng ký Sockets cho Phiếu Nghỉ Phép Realtime
+  useEffect(() => {
+    if (!session?.candidate.id) return;
+    const socket = getSocket();
+    const handleLeaveUpdate = () => {
+      loadLeaveTickets();
+      loadMonthlyShifts();
+    };
+
+    socket.on('leave_request:approved', handleLeaveUpdate);
+    socket.on('leave_request:rejected', handleLeaveUpdate);
+    socket.on('leave_request:created', handleLeaveUpdate);
+
+    return () => {
+      socket.off('leave_request:approved', handleLeaveUpdate);
+      socket.off('leave_request:rejected', handleLeaveUpdate);
+      socket.off('leave_request:created', handleLeaveUpdate);
+    };
+  }, [session?.candidate.id, loadLeaveTickets, loadMonthlyShifts]);
+
+  // Tạo phiếu Xin Nghỉ Phép (Quy tắc 48h Chờ HR Duyệt)
   const handleCreateLeaveRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!session?.candidate.id || !leaveDate || !leaveReason.trim()) return;
@@ -415,8 +472,9 @@ export default function EmployeePortal() {
         reason: leaveReason.trim(),
       });
 
-      setLeaveSuccessMsg(res.message || '✅ Đã gửi phiếu xin nghỉ phép 48h thành công!');
+      setLeaveSuccessMsg(res.message || '✅ Đã gửi phiếu xin nghỉ phép 48h thành công! Đang chờ HR/Quản lý duyệt.');
       setLeaveReason('');
+      loadLeaveTickets();
       if (activeTab === 'SHIFTS') loadMonthlyShifts();
     } catch (err) {
       setLeaveErrorMsg(err instanceof ApiError ? err.message : 'Tạo phiếu xin nghỉ phép thất bại.');
@@ -863,11 +921,101 @@ export default function EmployeePortal() {
                     className="w-full py-3.5 rounded-2xl text-xs font-black bg-gradient-to-r from-pink-600 via-rose-600 to-pink-500 hover:from-pink-500 hover:to-rose-500 text-white shadow-xl shadow-pink-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {leaveSubmitting ? <Spinner size={16} /> : <Send size={15} />}
-                    <span>GỬI PHIẾU XIN NGHỈ PHÉP 48H AI DUYỆT</span>
+                    <span>GỬI PHIẾU XIN NGHỈ PHÉP (CHỜ HR DUYỆT)</span>
                   </button>
                 </form>
               );
             })()}
+
+            {/* Lịch sử Phiếu Xin Nghỉ Phép đã gửi */}
+            <div className="pt-4 border-t border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs font-black text-slate-200 uppercase">
+                  <History size={15} className="text-pink-400" />
+                  <span>DANH SÁCH PHIẾU XIN NGHỈ PHÉP ({leaveTickets.length})</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={loadLeaveTickets}
+                  className="text-[11px] font-bold text-pink-400 hover:text-pink-300 transition-colors flex items-center gap-1 cursor-pointer"
+                >
+                  <RefreshCw size={12} />
+                  <span>Làm mới</span>
+                </button>
+              </div>
+
+              {loadingLeaveTickets ? (
+                <div className="py-6 text-center text-xs text-slate-400 space-y-2">
+                  <Spinner size={16} className="mx-auto text-pink-500" />
+                  <p>Đang tải danh sách phiếu nghỉ phép...</p>
+                </div>
+              ) : leaveTickets.length === 0 ? (
+                <div className="py-4 text-center text-xs text-slate-500 italic bg-slate-950/60 rounded-2xl border border-slate-800">
+                  Bạn chưa có phiếu xin nghỉ phép nào.
+                </div>
+              ) : (
+                <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+                  {leaveTickets.map((tk) => {
+                    const isApproved = tk.status === 'APPROVED';
+                    const isRejected = tk.status === 'REJECTED';
+
+                    return (
+                      <div
+                        key={tk.id}
+                        className={cn(
+                          'p-3.5 rounded-2xl border text-xs space-y-2 transition-all',
+                          isApproved
+                            ? 'bg-emerald-950/40 border-emerald-900/60 text-emerald-200'
+                            : isRejected
+                            ? 'bg-rose-950/40 border-rose-900/60 text-rose-200'
+                            : 'bg-amber-950/40 border-amber-900/60 text-amber-200'
+                        )}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono font-bold text-[11px] text-white">Mã phiếu: #{tk.id}</span>
+                          <Badge
+                            className={
+                              isApproved
+                                ? 'bg-emerald-900/80 text-emerald-200 border-emerald-700'
+                                : isRejected
+                                ? 'bg-rose-900/80 text-rose-200 border-rose-700'
+                                : 'bg-amber-900/80 text-amber-200 border-amber-700 animate-pulse'
+                            }
+                          >
+                            {isApproved
+                              ? '✅ HR Đã Duyệt (AI Gán OFF & Bù Ca)'
+                              : isRejected
+                              ? '❌ HR Từ Chối'
+                              : '⏳ Chờ HR/Quản Lý Duyệt'}
+                          </Badge>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-[11px] bg-slate-950/70 p-2.5 rounded-xl border border-slate-800 font-mono">
+                          <div>
+                            <span className="text-slate-400 font-sans block text-[10px]">Ngày xin nghỉ:</span>
+                            <span className="font-bold text-white">{tk.date}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 font-sans block text-[10px]">Ca làm:</span>
+                            <span className="font-bold text-pink-300">Ca {tk.shiftCode}</span>
+                          </div>
+                        </div>
+
+                        <div className="text-[11px] text-slate-300 italic">
+                          Lý do: "{tk.reason}"
+                        </div>
+
+                        {isRejected && tk.hrReason && (
+                          <div className="text-[11px] text-rose-300 bg-rose-950/80 p-2 rounded-xl border border-rose-900/80">
+                            Lý do từ chối: {tk.hrReason}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         )}
 

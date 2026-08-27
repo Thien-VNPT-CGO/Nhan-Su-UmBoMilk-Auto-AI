@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { nextId } from '../lib/id';
+import { emit } from '../sockets';
 import { z } from 'zod';
 import { ApiError } from '../lib/errors';
 import { prisma } from '../lib/prisma';
@@ -294,27 +296,46 @@ router.post('/public/employee/leave-request', async (req, res, next) => {
     const normCa = normalizeShiftCode(cand.caLam || '');
     const shiftCode = normCa && normCa !== 'OFF' ? normCa : 'SANG';
 
-    // Cập nhật ca ngày hôm đó sang OFF
-    await shiftService.upsert({
-      candidateId,
-      date,
-      shifts: 'OFF',
-      note: `XIN_NGHI_PHEP_48H: ${reason}`,
-      user: candidateId,
+    const ticketId = nextId('LVR');
+
+    // Tạo phiếu xin nghỉ phép ở trạng thái PENDING_HR_APPROVAL (Chờ HR/Manager duyệt)
+    const ticket = await prisma.leaveRequestTicket.create({
+      data: {
+        id: ticketId,
+        candidateId,
+        candidateName: cand.tenUv,
+        chiNhanh: cand.chiNhanh || 'Chưa phân công',
+        date,
+        shiftCode,
+        reason: reason.trim(),
+        status: 'PENDING_HR_APPROVAL',
+      },
     });
 
-    // Kích hoạt luồng AI bù ca đa tầng
-    const proposal = await shiftService.createOffReplacementProposal({
-      candidateIdA: candidateId,
-      date,
-      shiftCode,
-    });
+    // Phát tín hiệu Realtime Socket báo cho HR / Manager
+    emit('leave_request:created', { ticketId: ticket.id, candidateId, date, chiNhanh: cand.chiNhanh });
+    emit('approval:updated', { type: 'LEAVE_REQUEST', id: ticket.id });
 
     res.json({
       success: true,
-      message: '✅ Gửi phiếu xin nghỉ phép thành công. Đã kích hoạt luồng AI tìm nhân sự bù ca.',
-      data: proposal,
+      message: '✅ Đã gửi phiếu xin nghỉ phép 48h thành công! Phiếu đã được chuyển tới HR/Quản lý duyệt. Khi HR/Quản lý phê duyệt, AI sẽ tự động gán lịch OFF và mở luồng bù ca.',
+      data: ticket,
     });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// 3h. Lấy danh sách phiếu xin nghỉ phép của Nhân viên
+router.get('/public/employee/leave-requests/:candidateId', async (req, res, next) => {
+  try {
+    const candidateId = req.params.candidateId;
+    const tickets = await prisma.leaveRequestTicket.findMany({
+      where: { candidateId },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+    res.json({ success: true, data: tickets });
   } catch (e) {
     next(e);
   }

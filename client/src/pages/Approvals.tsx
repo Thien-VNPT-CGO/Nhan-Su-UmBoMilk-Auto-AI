@@ -64,13 +64,36 @@ interface CandidateOption {
   caLam: string;
 }
 
+interface LeaveRequestTicketItem {
+  id: string;
+  candidateId: string;
+  candidateName: string;
+  chiNhanh: string;
+  date: string;
+  shiftCode: string;
+  reason: string;
+  status: 'PENDING_HR_APPROVAL' | 'APPROVED' | 'REJECTED';
+  hrUser?: string | null;
+  hrReason?: string | null;
+  approvedAt?: string | null;
+  createdAt: string;
+}
+
 export default function Approvals() {
   const { toast } = useToast();
   const { user } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
   const isViewer = user?.role === 'VIEWER';
 
-  const [mainTab, setMainTab] = useState<'SWAP' | 'DEVICE_RESET' | 'KEY_GEN'>('SWAP');
+  const [mainTab, setMainTab] = useState<'LEAVE_REQUEST' | 'DEVICE_RESET' | 'KEY_GEN' | 'SWAP'>('LEAVE_REQUEST');
+
+  // Phiếu xin nghỉ phép states
+  const [leaveTickets, setLeaveTickets] = useState<LeaveRequestTicketItem[]>([]);
+  const [loadingLeave, setLoadingLeave] = useState(false);
+  const [leaveRejectModalOpen, setLeaveRejectModalOpen] = useState(false);
+  const [selectedLeaveTicket, setSelectedLeaveTicket] = useState<LeaveRequestTicketItem | null>(null);
+  const [leaveRejectReason, setLeaveRejectReason] = useState('');
+  const [leaveActionSubmitting, setLeaveActionSubmitting] = useState(false);
 
   // Đổi ca states
   const [requests, setRequests] = useState<ShiftSwapItem[]>([]);
@@ -188,7 +211,61 @@ export default function Approvals() {
     }
   }, []);
 
+  const loadLeaveTickets = useCallback(async () => {
+    setLoadingLeave(true);
+    try {
+      const res = await api.get<LeaveRequestTicketItem[] | { data: LeaveRequestTicketItem[] }>(`/approvals/leave-tickets?status=${statusFilter}&search=${encodeURIComponent(searchTerm)}`);
+      const list = Array.isArray(res) ? res : Array.isArray((res as any)?.data) ? (res as any).data : [];
+      setLeaveTickets(list);
+    } catch {
+      // ignore
+    } finally {
+      setLoadingLeave(false);
+    }
+  }, [statusFilter, searchTerm]);
+
+  const handleApproveLeaveTicket = async (ticketId: string) => {
+    if (isViewer) {
+      toast('error', 'Tài khoản Viewer chỉ có quyền xem.');
+      return;
+    }
+    setLeaveActionSubmitting(true);
+    try {
+      const res = await api.post<{ message: string }>(`/approvals/leave-tickets/${ticketId}/approve`);
+      toast('success', res.message || '✅ Phê duyệt thành công! AI đã gán lịch OFF và mở luồng bù ca.');
+      loadLeaveTickets();
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Duyệt phiếu thất bại.');
+    } finally {
+      setLeaveActionSubmitting(false);
+    }
+  };
+
+  const handleRejectLeaveTicketConfirm = async () => {
+    if (isViewer) {
+      toast('error', 'Tài khoản Viewer chỉ có quyền xem.');
+      return;
+    }
+    if (!selectedLeaveTicket) return;
+    setLeaveActionSubmitting(true);
+    try {
+      await api.post(`/approvals/leave-tickets/${selectedLeaveTicket.id}/reject`, {
+        hrReason: leaveRejectReason.trim(),
+      });
+      toast('success', '❌ Đã từ chối phiếu xin nghỉ phép.');
+      setLeaveRejectModalOpen(false);
+      setSelectedLeaveTicket(null);
+      setLeaveRejectReason('');
+      loadLeaveTickets();
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Từ chối phiếu thất bại.');
+    } finally {
+      setLeaveActionSubmitting(false);
+    }
+  };
+
   useEffect(() => {
+    loadLeaveTickets();
     loadRequests();
     loadResetTickets();
     loadCandidates();
@@ -196,6 +273,7 @@ export default function Approvals() {
     const socket = getSocket();
     const handleRealtimeUpdate = () => {
       loadCandidates();
+      loadLeaveTickets();
       loadRequests();
       loadResetTickets();
     };
@@ -212,6 +290,9 @@ export default function Approvals() {
     socket.on('shift_swap:requested', handleRealtimeUpdate);
     socket.on('shift_swap:approved', handleRealtimeUpdate);
     socket.on('shift_swap:rejected', handleRealtimeUpdate);
+    socket.on('leave_request:created', handleRealtimeUpdate);
+    socket.on('leave_request:approved', handleRealtimeUpdate);
+    socket.on('leave_request:rejected', handleRealtimeUpdate);
 
     return () => {
       socket.off('candidate:created', handleRealtimeUpdate);
@@ -226,8 +307,11 @@ export default function Approvals() {
       socket.off('shift_swap:requested', handleRealtimeUpdate);
       socket.off('shift_swap:approved', handleRealtimeUpdate);
       socket.off('shift_swap:rejected', handleRealtimeUpdate);
+      socket.off('leave_request:created', handleRealtimeUpdate);
+      socket.off('leave_request:approved', handleRealtimeUpdate);
+      socket.off('leave_request:rejected', handleRealtimeUpdate);
     };
-  }, [loadRequests, loadResetTickets, loadCandidates]);
+  }, [loadLeaveTickets, loadRequests, loadResetTickets, loadCandidates]);
 
   const filteredRequests = useMemo(() => {
     return requests.filter((r) => {
@@ -457,16 +541,16 @@ export default function Approvals() {
       <div className="flex border-b border-slate-200 gap-2 font-bold text-xs">
         <button
           type="button"
-          onClick={() => setMainTab('SWAP')}
+          onClick={() => setMainTab('LEAVE_REQUEST')}
           className={cn(
             'py-3 px-5 border-b-2 flex items-center gap-2 transition-colors cursor-pointer',
-            mainTab === 'SWAP'
+            mainTab === 'LEAVE_REQUEST'
               ? 'border-pink-600 text-pink-600 font-extrabold'
               : 'border-transparent text-slate-500 hover:text-slate-900'
           )}
         >
-          <ArrowRightLeft size={16} />
-          <span>🔄 Phê Duyệt Đổi Ca</span>
+          <Calendar size={16} />
+          <span>📋 Duyệt Phiếu Nghỉ Phép (48h) ({leaveTickets.filter((t) => t.status === 'PENDING_HR_APPROVAL').length})</span>
         </button>
 
         <button
@@ -481,6 +565,20 @@ export default function Approvals() {
         >
           <Smartphone size={16} />
           <span>📱 Phê Duyệt Reset Thiết Bị ({resetTickets.filter((t) => t.status !== 'APPROVED').length})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMainTab('SWAP')}
+          className={cn(
+            'py-3 px-5 border-b-2 flex items-center gap-2 transition-colors cursor-pointer',
+            mainTab === 'SWAP'
+              ? 'border-pink-600 text-pink-600 font-extrabold'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          )}
+        >
+          <ArrowRightLeft size={16} />
+          <span>🔄 Phê Duyệt Đổi Ca</span>
         </button>
 
         {isAdmin && (
@@ -500,7 +598,142 @@ export default function Approvals() {
         )}
       </div>
 
-      {/* TAB 1: PHÊ DUYỆT ĐỔI CA */}
+      {/* TAB 1: DUYỆT PHIẾU XIN NGHỈ PHÉP (48H) */}
+      {mainTab === 'LEAVE_REQUEST' && (
+        <div className="space-y-4">
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-3 items-center justify-between">
+            <div className="flex items-center gap-2 w-full md:w-auto">
+              <span className="text-xs font-bold text-slate-600 shrink-0">Trạng thái:</span>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs text-slate-800 font-semibold outline-none focus:border-pink-500"
+              >
+                <option value="ALL">Tất cả trạng thái</option>
+                <option value="PENDING_HR_APPROVAL">⏳ Chờ HR Duyệt</option>
+                <option value="APPROVED">✅ Đã Duyệt (AI Gán OFF & Bù Ca)</option>
+                <option value="REJECTED">❌ Đã Từ Chối</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2 w-full md:w-72">
+              <Search size={15} className="text-slate-400 shrink-0" />
+              <input
+                type="text"
+                placeholder="Tìm tên NV, Mã NV..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs text-slate-800 outline-none focus:border-pink-500 font-medium"
+              />
+            </div>
+          </div>
+
+          {loadingLeave ? (
+            <div className="py-12 text-center text-xs text-slate-500 space-y-2 bg-white rounded-2xl border border-slate-200">
+              <Spinner size={24} className="mx-auto text-pink-600" />
+              <p>Đang tải danh sách phiếu xin nghỉ phép Realtime...</p>
+            </div>
+          ) : leaveTickets.length === 0 ? (
+            <div className="py-12 text-center text-xs text-slate-500 italic bg-white rounded-2xl border border-slate-200">
+              Không tìm thấy phiếu xin nghỉ phép nào.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {leaveTickets.map((t) => {
+                const isApproved = t.status === 'APPROVED';
+                const isRejected = t.status === 'REJECTED';
+                const isPending = t.status === 'PENDING_HR_APPROVAL';
+
+                return (
+                  <div
+                    key={t.id}
+                    className={cn(
+                      'bg-white p-4 rounded-2xl border shadow-sm space-y-3 transition-all relative overflow-hidden',
+                      isPending ? 'border-amber-400 ring-1 ring-amber-400/30' : 'border-slate-200'
+                    )}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-xs font-bold text-slate-700">#{t.id}</span>
+                      <Badge
+                        className={
+                          isApproved
+                            ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                            : isRejected
+                            ? 'bg-rose-100 text-rose-800 border-rose-300'
+                            : 'bg-amber-100 text-amber-800 border-amber-300 font-bold animate-pulse'
+                        }
+                      >
+                        {isApproved
+                          ? '✅ AI Đã Gán OFF & Bù Ca'
+                          : isRejected
+                          ? '❌ HR Từ Chối'
+                          : '⏳ Chờ HR Duyệt'}
+                      </Badge>
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                        <User size={15} className="text-pink-600" />
+                        <span>{t.candidateName}</span>
+                      </div>
+                      <div className="text-xs text-slate-500 font-mono">
+                        Mã NV: <strong>{t.candidateId}</strong> | Chi nhánh: <strong>{t.chiNhanh}</strong>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1 font-mono text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-slate-500 font-sans">Ngày xin nghỉ:</span>
+                        <span className="font-bold text-pink-600">{t.date}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500 font-sans">Ca đăng ký:</span>
+                        <span className="font-bold text-slate-800">Ca {t.shiftCode}</span>
+                      </div>
+                    </div>
+
+                    <div className="text-xs text-slate-600 italic bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                      Lý do: "{t.reason}"
+                    </div>
+
+                    {isRejected && t.hrReason && (
+                      <div className="text-xs text-rose-700 bg-rose-50 p-2.5 rounded-xl border border-rose-200">
+                        Lý do từ chối: {t.hrReason}
+                      </div>
+                    )}
+
+                    {isPending && (
+                      <div className="flex gap-2 pt-2 border-t border-slate-100">
+                        <button
+                          type="button"
+                          disabled={leaveActionSubmitting || isViewer}
+                          onClick={() => handleApproveLeaveTicket(t.id)}
+                          className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-3 rounded-xl text-xs shadow transition-all cursor-pointer text-center"
+                        >
+                          ✅ DUYỆT & GÁN OFF
+                        </button>
+                        <button
+                          type="button"
+                          disabled={leaveActionSubmitting || isViewer}
+                          onClick={() => {
+                            setSelectedLeaveTicket(t);
+                            setLeaveRejectModalOpen(true);
+                          }}
+                          className="flex-1 bg-rose-100 hover:bg-rose-200 text-rose-700 font-bold py-2 px-3 rounded-xl text-xs border border-rose-300 transition-all cursor-pointer text-center"
+                        >
+                          ❌ TỪ CHỐI
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 2: PHÊ DUYỆT ĐỔI CA */}
       {mainTab === 'SWAP' && (
         <div className="space-y-4">
           {/* Requests Grid / Table */}
@@ -1007,6 +1240,53 @@ export default function Approvals() {
                 className="btn-danger text-xs flex items-center gap-1.5"
               >
                 {rejecting ? <Spinner size={14} /> : <XCircle size={15} />}
+                <span>Xác nhận Từ Chối</span>
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* MODAL TỪ CHỐI PHIẾU XIN NGHỈ PHÉP (48H) */}
+      {leaveRejectModalOpen && selectedLeaveTicket && (
+        <Modal
+          open={leaveRejectModalOpen}
+          onClose={() => setLeaveRejectModalOpen(false)}
+          title={`TỪ CHỐI PHIẾU XIN NGHỈ PHÉP #${selectedLeaveTicket.id}`}
+        >
+          <div className="space-y-4 font-sans text-slate-800">
+            <div className="bg-rose-50 border border-rose-200 text-rose-800 p-3 rounded-xl text-xs space-y-1">
+              <div>Phiếu nghỉ phép của: <strong>{selectedLeaveTicket.candidateName}</strong></div>
+              <div>Ngày đăng ký nghỉ: <strong>{selectedLeaveTicket.date}</strong> (Ca {selectedLeaveTicket.shiftCode})</div>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-slate-700 block mb-1">Lý do từ chối *</label>
+              <textarea
+                rows={3}
+                className="input text-xs"
+                value={leaveRejectReason}
+                onChange={(e) => setLeaveRejectReason(e.target.value)}
+                placeholder="Nhập lý do từ chối (ví dụ: Trùng lịch kiểm toán cửa hàng, nhân sự thiếu ca...)"
+                autoFocus
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setLeaveRejectModalOpen(false)}
+                className="btn-secondary text-xs cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                disabled={leaveActionSubmitting || !leaveRejectReason.trim()}
+                onClick={handleRejectLeaveTicketConfirm}
+                className="btn-danger text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {leaveActionSubmitting ? <Spinner size={14} /> : <XCircle size={15} />}
                 <span>Xác nhận Từ Chối</span>
               </button>
             </div>
