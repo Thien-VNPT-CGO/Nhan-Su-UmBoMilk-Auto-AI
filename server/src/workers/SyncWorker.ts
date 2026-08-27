@@ -353,40 +353,81 @@ export class SyncWorker {
       const branchIdx = headers.indexOf('CHI_NHANH');
       const shiftIdx = headers.indexOf('CA_LAM');
       const nameIdx = headers.indexOf('TEN_NV');
-
-      if (idIdx === -1) return;
+      const phoneIdx = headers.indexOf('SDT_ZALO');
 
       let updatedAny = false;
       for (let i = 1; i < rows.length; i++) {
         const row = rows[i];
-        const candidateId = (row[idIdx] ?? '').trim();
-        if (!candidateId) continue;
-
-        const candidate = await prisma.candidate.findUnique({ where: { id: candidateId } });
-        if (!candidate || candidate.trangThaiTraining !== 'NHAN_VIEN_CHINH_THUC') continue;
-
+        let candidateId = idIdx !== -1 ? (row[idIdx] ?? '').trim() : '';
+        const rawPhone = phoneIdx !== -1 ? (row[phoneIdx] ?? '').trim() : '';
+        const sheetPhone = rawPhone ? (rawPhone.startsWith('0') || rawPhone.startsWith('+') ? rawPhone : `0${rawPhone}`) : '';
         const sheetBranch = branchIdx !== -1 ? (row[branchIdx] ?? '').trim() : '';
         const sheetShift = shiftIdx !== -1 ? (row[shiftIdx] ?? '').trim() : '';
         const sheetName = nameIdx !== -1 ? (row[nameIdx] ?? '').trim() : '';
 
-        let patch: Record<string, unknown> = {};
-        if (sheetBranch && sheetBranch !== candidate.chiNhanh) patch.chiNhanh = sheetBranch;
-        if (sheetShift && sheetShift !== candidate.caLam) patch.caLam = sheetShift;
-        if (sheetName && sheetName !== candidate.tenUv) patch.tenUv = sheetName;
+        if (!candidateId && !sheetPhone && !sheetName) continue;
 
-        if (Object.keys(patch).length > 0) {
-          const newVersion = candidate.dataVersion + 1;
-          await prisma.candidate.update({
-            where: { id: candidateId },
-            data: { ...patch, dataVersion: newVersion, updatedBy: 'GOOGLE_SHEET_SYNC' },
+        let candidate = candidateId
+          ? await prisma.candidate.findUnique({ where: { id: candidateId } })
+          : null;
+
+        if (!candidate && sheetPhone) {
+          candidate = await prisma.candidate.findFirst({ where: { sdtZalo: sheetPhone } });
+          if (candidate) candidateId = candidate.id;
+        }
+
+        if (candidate) {
+          let patch: Record<string, unknown> = {};
+          if (candidate.trangThaiTraining !== 'NHAN_VIEN_CHINH_THUC') {
+            patch.trangThaiTraining = 'NHAN_VIEN_CHINH_THUC';
+            patch.hrDecision = 'PASS';
+          }
+          if (sheetBranch && sheetBranch !== candidate.chiNhanh) patch.chiNhanh = sheetBranch;
+          if (sheetShift && sheetShift !== candidate.caLam) patch.caLam = sheetShift;
+          if (sheetName && sheetName !== candidate.tenUv) patch.tenUv = sheetName;
+
+          if (Object.keys(patch).length > 0) {
+            const newVersion = candidate.dataVersion + 1;
+            await prisma.candidate.update({
+              where: { id: candidate.id },
+              data: { ...patch, dataVersion: newVersion, updatedBy: 'GOOGLE_SHEET_SYNC' },
+            });
+            updatedAny = true;
+            console.log(`[SyncWorker] Pull Official Employee Updated (${candidate.id}):`, patch);
+          }
+        } else {
+          // Nhân viên chính thức cũ có sẵn trong Google Sheet -> Tự động thêm vào DB với trạng thái NHAN_VIEN_CHINH_THUC
+          const newId = candidateId || `NV_IMPORT_${Date.now()}_${i}`;
+          await prisma.candidate.create({
+            data: {
+              id: newId,
+              thoiGian: new Date(),
+              tenUv: sheetName || 'Nhân viên chính thức',
+              namSinh: '2000',
+              trinhDo: 'Phổ thông',
+              queQuan: 'Việt Nam',
+              sdtZalo: sheetPhone || `090000${String(i).padStart(4, '0')}`,
+              caLam: sheetShift || 'Ca Sáng',
+              chiNhanh: sheetBranch || 'Chi nhánh',
+              kinhNghiem: 'Có kinh nghiệm',
+              xuLy: 'Nhân viên chính thức',
+              linkFb: '',
+              kenhBietTin: 'Import Sheet NHAN_VIEN_CHINH_THUC',
+              source: 'IMPORT',
+              hrDecision: 'PASS',
+              trangThaiTraining: 'NHAN_VIEN_CHINH_THUC',
+              dataVersion: 1,
+              updatedBy: 'GOOGLE_SHEET_IMPORT',
+            },
           });
           updatedAny = true;
-          console.log(`[SyncWorker] 2-Way Sync Sheet -> Web HR (${candidateId}):`, patch);
+          console.log(`[SyncWorker] Auto-Imported Official Employee from Sheet (${newId}): ${sheetName}`);
         }
       }
 
       if (updatedAny) {
         emit('official_employees:updated', {});
+        emit('candidate:updated', {});
         emit('shift:updated', {});
       }
     } catch (e) {
