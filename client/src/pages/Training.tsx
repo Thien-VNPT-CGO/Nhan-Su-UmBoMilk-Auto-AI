@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GraduationCap, CalendarDays, Calendar, Send, RefreshCw, Briefcase, Video, CheckCircle2, XCircle, FileCheck, FileText, MessageCircle, Award } from 'lucide-react';
+import { GraduationCap, CalendarDays, Calendar, Send, RefreshCw, Briefcase, Video, CheckCircle2, XCircle, FileCheck, FileText, MessageCircle, Award, Sparkles } from 'lucide-react';
 import { api, ApiError } from '../api/client';
 import { Badge, Skeleton, EmptyState, Modal, Field, ConfirmDialog } from '../components/ui';
 import InterviewScoreModal from '../components/InterviewScoreModal';
@@ -32,6 +32,15 @@ interface TrainingRow {
   aiNote?: string | null;
   dataVersion: number;
 }
+
+export const OUTPUT_TEST_TIME_SLOTS = [
+  { id: 'slot1', label: '08:00 - 09:30', fromTime: '08:00', toTime: '09:30', period: 'SÁNG' },
+  { id: 'slot2', label: '09:30 - 11:00', fromTime: '09:30', toTime: '11:00', period: 'SÁNG' },
+  { id: 'slot3', label: '11:00 - 12:30', fromTime: '11:00', toTime: '12:30', period: 'TRƯA' },
+  { id: 'slot4', label: '12:30 - 14:00', fromTime: '12:30', toTime: '14:00', period: 'CHIỀU' },
+  { id: 'slot5', label: '14:00 - 15:30', fromTime: '14:00', toTime: '15:30', period: 'CHIỀU' },
+  { id: 'slot6', label: '15:30 - 17:00', fromTime: '15:30', toTime: '17:00', period: 'CHIỀU' },
+];
 
 function getInterviewStatus(phongVanAtStr: string | null): 'CHUA_PV' | 'DANG_PV' | 'DA_PV' {
   if (!phongVanAtStr) return 'CHUA_PV';
@@ -88,15 +97,27 @@ export default function Training() {
   const [ivGgMeetLink, setIvGgMeetLink] = useState('');
   const [ivResend, setIvResend] = useState(true);
 
-  // States cho Phiếu Yêu Cầu Test Đầu Ra (Khóa 1h30m, AI duyệt 15-30s)
+  // States cho Phiếu Yêu Cầu Test Đầu Ra (Khóa 1h30m từ 8h-17h, AI tự động Meet Link)
   const [outputTestModalRow, setOutputTestModalRow] = useState<TrainingRow | null>(null);
   const tomorrowStr = new Date(Date.now() + 86400 * 1000).toISOString().split('T')[0];
   const [testDate, setTestDate] = useState(tomorrowStr);
-  const [fromTime, setFromTime] = useState('09:00');
-  const [toTime, setToTime] = useState('10:30');
+  const [selectedSlotId, setSelectedSlotId] = useState('slot2'); // Default 09:30 - 11:00
+  const [fromTime, setFromTime] = useState('09:30');
+  const [toTime, setToTime] = useState('11:00');
   const [meetLink, setMeetLink] = useState('https://meet.google.com/umb-milk-test');
   const [testContent, setTestContent] = useState('Kiểm tra phỏng vấn Test Đầu Ra Nhân Viên Training');
   const [ticketSubmitting, setTicketSubmitting] = useState(false);
+
+  const openOutputTestModal = (r: TrainingRow) => {
+    setOutputTestModalRow(r);
+    setSelectedSlotId('slot2');
+    setFromTime('09:30');
+    setToTime('11:00');
+    // AI Tự Động Tạo Link Google Meet Duy Nhất
+    const cleanId = r.id.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const meetCode = `umb-${cleanId.slice(-6) || 'test'}`;
+    setMeetLink(`https://meet.google.com/${meetCode}`);
+  };
 
   // States cho Bảng Đánh Giá Nhân Viên Cửa Hàng (Chấm điểm & note câu < 1)
   const [evaluationModalRow, setEvaluationModalRow] = useState<TrainingRow | null>(null);
@@ -910,7 +931,7 @@ export default function Training() {
                           {(r.trangThaiTraining === 'HOAN_THANH' || r.trangThaiTraining === 'HOAN_THANH_7_NGAY' || r.soNgayDaTraining >= 7) && (
                             <button
                               type="button"
-                              onClick={() => setOutputTestModalRow(r)}
+                              onClick={() => openOutputTestModal(r)}
                               className="bg-gradient-to-r from-teal-600 to-indigo-600 hover:from-teal-500 hover:to-indigo-500 text-white !py-1.5 !px-3 text-[11px] font-extrabold shadow-md rounded-xl flex items-center gap-1.5 hover:scale-102 transition-all cursor-pointer whitespace-nowrap"
                               title="Tạo phiếu yêu cầu đặt lịch phỏng vấn Test Đầu Ra (Khóa 1h30m giữa các phiếu, AI tự động duyệt 15-30s)"
                             >
@@ -1159,42 +1180,93 @@ export default function Training() {
         />
       )}
 
-      {/* MODAL 📋 TẠO PHIẾU YÊU CẦU TEST ĐẦU RA (Khóa 1h30m, AI duyệt 15-30s) */}
+      {/* MODAL 📋 TẠO PHIẾU YÊU CẦU TEST ĐẦU RA (Khóa 1h30m từ 8h-17h, AI tự động Meet Link) */}
       <Modal open={!!outputTestModalRow} onClose={() => setOutputTestModalRow(null)} title={`📋 Tạo Phiếu Yêu Cầu Test Đầu Ra – ${outputTestModalRow?.tenUv ?? ''}`}>
         <form onSubmit={handleCreateOutputTestSubmit} className="space-y-4">
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs space-y-1">
             <div className="font-bold text-slate-800 flex items-center justify-between">
-              <span>👤 Ứng viên: <span className="text-brand-600">{outputTestModalRow?.tenUv}</span></span>
+              <span>👤 Ứng viên: <span className="text-brand-600 font-extrabold">{outputTestModalRow?.tenUv}</span></span>
               <span className="text-slate-500 font-mono">Mã: {outputTestModalRow?.id}</span>
             </div>
             <div className="text-slate-600">
               🏬 Chi nhánh: <b>{outputTestModalRow?.chiNhanh || 'Chưa chọn'}</b> | Ca làm: <b>{outputTestModalRow?.caLam || 'Chưa chọn'}</b>
             </div>
-            <div className="text-indigo-600 font-semibold italic pt-1">
-              ⚡ Ràng buộc AI: Mỗi phiếu yêu cầu của HR cách nhau 1h30 phút. AI sẽ duyệt tự động trong 15-30 giây!
+            <div className="text-indigo-600 font-bold italic pt-0.5 flex items-center gap-1">
+              ⚡ Ràng buộc AI: Lịch phỏng vấn cách nhau 1h30 phút (08:00 - 17:00). AI sẽ duyệt tự động trong 15-30 giây!
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Ngày phỏng vấn Test">
-              <input type="date" className="input text-xs font-bold" value={testDate} onChange={(e) => setTestDate(e.target.value)} required />
-            </Field>
-            <div className="grid grid-cols-2 gap-2">
-              <Field label="Từ mấy giờ">
-                <input type="time" className="input text-xs font-bold" value={fromTime} onChange={(e) => setFromTime(e.target.value)} required />
-              </Field>
-              <Field label="Đến mấy giờ">
-                <input type="time" className="input text-xs font-bold" value={toTime} onChange={(e) => setToTime(e.target.value)} required />
-              </Field>
-            </div>
-          </div>
-
-          <Field label="Link Google Meet">
-            <input type="url" className="input text-xs font-mono" value={meetLink} onChange={(e) => setMeetLink(e.target.value)} placeholder="https://meet.google.com/xxx-xxxx-xxx" required />
+          {/* NGÀY PHỎNG VẤN TEST */}
+          <Field label="NGÀY PHỎNG VẤN TEST">
+            <input type="date" className="input text-xs font-bold" value={testDate} onChange={(e) => setTestDate(e.target.value)} required />
           </Field>
 
-          <Field label="Nội dung phỏng vấn & Ghi chú">
-            <textarea className="input text-xs min-h-[70px]" value={testContent} onChange={(e) => setTestContent(e.target.value)} placeholder="Nhập nội dung phỏng vấn Test đầu ra..." required />
+          {/* BỘ CHỌN KHUNG GIỜ CỐ ĐỊNH 1H30M (08:00 - 17:00) */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-extrabold text-slate-700 uppercase block">
+              CHỌN KHUNG GIỜ PHỎNG VẤN TEST (CÁCH NHAU 1H30M TỪ 08:00 - 17:00):
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {OUTPUT_TEST_TIME_SLOTS.map((slot) => {
+                const isSelected = selectedSlotId === slot.id;
+                return (
+                  <button
+                    key={slot.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedSlotId(slot.id);
+                      setFromTime(slot.fromTime);
+                      setToTime(slot.toTime);
+                    }}
+                    className={cn(
+                      'p-2 rounded-xl text-xs font-bold border transition-all text-center flex flex-col items-center justify-center gap-0.5 cursor-pointer',
+                      isSelected
+                        ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white border-indigo-700 shadow-md scale-102'
+                        : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                    )}
+                  >
+                    <span className={cn('text-[9px] font-black uppercase px-1.5 py-0.2 rounded', isSelected ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600')}>
+                      {slot.period}
+                    </span>
+                    <span className="font-mono text-[11px] font-extrabold">{slot.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* LINK GOOGLE MEET TỰ ĐỘNG BỞI AI */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-extrabold text-slate-700 uppercase block">
+                LINK GOOGLE MEET (AI TỰ ĐỘNG TẠO & GỬI VỀ WEB APP ỨNG VIÊN):
+              </label>
+              <span className="text-[10px] bg-purple-100 text-purple-800 font-bold px-2 py-0.5 rounded-full border border-purple-200 flex items-center gap-1">
+                <Sparkles size={11} className="text-purple-600" /> AI AUTO GENERATED
+              </span>
+            </div>
+            <div className="relative">
+              <input
+                type="url"
+                readOnly
+                className="input text-xs font-mono font-bold bg-purple-50/60 border-purple-200 text-purple-900 pr-10 cursor-not-allowed select-all"
+                value={meetLink}
+                placeholder="https://meet.google.com/umb-xxxx-test"
+                required
+              />
+              <Video className="absolute right-3 top-2.5 text-purple-500" size={16} />
+            </div>
+          </div>
+
+          {/* NỘI DUNG PHỎNG VẤN & GHI CHÚ */}
+          <Field label="NỘI DUNG PHỎNG VẤN & GHI CHÚ">
+            <textarea
+              className="input text-xs min-h-[70px]"
+              value={testContent}
+              onChange={(e) => setTestContent(e.target.value)}
+              placeholder="Nhập nội dung phỏng vấn Test đầu ra..."
+              required
+            />
           </Field>
 
           <div className="pt-2">
