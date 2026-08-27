@@ -725,21 +725,21 @@ export class ShiftService {
       return record;
     }
 
-    // ƯU TIÊN ĐA TẦNG:
-    // Tầng 1: Cùng chi nhánh + Cùng ca làm
-    // Tầng 2: Cùng chi nhánh + Khác ca làm
-    // Tầng 3: Khác chi nhánh + Cùng ca làm
-    // Tầng 4: Khác chi nhánh + Khác ca làm
+    // ƯU TIÊN ĐA TẦNG CỦA HỆ THỐNG AI:
+    // Tầng 1: CÙNG CHI NHÁNH + Đăng ký ca hỗ trợ (caHoTro) hoặc caLam chứa ca missing
+    // Tầng 2: CÙNG CHI NHÁNH + Các ca còn lại
+    // Tầng 3: KHÁC CHI NHÁNH + Đăng ký ca hỗ trợ (caHoTro) chứa ca missing
+    // Tầng 4: KHÁC CHI NHÁNH + Các ca còn lại
     const normShiftCodeA = normalizeShiftCode(shiftCode);
     const sortedPool = [...availablePool].sort((a, b) => {
       const isSameBranchA = a.chiNhanh?.trim() === candA.chiNhanh?.trim() ? 1 : 0;
       const isSameBranchB = b.chiNhanh?.trim() === candA.chiNhanh?.trim() ? 1 : 0;
 
-      const isSameShiftA = normalizeShiftCode(a.caLam || '') === normShiftCodeA ? 1 : 0;
-      const isSameShiftB = normalizeShiftCode(b.caLam || '') === normShiftCodeA ? 1 : 0;
+      const supportsShiftA = (a.caHoTro && a.caHoTro.toUpperCase().includes(normShiftCodeA)) || normalizeShiftCode(a.caLam || '') === normShiftCodeA ? 1 : 0;
+      const supportsShiftB = (b.caHoTro && b.caHoTro.toUpperCase().includes(normShiftCodeA)) || normalizeShiftCode(b.caLam || '') === normShiftCodeA ? 1 : 0;
 
-      const scoreA = isSameBranchA * 10 + isSameShiftA * 5;
-      const scoreB = isSameBranchB * 10 + isSameShiftB * 5;
+      const scoreA = isSameBranchA * 20 + supportsShiftA * 10;
+      const scoreB = isSameBranchB * 20 + supportsShiftB * 10;
 
       return scoreB - scoreA;
     });
@@ -807,10 +807,29 @@ export class ShiftService {
       });
 
       if (record.replacementId) {
+        // Kiểm tra ca làm hiện tại của nhân viên B trong ngày đó để ghép ca (Tối đa 2 ca/ngày: SANG|CHIEU, SANG|TOI, CHIEU|TOI)
+        const existingShiftB = await prisma.shift.findUnique({
+          where: { candidateId_date: { candidateId: record.replacementId, date: record.date } },
+        });
+
+        let newShiftsVal = record.shiftCode;
+        if (existingShiftB && existingShiftB.shifts && existingShiftB.shifts !== 'OFF') {
+          const currentShifts = existingShiftB.shifts.split('|');
+          if (!currentShifts.includes(record.shiftCode)) {
+            if (currentShifts.length >= 2) {
+              newShiftsVal = currentShifts.slice(0, 2).join('|');
+            } else {
+              newShiftsVal = [...currentShifts, record.shiftCode].join('|');
+            }
+          } else {
+            newShiftsVal = existingShiftB.shifts;
+          }
+        }
+
         await this.upsert({
           candidateId: record.replacementId,
           date: record.date,
-          shifts: record.shiftCode,
+          shifts: newShiftsVal,
           note: `AI_REPLACEMENT_ACCEPTED (Thay NV ${record.candidateNameA})`,
           user,
         });

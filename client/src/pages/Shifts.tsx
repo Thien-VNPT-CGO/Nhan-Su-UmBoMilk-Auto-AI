@@ -17,6 +17,7 @@ interface RowData {
   sdtZalo?: string;
   chiNhanh: string;
   caLam: string;
+  caHoTro?: string;
   shifts: Record<
     string,
     {
@@ -761,8 +762,13 @@ export default function Shifts() {
                               • {r.chiNhanh || 'Chưa chọn chi nhánh'}
                             </div>
                             <div className="text-[11px] text-amber-700 font-medium mt-0.5">
-                              • Ca làm: <span className="font-bold">{r.caLam || 'Chưa chốt ca'}</span>
+                              • Ca cố định: <span className="font-bold">{r.caLam || 'Chưa chốt ca'}</span>
                             </div>
+                            {r.caHoTro && (
+                              <div className="text-[10px] text-purple-700 font-extrabold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 mt-0.5">
+                                ⚡ Ca hỗ trợ: {r.caHoTro}
+                              </div>
+                            )}
 
                             {tab === 'training' && (
                               <div className="text-[10px] font-bold mt-1.5">

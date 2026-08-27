@@ -64,6 +64,7 @@ model Candidate {
   sdtZalo    String
   zaloUserId String? // Mã định danh Zalo (appuser_id) của ứng viên — bắt buộc để gửi tin OA, tự lưu từ webhook/tra cứu theo SĐT
   caLam      String
+  caHoTro    String? // Ca có thể hỗ trợ trực bù: "CHIEU,TOI", "SANG,TOI", etc.
   chiNhanh   String
   kinhNghiem String
   xuLy       String

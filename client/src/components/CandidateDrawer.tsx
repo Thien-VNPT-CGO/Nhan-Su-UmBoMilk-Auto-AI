@@ -25,6 +25,7 @@ interface CandidateDetail {
   sdtZalo: string;
   zaloUserId: string | null;
   caLam: string;
+  caHoTro: string | null;
   chiNhanh: string;
   kinhNghiem: string;
   xuLy: string;
@@ -281,6 +282,43 @@ export default function CandidateDrawer({
       toast('error', e instanceof ApiError ? e.message : 'Lưu Zalo User ID thất bại.');
     } finally {
       setZaloUserIdSaving(false);
+    }
+  };
+
+  const [showSupportModal, setShowSupportModal] = useState(false);
+  const [selectedSupportShifts, setSelectedSupportShifts] = useState<string[]>([]);
+  const [savingSupportShifts, setSavingSupportShifts] = useState(false);
+
+  const openSupportModal = () => {
+    if (!c) return;
+    const existing = c.caHoTro ? c.caHoTro.split(',').map((s) => s.trim().toUpperCase()) : [];
+    setSelectedSupportShifts(existing);
+    setShowSupportModal(true);
+  };
+
+  const toggleSupportShift = (code: string) => {
+    if (selectedSupportShifts.includes(code)) {
+      setSelectedSupportShifts(selectedSupportShifts.filter((s) => s !== code));
+    } else {
+      setSelectedSupportShifts([...selectedSupportShifts, code]);
+    }
+  };
+
+  const saveSupportShifts = async () => {
+    if (!c) return;
+    setSavingSupportShifts(true);
+    try {
+      const val = selectedSupportShifts.join(',');
+      await api.patch(`/candidates/${c.id}`, { patch: { caHoTro: val }, version: c.dataVersion });
+      toast('success', '✅ Đã lưu Ca có thể hỗ trợ trực bù!');
+      setShowSupportModal(false);
+      const d = await api.get<CandidateDetail>(`/candidates/${candidateId}`);
+      setC(d);
+      onChanged();
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Cập nhật ca hỗ trợ thất bại.');
+    } finally {
+      setSavingSupportShifts(false);
     }
   };
 
@@ -548,8 +586,22 @@ export default function CandidateDrawer({
                     </div>
                   </div>
                   <div className="rounded-xl bg-slate-50/80 hover:bg-slate-100/60 p-4 border border-slate-100 transition-colors">
-                    <div className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase">Ca mong muốn</div>
-                    <div className="text-sm text-slate-800 mt-0.5">{c.caLam || '—'}</div>
+                    <div className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase">Ca cố định</div>
+                    <div className="text-sm font-extrabold text-slate-900 mt-0.5">{c.caLam || '—'}</div>
+                  </div>
+                  <div className="rounded-xl bg-purple-50/80 hover:bg-purple-100/60 p-4 border border-purple-200 transition-colors">
+                    <div className="text-[11px] font-extrabold tracking-wider text-purple-700 uppercase flex items-center justify-between">
+                      <span>Ca có thể hỗ trợ</span>
+                      <button
+                        onClick={openSupportModal}
+                        className="text-[10px] bg-purple-200 text-purple-800 px-2 py-0.5 rounded-full hover:bg-purple-300 font-bold cursor-pointer transition-colors"
+                      >
+                        ✏️ Sửa ca hỗ trợ
+                      </button>
+                    </div>
+                    <div className="text-sm font-extrabold text-purple-900 mt-1">
+                      {c.caHoTro && c.caHoTro.trim() ? c.caHoTro.split(',').map((s) => `Ca ${s.trim()}`).join(', ') : 'Chưa thiết lập (VD: CHIỀU, TỐI)'}
+                    </div>
                   </div>
                   <div className="rounded-xl bg-slate-50/80 hover:bg-slate-100/60 p-4 border border-slate-100 transition-colors">
                     <div className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase">Chi nhánh</div>
@@ -793,6 +845,52 @@ export default function CandidateDrawer({
           <button className="btn-success w-full" onClick={submitInterview} disabled={!!timeConflict}>
             <Video size={15} /> {interviewEditMode ? 'Lưu lịch phỏng vấn' : 'Xác nhận ĐẠT & Hẹn lịch phỏng vấn'}
           </button>
+        </div>
+      </Modal>
+
+      <Modal open={showSupportModal} onClose={() => setShowSupportModal(false)} title="✏️ Cấu hình Ca Có Thể Hỗ Trợ Trực Bù">
+        <div className="space-y-4 p-2">
+          <p className="text-xs text-slate-600">
+            Chọn các ca làm việc mà nhân viên <strong>{c?.tenUv}</strong> (Ca cố định: Ca {c?.caLam}) có thể linh hoạt hỗ trợ khi phát sinh nhân sự bận/nghỉ tại chi nhánh <strong>{c?.chiNhanh}</strong> hoặc chi nhánh khác:
+          </p>
+
+          <div className="grid grid-cols-3 gap-3">
+            {['SANG', 'CHIEU', 'TOI'].map((code) => {
+              const isSelected = selectedSupportShifts.includes(code);
+              return (
+                <button
+                  key={code}
+                  type="button"
+                  onClick={() => toggleSupportShift(code)}
+                  className={cn(
+                    'p-3 rounded-2xl border text-center font-bold text-xs cursor-pointer transition-all',
+                    isSelected
+                      ? 'bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-500/20'
+                      : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                  )}
+                >
+                  Ca {code === 'SANG' ? 'SÁNG' : code === 'CHIEU' ? 'CHIỀU' : 'TỐI'}
+                  {isSelected && <span className="block text-[10px] font-normal mt-0.5">✓ Có thể hỗ trợ</span>}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+            <button
+              onClick={() => setShowSupportModal(false)}
+              className="px-4 py-2 rounded-xl text-xs font-semibold border border-slate-200 hover:bg-slate-50 cursor-pointer"
+            >
+              Hủy
+            </button>
+            <button
+              onClick={saveSupportShifts}
+              disabled={savingSupportShifts}
+              className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white cursor-pointer"
+            >
+              {savingSupportShifts ? 'Đang lưu...' : 'Lưu ca hỗ trợ'}
+            </button>
+          </div>
         </div>
       </Modal>
     </Drawer>

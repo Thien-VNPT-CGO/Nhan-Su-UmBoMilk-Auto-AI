@@ -25,6 +25,7 @@ const CANDIDATE_FIELDS: Record<string, { label: string; schema: z.ZodTypeAny }> 
   sdtZalo: { label: 'SDT_ZALO', schema: z.string() },
   zaloUserId: { label: 'ZALO_USER_ID', schema: z.string().max(64) },
   caLam: { label: 'CA_LAM', schema: z.string() },
+  caHoTro: { label: 'CA_HO_TRO', schema: z.string() },
   chiNhanh: { label: 'CHI_NHANH', schema: z.string() },
   kinhNghiem: { label: 'KINH_NGHIEM', schema: z.string() },
   xuLy: { label: 'XU_LY', schema: z.string() },
