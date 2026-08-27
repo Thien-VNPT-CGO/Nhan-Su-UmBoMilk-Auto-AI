@@ -25,6 +25,8 @@ import { api, ApiError } from '../api/client';
 import { Badge, Tooltip, Modal, Spinner } from '../components/ui';
 import { useToast } from '../stores/Toast';
 
+import { getShiftOrderRank } from '../utils/shiftOrder';
+
 interface OfficialEmployeeItem {
   id: string;
   tenUv: string;
@@ -256,7 +258,13 @@ export function OfficialEmployees() {
       }>(`/official-employees?${queryParams.toString()}`);
 
       if (res) {
-        setItems(res.items ?? []);
+        const sortedItems = (res.items ?? []).sort((a, b) => {
+          const rankA = getShiftOrderRank(a.caLam);
+          const rankB = getShiftOrderRank(b.caLam);
+          if (rankA !== rankB) return rankA - rankB;
+          return (a.tenUv || '').localeCompare(b.tenUv || '', 'vi');
+        });
+        setItems(sortedItems);
         setBranches(res.branches ?? []);
         setShifts(res.shifts ?? []);
         if (res.summary) setSummary(res.summary);

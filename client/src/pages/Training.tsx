@@ -11,6 +11,8 @@ import { cn, trainingStatusLabel } from '../utils/format';
 import { debounce } from '../utils/debounce';
 import { formatDate, formatDateTime, dateKey, addDays } from '../utils/date';
 
+import { getShiftOrderRank } from '../utils/shiftOrder';
+
 interface TrainingRow {
   id: string;
   tenUv: string;
@@ -99,7 +101,13 @@ export default function Training() {
     setLoading(true);
     try {
       const data = await api.get<TrainingRow[]>('/training');
-      setRows(data);
+      const sortedData = (data ?? []).sort((a, b) => {
+        const rankA = getShiftOrderRank(a.caLam);
+        const rankB = getShiftOrderRank(b.caLam);
+        if (rankA !== rankB) return rankA - rankB;
+        return (a.tenUv || '').localeCompare(b.tenUv || '', 'vi');
+      });
+      setRows(sortedData);
     } catch {
       toast('error', 'Không tải được danh sách đào tạo.');
     } finally {

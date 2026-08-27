@@ -9,6 +9,7 @@ import { getSocket } from '../api/socket';
 import { dateKey, weekdayVi, formatDate } from '../utils/date';
 import { cn, shiftColor } from '../utils/format';
 import { debounce } from '../utils/debounce';
+import { getShiftOrderRank } from '../utils/shiftOrder';
 
 interface RowData {
   candidateId: string;
@@ -156,6 +157,17 @@ export default function Shifts() {
       if (!map.has(branchKey)) map.set(branchKey, []);
       map.get(branchKey)!.push(row);
     });
+
+    // Ràng buộc thứ tự ca làm việc: Ca SÁNG (1) -> Ca CHIỀU (2) -> Ca TỐI (3) -> Khác/OFF (4)
+    for (const [, rows] of map.entries()) {
+      rows.sort((a, b) => {
+        const rankA = getShiftOrderRank(a.caLam);
+        const rankB = getShiftOrderRank(b.caLam);
+        if (rankA !== rankB) return rankA - rankB;
+        return (a.tenUv || '').localeCompare(b.tenUv || '', 'vi');
+      });
+    }
+
     return Array.from(map.entries());
   }, [activeRows]);
 

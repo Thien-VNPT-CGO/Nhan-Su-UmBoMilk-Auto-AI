@@ -323,21 +323,26 @@ export class ShiftService {
       },
     });
 
-    // TỰ ĐỘNG BÙ CA XOAY VÒNG CHỐNG TRÙNG REALTIME CHO NHÂN VIÊN TRAINING:
-    if (candidate.trangThaiTraining !== 'NHAN_VIEN_CHINH_THUC' && candidate.chiNhanh) {
+    // TỰ ĐỘNG BÙ CA XOAY VÒNG CHỐNG TRÙNG REALTIME CHO TẤT CẢ NHÂN VIÊN (TRAINING & CHÍNH THỨC):
+    if (candidate.chiNhanh) {
       const validTarget = valid[0] || 'OFF';
       const normCandCa = normalizeShiftCode(candidate.caLam || '');
 
-      const sameBranchTrainingCandidates = await prisma.candidate.findMany({
+      const isOfficial = candidate.trangThaiTraining === 'NHAN_VIEN_CHINH_THUC';
+      const targetStatuses = isOfficial
+        ? ['NHAN_VIEN_CHINH_THUC']
+        : ['BAT_DAU', 'SAP_BAT_DAU'];
+
+      const sameBranchCandidates = await prisma.candidate.findMany({
         where: {
           chiNhanh: candidate.chiNhanh,
           id: { not: candidate.id },
-          trangThaiTraining: { in: ['BAT_DAU', 'SAP_BAT_DAU'] },
+          trangThaiTraining: { in: targetStatuses },
         },
         select: { id: true, caLam: true },
       });
 
-      const matchedCandidates = sameBranchTrainingCandidates.filter(
+      const matchedCandidates = sameBranchCandidates.filter(
         (c) => normalizeShiftCode(c.caLam || '') === normCandCa
       );
 
